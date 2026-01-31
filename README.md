@@ -196,7 +196,7 @@ Provide `scripts/setup_macos.sh` that:
 - verifies:
   - `python3 --version`
   - `exiftool -ver`
-  - `python -c "import PySide6"`
+- `python -c "import PySide6"`
 
 ### 7.2 Running during development
 Provide `scripts/run_gui.sh` to activate venv and run the GUI.
@@ -205,6 +205,30 @@ Provide `scripts/run_gui.sh` to activate venv and run the GUI.
 Provide `scripts/build_macos_app.sh` using **PyInstaller**:
 - produce `dist/PurwayGeotagger.app`
 - note: signing/notarization is out of scope but leave placeholder comments
+
+---
+
+## 7.4 Windows dev setup (optional)
+
+For local development on Windows, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\setup_windows.ps1
+```
+
+This creates `.venv` and installs `requirements.txt` (+ `requirements-dev.txt` if present).
+
+Run the GUI (Windows):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\run_gui.ps1
+```
+
+Run tests (Windows):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\run_tests.ps1
+```
 
 ---
 
