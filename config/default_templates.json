@@ -1,0 +1,18 @@
+{
+  "templates": [
+    {
+      "id": "default",
+      "name": "Default (client_date_index_ppm)",
+      "client": "CLIENT",
+      "pattern": "{client}_{date}_{index:05d}_{ppm}ppm",
+      "description": "CLIENT_YYYYMMDD_00001_123ppm.jpg"
+    },
+    {
+      "id": "clientA",
+      "name": "Client A (index_orig)",
+      "client": "ClientA",
+      "pattern": "{client}_{index:06d}_{orig}",
+      "description": "ClientA_000001_originalname.jpg"
+    }
+  ]
+}
