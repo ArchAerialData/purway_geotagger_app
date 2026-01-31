@@ -22,7 +22,7 @@ def test_run_job_writes_artifacts_on_cancel() -> None:
             flatten=False,
             cleanup_empty_dirs=False,
             sort_by_ppm=False,
-            ppm_bin_edges=[0, 100, 500, 1000],
+            ppm_bin_edges=[0, 1000],
             write_xmp=True,
             dry_run=True,
             max_join_delta_seconds=3,

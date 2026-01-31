@@ -39,7 +39,7 @@ def test_dry_run_pipeline_copy_rename_sort_flatten(tmp_path: Path) -> None:
         flatten=True,
         cleanup_empty_dirs=False,
         sort_by_ppm=True,
-        ppm_bin_edges=[0, 100, 500, 1000],
+        ppm_bin_edges=[0, 1000],
         write_xmp=True,
         dry_run=True,
         max_join_delta_seconds=3,
@@ -61,7 +61,7 @@ def test_dry_run_pipeline_copy_rename_sort_flatten(tmp_path: Path) -> None:
     flat_name = flat_files[0].name
     assert flat_name.startswith("ACME_001_123ppm_")
 
-    bin_dir = run_folder / "BY_PPM" / "0100-0499ppm"
+    bin_dir = run_folder / "BY_PPM" / "0000-0999ppm"
     assert bin_dir.exists()
     assert (bin_dir / flat_name).exists()
 

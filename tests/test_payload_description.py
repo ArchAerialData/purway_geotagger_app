@@ -29,7 +29,7 @@ def test_payload_is_appended_to_description(tmp_path: Path, monkeypatch) -> None
         flatten=False,
         cleanup_empty_dirs=False,
         sort_by_ppm=False,
-        ppm_bin_edges=[0, 100, 500, 1000],
+        ppm_bin_edges=[0, 1000],
         write_xmp=True,
         dry_run=False,
         max_join_delta_seconds=3,

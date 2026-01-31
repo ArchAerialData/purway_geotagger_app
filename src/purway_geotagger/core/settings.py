@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from appdirs import user_config_dir
 
-DEFAULT_BIN_EDGES = [0, 100, 500, 1000]  # ppm
+DEFAULT_BIN_EDGES = [0, 1000]  # ppm
 DEFAULT_MAX_JOIN_DELTA_SECONDS = 3
 
 def _config_path() -> Path:

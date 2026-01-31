@@ -6,7 +6,8 @@ from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QCheckBox, QSpinBox, QLineEdit, QProgressBar, QTableView,
-    QMessageBox, QComboBox
+    QMessageBox, QComboBox, QTabWidget, QGroupBox, QListWidget, QToolButton,
+    QStyle
 )
 
 from purway_geotagger.core.settings import AppSettings
@@ -35,143 +36,234 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         layout = QVBoxLayout(root)
 
-        layout.addWidget(QLabel("Drag & drop folders/files below (parent folder or many folders supported):"))
+        tabs = QTabWidget()
+        layout.addWidget(tabs)
 
+        # ----- Run tab -----
+        run_tab = QWidget()
+        run_layout = QVBoxLayout(run_tab)
+        tabs.addTab(run_tab, "Run")
+
+        input_group = QGroupBox("1) Add Inputs")
+        input_layout = QVBoxLayout(input_group)
+        input_layout.addWidget(QLabel("Drag & drop folders/files below (parent folder or many folders supported):"))
         self.drop_zone = DropZone()
         self.drop_zone.paths_dropped.connect(self._on_paths_dropped)
-        layout.addWidget(self.drop_zone)
+        input_layout.addWidget(self.drop_zone)
+        run_layout.addWidget(input_group)
 
-        # Output controls
-        out_row = QHBoxLayout()
+        out_group = QGroupBox("2) Output Folder")
+        out_row = QHBoxLayout(out_group)
         self.out_dir_edit = QLineEdit(self.settings.last_output_dir)
         self.out_browse_btn = QPushButton("Select Output Folder…")
         self.out_browse_btn.clicked.connect(self._select_output_folder)
         out_row.addWidget(QLabel("Output:"))
         out_row.addWidget(self.out_dir_edit, 1)
         out_row.addWidget(self.out_browse_btn)
-        layout.addLayout(out_row)
+        out_row.addWidget(self._help_btn("Choose where processed files and logs will be saved."))
+        run_layout.addWidget(out_group)
 
-        # Options
-        opt_row = QHBoxLayout()
+        basic_group = QGroupBox("3) Basic Options")
+        basic_row = QHBoxLayout(basic_group)
         self.overwrite_chk = QCheckBox("Overwrite originals")
         self.overwrite_chk.setChecked(self.settings.overwrite_originals_default)
-        self.flatten_chk = QCheckBox("Flatten to single folder")
-        self.flatten_chk.setChecked(self.settings.flatten_default)
-        self.cleanup_chk = QCheckBox("Cleanup empty dirs")
-        self.cleanup_chk.setChecked(self.settings.cleanup_empty_dirs_default)
-        self.sort_chk = QCheckBox("Sort by PPM bins")
-        self.sort_chk.setChecked(self.settings.sort_by_ppm_default)
+        self.overwrite_chk.setToolTip("Writes metadata into original JPGs in place.")
         self.dry_run_chk = QCheckBox("Dry run (no EXIF write)")
         self.dry_run_chk.setChecked(self.settings.dry_run_default)
-        opt_row.addWidget(self.overwrite_chk)
-        opt_row.addWidget(self.flatten_chk)
-        opt_row.addWidget(self.cleanup_chk)
-        opt_row.addWidget(self.sort_chk)
-        opt_row.addWidget(self.dry_run_chk)
-        layout.addLayout(opt_row)
+        self.dry_run_chk.setToolTip("Match only; do not write EXIF/XMP.")
+        basic_row.addWidget(self.overwrite_chk)
+        basic_row.addWidget(self.dry_run_chk)
+        basic_row.addWidget(self._help_btn("Tip: Most pilots can leave Basic Options unchecked and just press Run."))
+        run_layout.addWidget(basic_group)
 
-        opt_row2 = QHBoxLayout()
+        self.advanced_group = QGroupBox("Advanced options (optional)")
+        self.advanced_group.setCheckable(True)
+        self.advanced_group.setChecked(False)
+        self.advanced_group.toggled.connect(self._on_advanced_toggled)
+        adv_layout = QVBoxLayout(self.advanced_group)
+        self.advanced_container = QWidget()
+        adv_container_layout = QVBoxLayout(self.advanced_container)
+
+        adv_row1 = QHBoxLayout()
+        self.flatten_chk = QCheckBox("Flatten to single folder")
+        self.flatten_chk.setChecked(self.settings.flatten_default)
+        self.flatten_chk.setToolTip("Move all successful JPGs into JPG_FLAT.")
+        self.flatten_chk.toggled.connect(self._on_flatten_toggle)
+        self.cleanup_chk = QCheckBox("Cleanup empty dirs")
+        self.cleanup_chk.setChecked(self.settings.cleanup_empty_dirs_default)
+        self.cleanup_chk.setEnabled(self.flatten_chk.isChecked())
+        self.cleanup_chk.setToolTip("Removes empty folders after flattening (scoped safely).")
+        self.sort_chk = QCheckBox("Sort by PPM bins")
+        self.sort_chk.setChecked(self.settings.sort_by_ppm_default)
+        self.sort_chk.setToolTip("Copies output JPGs into PPM bin folders.")
+        adv_row1.addWidget(self.flatten_chk)
+        adv_row1.addWidget(self.cleanup_chk)
+        adv_row1.addWidget(self.sort_chk)
+        adv_container_layout.addLayout(adv_row1)
+
+        adv_row2 = QHBoxLayout()
         self.write_xmp_chk = QCheckBox("Write XMP")
         self.write_xmp_chk.setChecked(self.settings.write_xmp_default)
-        opt_row2.addWidget(self.write_xmp_chk)
-        layout.addLayout(opt_row2)
+        self.write_xmp_chk.setToolTip("Also write XMP GPS/Description tags.")
+        adv_row2.addWidget(self.write_xmp_chk)
+        adv_container_layout.addLayout(adv_row2)
 
-        # Renaming
         rename_row = QHBoxLayout()
         self.rename_chk = QCheckBox("Enable renaming")
         self.rename_chk.setChecked(False)
+        self.rename_chk.setToolTip("Rename output JPGs using a template.")
         self.rename_chk.toggled.connect(self._on_rename_toggle)
         self.template_combo = QComboBox()
         self.template_combo.setEnabled(False)
         self.template_combo.currentIndexChanged.connect(self._on_template_changed)
         self._template_user_selected = False
-        self.template_btn = QPushButton("Edit templates...")
-        self.template_btn.clicked.connect(self._open_template_editor)
-        rename_row.addWidget(self.rename_chk)
-        rename_row.addWidget(QLabel("Template:"))
-        rename_row.addWidget(self.template_combo, 1)
-        rename_row.addWidget(self.template_btn)
-        layout.addLayout(rename_row)
-
-        # Start index
-        idx_row = QHBoxLayout()
+        self.template_combo.setToolTip("Select a rename template.")
         self.start_index_spin = QSpinBox()
         self.start_index_spin.setMinimum(1)
         self.start_index_spin.setMaximum(10_000_000)
         self.start_index_spin.setValue(1)
         self.start_index_spin.setEnabled(False)
-        idx_row.addWidget(QLabel("Rename start index:"))
-        idx_row.addWidget(self.start_index_spin)
-        layout.addLayout(idx_row)
+        self.start_index_spin.setToolTip("Starting index for rename templates.")
+        rename_row.addWidget(self.rename_chk)
+        rename_row.addWidget(QLabel("Template:"))
+        rename_row.addWidget(self.template_combo, 1)
+        rename_row.addWidget(QLabel("Start index:"))
+        rename_row.addWidget(self.start_index_spin)
+        adv_container_layout.addLayout(rename_row)
 
-        # Payload
         payload_row = QHBoxLayout()
         self.payload_edit = QLineEdit()
+        self.payload_edit.setToolTip("Optional string stored in ImageDescription for downstream use.")
         payload_row.addWidget(QLabel("Purway payload (optional):"))
         payload_row.addWidget(self.payload_edit, 1)
-        layout.addLayout(payload_row)
+        adv_container_layout.addLayout(payload_row)
 
-        # Buttons
-        btn_row = QHBoxLayout()
-        self.run_btn = QPushButton("Run Job")
-        self.run_btn.clicked.connect(self._run_job)
+        tools_row = QHBoxLayout()
         self.preview_btn = QPushButton("Preview matches")
         self.preview_btn.clicked.connect(self._preview_matches)
+        self.preview_btn.setToolTip("Preview up to 20 matches before running.")
+        self.preview_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogHelpButton))
         self.schema_btn = QPushButton("CSV schema")
         self.schema_btn.clicked.connect(self._show_schema)
-        self.clear_btn = QPushButton("Clear Inputs")
-        self.clear_btn.clicked.connect(self.controller.clear_inputs)
-        self.settings_btn = QPushButton("Settings...")
+        self.schema_btn.setToolTip("Show detected CSV columns and matches.")
+        self.schema_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
+        self.settings_btn = QPushButton("Settings…")
         self.settings_btn.clicked.connect(self._open_settings)
-        btn_row.addWidget(self.run_btn)
-        btn_row.addWidget(self.preview_btn)
-        btn_row.addWidget(self.schema_btn)
-        btn_row.addWidget(self.clear_btn)
-        btn_row.addWidget(self.settings_btn)
-        layout.addLayout(btn_row)
+        self.settings_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogContentsView))
+        tools_row.addWidget(self.preview_btn)
+        tools_row.addWidget(self.schema_btn)
+        tools_row.addWidget(self.settings_btn)
+        adv_container_layout.addLayout(tools_row)
 
-        # Job table
+        adv_layout.addWidget(self.advanced_container)
+        self.advanced_container.setVisible(False)
+        run_layout.addWidget(self.advanced_group)
+
+        run_actions = QHBoxLayout()
+        self.run_btn = QPushButton("Run Job")
+        self.run_btn.clicked.connect(self._run_job)
+        self._style_primary_button(self.run_btn)
+        self.clear_btn = QPushButton("Clear Inputs")
+        self.clear_btn.clicked.connect(self._clear_inputs)
+        run_actions.addWidget(self.run_btn)
+        run_actions.addWidget(self.clear_btn)
+        run_layout.addLayout(run_actions)
+
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        run_layout.addWidget(self.progress)
+
+        # ----- Jobs tab -----
+        jobs_tab = QWidget()
+        jobs_layout = QVBoxLayout(jobs_tab)
+        tabs.addTab(jobs_tab, "Jobs")
+
         self.table = QTableView()
         self.model = JobTableModel(self.controller)
         self.table.setModel(self.model)
         self.table.setSelectionBehavior(QTableView.SelectRows)
         self.table.setSelectionMode(QTableView.SingleSelection)
-        layout.addWidget(self.table, 1)
+        jobs_layout.addWidget(self.table, 1)
         self.table.selectionModel().selectionChanged.connect(self._update_action_buttons)
 
-        # Selected job actions
         act_row = QHBoxLayout()
         self.cancel_btn = QPushButton("Cancel selected job")
         self.cancel_btn.clicked.connect(self._cancel_selected)
+        self.cancel_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogCancelButton))
         self.open_out_btn = QPushButton("Open output folder")
         self.open_out_btn.clicked.connect(self._open_selected_output)
+        self.open_out_btn.setIcon(self.style().standardIcon(QStyle.SP_DirOpenIcon))
         self.rerun_failed_btn = QPushButton("Re-run failed only")
         self.rerun_failed_btn.clicked.connect(self._rerun_failed)
+        self.rerun_failed_btn.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
         self.export_manifest_btn = QPushButton("Export manifest.csv")
         self.export_manifest_btn.clicked.connect(self._export_selected_manifest)
+        self.export_manifest_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
         act_row.addWidget(self.cancel_btn)
         act_row.addWidget(self.open_out_btn)
         act_row.addWidget(self.rerun_failed_btn)
         act_row.addWidget(self.export_manifest_btn)
-        layout.addLayout(act_row)
+        jobs_layout.addLayout(act_row)
 
-        # Progress bar
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
-        layout.addWidget(self.progress)
+        # ----- Templates tab -----
+        templates_tab = QWidget()
+        templates_layout = QVBoxLayout(templates_tab)
+        tabs.addTab(templates_tab, "Templates")
+
+        templates_layout.addWidget(QLabel("Templates are used when renaming is enabled on the Run tab."))
+        self.templates_list = QListWidget()
+        templates_layout.addWidget(self.templates_list, 1)
+        tmpl_btn_row = QHBoxLayout()
+        self.template_manage_btn = QPushButton("Open Template Editor…")
+        self.template_manage_btn.clicked.connect(self._open_template_editor)
+        self.template_refresh_btn = QPushButton("Refresh list")
+        self.template_refresh_btn.clicked.connect(self._refresh_templates)
+        tmpl_btn_row.addWidget(self.template_manage_btn)
+        tmpl_btn_row.addWidget(self.template_refresh_btn)
+        templates_layout.addLayout(tmpl_btn_row)
+
+        # ----- Help tab -----
+        help_tab = QWidget()
+        help_layout = QVBoxLayout(help_tab)
+        tabs.addTab(help_tab, "Help")
+
+        help_text = QLabel(
+            "Quick start:\n"
+            "1) Drag & drop your Purway output folders.\n"
+            "2) Choose an output folder.\n"
+            "3) Click Run Job.\n\n"
+            "Advanced options are optional. Use Preview if you want to validate a few matches first."
+        )
+        help_text.setWordWrap(True)
+        help_layout.addWidget(help_text)
+
+        help_actions = QHBoxLayout()
+        self.help_run_btn = QPushButton("Go to Run tab")
+        self.help_run_btn.clicked.connect(lambda: tabs.setCurrentIndex(0))
+        self.help_jobs_btn = QPushButton("Go to Jobs tab")
+        self.help_jobs_btn.clicked.connect(lambda: tabs.setCurrentIndex(1))
+        help_actions.addWidget(self.help_run_btn)
+        help_actions.addWidget(self.help_jobs_btn)
+        help_layout.addLayout(help_actions)
 
         self._refresh_templates()
+        self._update_inputs_state()
 
     @Slot(list)
     def _on_paths_dropped(self, paths: list[str]) -> None:
         self.controller.add_inputs([Path(p) for p in paths])
         self._auto_select_template()
+        self._update_inputs_state()
 
     def _select_output_folder(self) -> None:
         d = QFileDialog.getExistingDirectory(self, "Select output folder", self.out_dir_edit.text() or str(Path.home()))
         if d:
             self.out_dir_edit.setText(d)
             self.settings.last_output_dir = d
+
+    def _clear_inputs(self) -> None:
+        self.controller.clear_inputs()
+        self._update_inputs_state()
 
     def _run_job(self) -> None:
         out = self.out_dir_edit.text().strip()
@@ -241,6 +333,10 @@ class MainWindow(QMainWindow):
         self.template_combo.clear()
         for t in self.controller.template_manager.list_templates():
             self.template_combo.addItem(t.name, userData=t.id)
+        if hasattr(self, "templates_list"):
+            self.templates_list.clear()
+            for t in self.controller.template_manager.list_templates():
+                self.templates_list.addItem(f"{t.name} ({t.id}) — {t.pattern}")
         self._template_user_selected = False
         self._auto_select_template()
 
@@ -350,3 +446,35 @@ class MainWindow(QMainWindow):
     def _on_template_changed(self, _idx: int) -> None:
         if self.template_combo.isEnabled():
             self._template_user_selected = True
+
+    def _help_btn(self, text: str) -> QToolButton:
+        btn = QToolButton()
+        btn.setText("?")
+        btn.setToolTip(text)
+        btn.setAutoRaise(True)
+        btn.setFixedSize(18, 18)
+        return btn
+
+    def _style_primary_button(self, btn: QPushButton) -> None:
+        f = btn.font()
+        f.setBold(True)
+        f.setPointSize(f.pointSize() + 2)
+        btn.setFont(f)
+        btn.setMinimumHeight(36)
+        btn.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        btn.setDefault(True)
+
+    def _on_advanced_toggled(self, enabled: bool) -> None:
+        self.advanced_container.setVisible(enabled)
+        self._update_inputs_state()
+
+    def _on_flatten_toggle(self, enabled: bool) -> None:
+        self.cleanup_chk.setEnabled(enabled)
+        if not enabled:
+            self.cleanup_chk.setChecked(False)
+
+    def _update_inputs_state(self) -> None:
+        has_inputs = len(self.controller.inputs) > 0
+        self.run_btn.setEnabled(has_inputs)
+        self.preview_btn.setEnabled(has_inputs and self.advanced_group.isChecked())
+        self.schema_btn.setEnabled(has_inputs and self.advanced_group.isChecked())

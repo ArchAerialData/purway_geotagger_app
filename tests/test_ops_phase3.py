@@ -19,7 +19,7 @@ def _job_options(run_folder: Path, overwrite: bool, cleanup: bool) -> JobOptions
         flatten=True,
         cleanup_empty_dirs=cleanup,
         sort_by_ppm=False,
-        ppm_bin_edges=[0, 100, 500, 1000],
+        ppm_bin_edges=[0, 1000],
         write_xmp=True,
         dry_run=True,
         max_join_delta_seconds=3,
@@ -78,7 +78,7 @@ def test_rename_collision_safe(tmp_path: Path) -> None:
             flatten=False,
             cleanup_empty_dirs=False,
             sort_by_ppm=False,
-            ppm_bin_edges=[0, 100, 500, 1000],
+            ppm_bin_edges=[0, 1000],
             write_xmp=True,
             dry_run=True,
             max_join_delta_seconds=3,
@@ -99,12 +99,9 @@ def test_rename_collision_safe(tmp_path: Path) -> None:
 
 
 def test_bin_edges() -> None:
-    edges = [0, 100, 500, 1000]
-    assert _bin_folder_name(0, edges) == "0000-0099ppm"
-    assert _bin_folder_name(99, edges) == "0000-0099ppm"
-    assert _bin_folder_name(100, edges) == "0100-0499ppm"
-    assert _bin_folder_name(500, edges) == "0500-0999ppm"
-    assert _bin_folder_name(999, edges) == "0500-0999ppm"
+    edges = [0, 1000]
+    assert _bin_folder_name(0, edges) == "0000-0999ppm"
+    assert _bin_folder_name(999, edges) == "0000-0999ppm"
     assert _bin_folder_name(1000, edges) == "1000+ppm"
 
 

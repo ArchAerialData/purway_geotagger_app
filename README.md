@@ -141,9 +141,7 @@ On collisions: append `_dupN` suffix (N starts at 1).
 ### 4.5 Sorting by concentration (PPM)
 If enabled, output JPGs are additionally placed into bins:
 - bins default:
-  - `0000-0099ppm`
-  - `0100-0499ppm`
-  - `0500-0999ppm`
+  - `0000-0999ppm`
   - `1000+ppm`
 Configurable in Settings UI (list of bin edges).
 
