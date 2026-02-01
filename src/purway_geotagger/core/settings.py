@@ -30,6 +30,7 @@ class AppSettings:
     max_join_delta_seconds: int = DEFAULT_MAX_JOIN_DELTA_SECONDS
     write_xmp_default: bool = True
     dry_run_default: bool = False
+    exiftool_path: str = ""
 
     @classmethod
     def load(cls) -> "AppSettings":

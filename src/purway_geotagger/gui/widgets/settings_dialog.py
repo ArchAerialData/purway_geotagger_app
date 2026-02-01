@@ -11,6 +11,10 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QDialogButtonBox,
     QMessageBox,
+    QHBoxLayout,
+    QPushButton,
+    QFileDialog,
+    QWidget,
 )
 
 from purway_geotagger.core.settings import AppSettings
@@ -40,11 +44,21 @@ class SettingsDialog(QDialog):
         self.cleanup_chk = QCheckBox("Allow cleanup of empty dirs when flattening")
         self.cleanup_chk.setChecked(settings.cleanup_empty_dirs_default)
 
+        self.exiftool_edit = QLineEdit(settings.exiftool_path)
+        browse_btn = QPushButton("Browse…")
+        browse_btn.clicked.connect(self._browse_exiftool)
+        exiftool_row = QHBoxLayout()
+        exiftool_row.addWidget(self.exiftool_edit, 1)
+        exiftool_row.addWidget(browse_btn)
+        exiftool_widget = QWidget()
+        exiftool_widget.setLayout(exiftool_row)
+
         form.addRow("PPM bin edges (comma-separated)", self.ppm_edges_edit)
         form.addRow("Max join delta (seconds)", self.join_delta_spin)
         form.addRow("", self.write_xmp_chk)
         form.addRow("", self.backup_chk)
         form.addRow("", self.cleanup_chk)
+        form.addRow("ExifTool path (optional)", exiftool_widget)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._on_accept)
@@ -63,8 +77,15 @@ class SettingsDialog(QDialog):
         self.settings.write_xmp_default = self.write_xmp_chk.isChecked()
         self.settings.create_backup_on_overwrite = self.backup_chk.isChecked()
         self.settings.cleanup_empty_dirs_default = self.cleanup_chk.isChecked()
+        self.settings.exiftool_path = self.exiftool_edit.text().strip()
         self.settings.save()
         self.accept()
+
+    def _browse_exiftool(self) -> None:
+        start_dir = self.exiftool_edit.text().strip() or ""
+        path, _ = QFileDialog.getOpenFileName(self, "Select ExifTool", start_dir)
+        if path:
+            self.exiftool_edit.setText(path)
 
 
 def _parse_edges(value: str) -> list[int]:

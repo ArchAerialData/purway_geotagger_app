@@ -28,3 +28,17 @@ def test_parse_csv_with_bom_and_column_variants(tmp_path: Path) -> None:
     assert rec.ppm == 123.0
     assert rec.photo_ref == "IMG_0001.jpg"
     assert rec.timestamp is not None
+
+
+def test_parse_csv_skips_non_utf8_files(tmp_path: Path) -> None:
+    good = tmp_path / "good.csv"
+    bad = tmp_path / "._bad.csv"
+    _write_csv(
+        good,
+        "Latitude,Longitude,PPM,Timestamp\n"
+        "1.0,2.0,10,2023-08-30 20:51:00\n",
+    )
+    bad.write_bytes(b"\xff\xfe\x00\x00")
+
+    index = PurwayCSVIndex.from_csv_files([good, bad])
+    assert len(index.records) == 1

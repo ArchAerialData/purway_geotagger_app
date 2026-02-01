@@ -17,6 +17,11 @@ FILENAME_TS_REGEXES = [
     re.compile(r"(?P<y>\d{4})(?P<m>\d{2})(?P<d>\d{2})[ _]?(?P<h>\d{2})(?P<mi>\d{2})(?P<s>\d{2})"),
 ]
 
+PURWAY_TS_REGEX = re.compile(
+    r"^(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})[ _]"
+    r"(?P<h>\d{2}):(?P<mi>\d{2}):(?P<s>\d{2})(?::(?P<ms>\d{1,3}))?$"
+)
+
 def parse_csv_timestamp(value: str) -> datetime:
     """Parse a CSV timestamp string into a datetime.
 
@@ -25,7 +30,18 @@ def parse_csv_timestamp(value: str) -> datetime:
     """
     v = value.strip()
     # Normalize common separators
-    v2 = v.replace("_", " ").replace("/", "-")
+    v2 = v.replace("/", "-")
+    m = PURWAY_TS_REGEX.match(v2)
+    if m:
+        gd = m.groupdict()
+        ms = gd.get("ms")
+        micro = int(ms) * 1000 if ms else 0
+        return datetime(
+            int(gd["y"]), int(gd["m"]), int(gd["d"]),
+            int(gd["h"]), int(gd["mi"]), int(gd["s"]),
+            microsecond=micro,
+        )
+    v2 = v2.replace("_", " ")
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y%m%d %H%M%S"):
         try:
             return datetime.strptime(v2, fmt)
@@ -41,10 +57,13 @@ def parse_photo_timestamp_from_name(stem: str) -> datetime | None:
         if not m:
             continue
         gd = m.groupdict()
-        return datetime(
-            int(gd["y"]), int(gd["m"]), int(gd["d"]),
-            int(gd["h"]), int(gd["mi"]), int(gd["s"])
-        )
+        try:
+            return datetime(
+                int(gd["y"]), int(gd["m"]), int(gd["d"]),
+                int(gd["h"]), int(gd["mi"]), int(gd["s"])
+            )
+        except ValueError:
+            continue
     return None
 
 def format_exif_datetime(dt: datetime) -> str:

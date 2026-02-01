@@ -185,7 +185,7 @@ For each run, write:
 ## 7) macOS setup + packaging (must implement)
 
 ### 7.1 Field setup script (run once per pilot laptop)
-Provide `scripts/setup_macos.sh` that:
+Provide `scripts/macos/setup_macos.sh` that:
 - installs Homebrew if missing
 - installs Python (3.11 recommended) via brew if missing
 - installs ExifTool via brew
@@ -197,10 +197,10 @@ Provide `scripts/setup_macos.sh` that:
 - `python -c "import PySide6"`
 
 ### 7.2 Running during development
-Provide `scripts/run_gui.sh` to activate venv and run the GUI.
+Provide `scripts/macos/run_gui.sh` to activate venv and run the GUI.
 
 ### 7.3 Building a `.app`
-Provide `scripts/build_macos_app.sh` using **PyInstaller**:
+Provide `scripts/macos/build_app.sh` using **PyInstaller**:
 - produce `dist/PurwayGeotagger.app`
 - note: signing/notarization is out of scope but leave placeholder comments
 
@@ -314,13 +314,13 @@ purway_geotagger_app/
 After setup:
 
 ```bash
-./scripts/run_gui.sh
+./scripts/macos/run_gui.sh
 ```
 
 Build .app:
 
 ```bash
-./scripts/build_macos_app.sh
+./scripts/macos/build_app.sh
 ```
 
 Notes:
@@ -340,7 +340,7 @@ python -m pip install -r requirements.txt -r requirements-dev.txt
 Run tests (includes `compileall`):
 
 ```bash
-./scripts/run_tests.sh
+./scripts/macos/run_tests.sh
 ```
 
 ---

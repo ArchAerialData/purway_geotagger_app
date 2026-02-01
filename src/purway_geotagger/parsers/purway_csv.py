@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import csv
+import logging
 from typing import Optional
 
 from purway_geotagger.util.timeparse import parse_csv_timestamp, parse_photo_timestamp_from_name, format_exif_datetime
@@ -128,12 +129,17 @@ def _to_match(r: PurwayRecord, join_method: str) -> PhotoMatch:
 
 def _parse_single_csv(path: Path) -> list[PurwayRecord]:
     # Read with BOM tolerance
-    with path.open("r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-        if not rows:
-            return []
-        cols = reader.fieldnames or list(rows[0].keys())
+    logger = logging.getLogger(__name__)
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            if not rows:
+                return []
+            cols = reader.fieldnames or list(rows[0].keys())
+    except UnicodeDecodeError:
+        logger.warning("Skipping non-UTF8 CSV: %s", path)
+        return []
 
     photo_col = _pick_col(cols, PHOTO_COL_CANDIDATES)
     lat_col = _pick_col(cols, LAT_COL_CANDIDATES)
@@ -192,10 +198,24 @@ class CSVSchema:
 
 
 def inspect_csv_schema(path: Path) -> CSVSchema:
-    with path.open("r", encoding="utf-8-sig", newline="") as f:
-        reader = csv.DictReader(f)
-        rows = list(reader)
-        cols = reader.fieldnames or (list(rows[0].keys()) if rows else [])
+    logger = logging.getLogger(__name__)
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            cols = reader.fieldnames or (list(rows[0].keys()) if rows else [])
+    except UnicodeDecodeError:
+        logger.warning("Skipping non-UTF8 CSV schema: %s", path)
+        return CSVSchema(
+            csv_path=path,
+            columns=[],
+            row_count=0,
+            photo_col=None,
+            lat_col=None,
+            lon_col=None,
+            time_col=None,
+            ppm_col=None,
+        )
 
     photo_col = _pick_col(cols, PHOTO_COL_CANDIDATES)
     lat_col = _pick_col(cols, LAT_COL_CANDIDATES)

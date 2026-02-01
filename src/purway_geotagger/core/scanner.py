@@ -3,8 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
+import logging
 
-from purway_geotagger.util.paths import is_csv, is_jpg
+from purway_geotagger.util.paths import is_csv, is_jpg, is_macos_artifact
 
 @dataclass(frozen=True)
 class ScanResult:
@@ -21,6 +22,7 @@ def scan_inputs(inputs: Iterable[Path]) -> ScanResult:
     photos: set[Path] = set()
     csvs: set[Path] = set()
 
+    logger = logging.getLogger(__name__)
     for p in inputs:
         p = p.expanduser().resolve()
         if not p.exists():
@@ -35,6 +37,9 @@ def scan_inputs(inputs: Iterable[Path]) -> ScanResult:
         # directory
         for child in p.rglob("*"):
             if not child.is_file():
+                continue
+            if is_macos_artifact(child):
+                logger.debug("Skipping macOS artifact: %s", child)
                 continue
             if is_jpg(child):
                 photos.add(child)

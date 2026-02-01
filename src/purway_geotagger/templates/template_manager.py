@@ -6,13 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from purway_geotagger.templates.models import RenameTemplate
+from purway_geotagger.util.paths import resource_path
 try:
     from appdirs import user_config_dir
 except ModuleNotFoundError:  # pragma: no cover - only used in minimal test envs
     def user_config_dir(*_args, **_kwargs):
         raise ModuleNotFoundError("appdirs is required for user template storage.")
 
-DEFAULT_TEMPLATES_PATH = Path(__file__).resolve().parents[3] / "config" / "default_templates.json"
+DEFAULT_TEMPLATES_PATH = resource_path(Path("config") / "default_templates.json")
 
 def _user_templates_path() -> Path:
     cfg_dir = Path(user_config_dir(appname="PurwayGeotagger", appauthor=False))

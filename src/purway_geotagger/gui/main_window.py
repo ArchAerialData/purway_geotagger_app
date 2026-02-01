@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import shutil
+import os
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -19,6 +20,7 @@ from purway_geotagger.gui.widgets.settings_dialog import SettingsDialog
 from purway_geotagger.gui.widgets.preview_dialog import PreviewDialog
 from purway_geotagger.gui.widgets.schema_dialog import SchemaDialog
 from purway_geotagger.gui.workers import PreviewWorker
+from purway_geotagger.exif.exiftool_writer import is_exiftool_available
 
 class MainWindow(QMainWindow):
     def __init__(self, settings: AppSettings) -> None:
@@ -270,6 +272,20 @@ class MainWindow(QMainWindow):
         if not out:
             QMessageBox.warning(self, "Output required", "Select an output folder.")
             return
+        if not is_exiftool_available():
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Warning)
+            msg.setWindowTitle("ExifTool required")
+            msg.setText(
+                "ExifTool is required to write EXIF metadata.\n\n"
+                "Install ExifTool or set its path in Settings."
+            )
+            open_btn = msg.addButton("Open Settings", QMessageBox.AcceptRole)
+            msg.addButton(QMessageBox.Cancel)
+            msg.exec()
+            if msg.clickedButton() == open_btn:
+                self._open_settings()
+            return
         if self.overwrite_chk.isChecked():
             msg = "You are about to overwrite original JPG files in place. This cannot be undone."
             if self.cleanup_chk.isChecked():
@@ -323,6 +339,10 @@ class MainWindow(QMainWindow):
         if dlg.exec():
             self.cleanup_chk.setChecked(self.settings.cleanup_empty_dirs_default)
             self.write_xmp_chk.setChecked(self.settings.write_xmp_default)
+            if self.settings.exiftool_path:
+                os.environ["PURWAY_EXIFTOOL_PATH"] = self.settings.exiftool_path
+            else:
+                os.environ.pop("PURWAY_EXIFTOOL_PATH", None)
 
     def _open_template_editor(self) -> None:
         dlg = TemplateEditorDialog(self.controller.template_manager, parent=self)

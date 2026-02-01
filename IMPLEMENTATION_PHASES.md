@@ -36,7 +36,7 @@ This repo already contains a working **skeleton**. This document breaks the rema
 ### Work items
 - [x] Decide and document how tests are installed/run (e.g., add `pytest` as a dev dependency in `requirements-dev.txt` and define a single canonical command like `python -m pytest`).
 - [x] Add a minimal test runner script (optional) under `scripts/` if it improves repeatability.
-- [x] Confirm `scripts/setup_macos.sh` + `scripts/run_gui.sh` still match the documented workflow in `README.md`.
+- [x] Confirm `scripts/macos/setup_macos.sh` + `scripts/macos/run_gui.sh` still match the documented workflow in `README.md`.
 - [x] Confirm run folder naming matches `<output_root>/PurwayGeotagger_<YYYYMMDD_HHMMSS>/`.
 - [x] Confirm `run_log.txt`, `run_config.json`, and `manifest.csv` are always created even on cancel/failure.
 
@@ -208,8 +208,8 @@ This repo already contains a working **skeleton**. This document breaks the rema
 - Build script produces a working macOS `.app` (or a clearly documented alternative) with the necessary Qt plugins and bundled resources.
 
 ### Work items
-- [x] Validate and refine `scripts/setup_macos.sh` to be idempotent and fail with clear guidance.
-- [x] Update `scripts/build_macos_app.sh` to reliably bundle PySide6/Qt dependencies (PyInstaller flags/spec as needed).
+- [x] Validate and refine `scripts/macos/setup_macos.sh` to be idempotent and fail with clear guidance.
+- [x] Update `scripts/macos/build_app.sh` to reliably bundle PySide6/Qt dependencies (PyInstaller flags/spec as needed).
 - [x] Ensure non-code resources are included where needed (e.g., default templates JSON).
 - [x] Document build output expectations (e.g., `dist/PurwayGeotagger.app`).
 

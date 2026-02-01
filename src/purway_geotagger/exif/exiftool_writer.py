@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import csv
+import os
+import shutil
 import subprocess
+import sys
 from typing import Callable
 
 from purway_geotagger.core.photo_task import PhotoTask
@@ -18,6 +21,7 @@ class ExifToolWriter:
     def __init__(self, write_xmp: bool, dry_run: bool) -> None:
         self.write_xmp = write_xmp
         self.dry_run = dry_run
+        self.exiftool_path = _resolve_exiftool_path()
 
     def write_tasks(
         self,
@@ -51,17 +55,20 @@ class ExifToolWriter:
         self._write_import_csv(import_csv, matched)
 
         cmd = [
-            "exiftool",
+            self.exiftool_path,
             "-overwrite_original",
             f"-csv={import_csv}",
         ]
 
-        proc = subprocess.run(
-            cmd,
-            cwd=str(work_dir),
-            capture_output=True,
-            text=True,
-        )
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(work_dir),
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError as e:
+            raise ExifToolError(_exiftool_missing_message()) from e
 
         if proc.returncode != 0:
             raise ExifToolError(proc.stderr.strip() or "ExifTool returned non-zero exit code.")
@@ -117,7 +124,7 @@ class ExifToolWriter:
         """
         files = [str(t.output_path.expanduser().resolve()) for t in tasks]
         cmd = [
-            "exiftool",
+            self.exiftool_path,
             "-csv",
             "-GPSLatitude",
             "-GPSLongitude",
@@ -126,12 +133,15 @@ class ExifToolWriter:
             *files,
         ]
 
-        proc = subprocess.run(
-            cmd,
-            cwd=str(work_dir),
-            capture_output=True,
-            text=True,
-        )
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(work_dir),
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError as e:
+            raise ExifToolError(_exiftool_missing_message()) from e
 
         if proc.returncode != 0:
             raise ExifToolError(proc.stderr.strip() or "ExifTool verification failed.")
@@ -182,3 +192,50 @@ def _gps_lon_ref(lon: float | None) -> str:
     if lon is None:
         return ""
     return "E" if lon >= 0 else "W"
+
+
+def _resolve_exiftool_path() -> str:
+    """Resolve an ExifTool executable path.
+
+    Resolution order:
+    1) PURWAY_EXIFTOOL_PATH env var (explicit override)
+    2) Bundled binary next to the app executable (PyInstaller onedir/.app)
+    3) PATH lookup
+    4) Common macOS locations
+    5) Fallback: "exiftool" (may still fail at runtime with a friendly error)
+    """
+    env_path = os.environ.get("PURWAY_EXIFTOOL_PATH")
+    if env_path:
+        p = Path(env_path)
+        if p.exists():
+            return str(p)
+
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        bundled = exe_dir / "bin" / "exiftool"
+        if bundled.exists():
+            return str(bundled)
+
+    which = shutil.which("exiftool")
+    if which:
+        return which
+
+    for cand in ("/opt/homebrew/bin/exiftool", "/usr/local/bin/exiftool", "/usr/bin/exiftool"):
+        if Path(cand).exists():
+            return cand
+
+    return "exiftool"
+
+
+def _exiftool_missing_message() -> str:
+    return (
+        "ExifTool not found. Install ExifTool or set PURWAY_EXIFTOOL_PATH, "
+        "or use a bundled ExifTool in the packaged app."
+    )
+
+
+def is_exiftool_available() -> bool:
+    path = _resolve_exiftool_path()
+    if path == "exiftool":
+        return shutil.which("exiftool") is not None
+    return Path(path).exists()
