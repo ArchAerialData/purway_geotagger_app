@@ -339,6 +339,11 @@ Modeled after `IMPLEMENTATION_PHASES.md`: do not start the next phase until the 
 - Deviations:
   - Finder/packaged `.app` ExifTool preflight not verified in this environment; requires macOS manual check.
 
+### CI scaffolding exception (user‑approved)
+- Date: 2026‑02‑01
+- Scope: Add GitHub Actions macOS build pipeline + CI scripts (no app‑behavior changes).
+- Reason: User requested CI setup now; Phase 1 Finder/packaged‑app ExifTool gate remains **incomplete**.
+
 ### Phase 2 — Methane Reports mode (in-place EXIF + cleaned CSV)
 
 **Goal:** One-click workflow for methane reporting with minimal pilot decisions.
