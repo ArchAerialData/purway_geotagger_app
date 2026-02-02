@@ -9,3 +9,4 @@ class RenameTemplate:
     client: str
     pattern: str
     description: str = ""
+    start_index: int = 1

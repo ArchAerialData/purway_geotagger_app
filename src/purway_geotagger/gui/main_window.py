@@ -466,6 +466,11 @@ class MainWindow(QMainWindow):
     def _on_template_changed(self, _idx: int) -> None:
         if self.template_combo.isEnabled():
             self._template_user_selected = True
+            template_id = self.template_combo.currentData()
+            tmpl = self.controller.template_manager.templates.get(template_id)
+            if tmpl:
+                value = max(1, int(tmpl.start_index))
+                self.start_index_spin.setValue(min(value, self.start_index_spin.maximum()))
 
     def _help_btn(self, text: str) -> QToolButton:
         btn = QToolButton()

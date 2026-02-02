@@ -8,10 +8,11 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QListWidget,
     QLineEdit,
-    QTextEdit,
     QPushButton,
     QLabel,
     QMessageBox,
+    QFormLayout,
+    QGroupBox,
 )
 
 from purway_geotagger.templates.models import RenameTemplate
@@ -23,7 +24,10 @@ class TemplateEditorDialog(QDialog):
         super().__init__(parent)
         self.manager = manager
         self.setWindowTitle("Template Editor")
-        self.resize(640, 420)
+        self.resize(720, 460)
+
+        self._editing_template_id: str | None = None
+        self._current_description: str = ""
 
         layout = QVBoxLayout(self)
         row = QHBoxLayout()
@@ -36,23 +40,35 @@ class TemplateEditorDialog(QDialog):
         right = QVBoxLayout()
         row.addLayout(right, 2)
 
-        self.id_edit = QLineEdit()
-        self.name_edit = QLineEdit()
-        self.client_edit = QLineEdit()
-        self.pattern_edit = QLineEdit()
-        self.desc_edit = QTextEdit()
-        self.desc_edit.setFixedHeight(80)
+        form = QFormLayout()
+        self.client_name_edit = QLineEdit()
+        self.client_abbr_edit = QLineEdit()
+        self.start_index_edit = QLineEdit("0001")
+        self.suffix_edit = QLineEdit()
+        self.suffix_edit.setPlaceholderText("Optional, e.g. _{date} or _AREA")
 
-        right.addWidget(QLabel("ID"))
-        right.addWidget(self.id_edit)
-        right.addWidget(QLabel("Name"))
-        right.addWidget(self.name_edit)
-        right.addWidget(QLabel("Client"))
-        right.addWidget(self.client_edit)
-        right.addWidget(QLabel("Pattern"))
-        right.addWidget(self.pattern_edit)
-        right.addWidget(QLabel("Description"))
-        right.addWidget(self.desc_edit)
+        form.addRow("Client Name", self.client_name_edit)
+        form.addRow("Client Abbreviation", self.client_abbr_edit)
+        form.addRow("Starting Index", self.start_index_edit)
+        form.addRow("Additional fields/suffix (optional)", self.suffix_edit)
+        right.addLayout(form)
+
+        tokens_help = QLabel("Tokens for suffix: {date} {time} {ppm} {lat} {lon} {orig}")
+        tokens_help.setWordWrap(True)
+        right.addWidget(tokens_help)
+
+        preview_box = QGroupBox("Preview")
+        preview_layout = QVBoxLayout(preview_box)
+        self.pattern_preview = QLabel()
+        self.pattern_preview.setWordWrap(True)
+        self.example_preview = QLabel()
+        self.example_preview.setWordWrap(True)
+        preview_layout.addWidget(QLabel("Pattern"))
+        preview_layout.addWidget(self.pattern_preview)
+        preview_layout.addWidget(QLabel("Example"))
+        preview_layout.addWidget(self.example_preview)
+        right.addWidget(preview_box)
+        right.addStretch(1)
 
         btn_row = QHBoxLayout()
         self.new_btn = QPushButton("New")
@@ -71,12 +87,19 @@ class TemplateEditorDialog(QDialog):
         self.delete_btn.clicked.connect(self._delete_template)
         self.close_btn.clicked.connect(self.accept)
 
+        self.client_name_edit.textChanged.connect(self._update_preview)
+        self.client_abbr_edit.textChanged.connect(self._update_preview)
+        self.start_index_edit.textChanged.connect(self._update_preview)
+        self.suffix_edit.textChanged.connect(self._update_preview)
+
         self._refresh_list()
+        self._update_preview()
 
     def _refresh_list(self) -> None:
         self.list_widget.clear()
         for t in self.manager.list_templates():
-            self.list_widget.addItem(f"{t.name} ({t.id})")
+            label = f"{t.name} ({t.client})"
+            self.list_widget.addItem(label)
         if self.list_widget.count() > 0:
             self.list_widget.setCurrentRow(0)
 
@@ -91,52 +114,61 @@ class TemplateEditorDialog(QDialog):
         t = self._current_template()
         if not t:
             return
-        self.id_edit.setText(t.id)
-        self.name_edit.setText(t.name)
-        self.client_edit.setText(t.client)
-        self.pattern_edit.setText(t.pattern)
-        self.desc_edit.setPlainText(t.description)
+        self._editing_template_id = t.id
+        self._current_description = t.description
+        self.client_name_edit.setText(t.name)
+        self.client_abbr_edit.setText(t.client)
+        start_text, suffix = _extract_fields_from_pattern(t.pattern, t.start_index)
+        self.start_index_edit.setText(start_text)
+        self.suffix_edit.setText(suffix)
+        self._update_preview()
 
     def _new_template(self) -> None:
         self.list_widget.clearSelection()
-        self.id_edit.clear()
-        self.name_edit.clear()
-        self.client_edit.clear()
-        self.pattern_edit.clear()
-        self.desc_edit.clear()
-        self.name_edit.setFocus()
+        self._editing_template_id = None
+        self._current_description = ""
+        self.client_name_edit.clear()
+        self.client_abbr_edit.clear()
+        self.start_index_edit.setText("0001")
+        self.suffix_edit.clear()
+        self.client_name_edit.setFocus()
+        self._update_preview()
 
     def _save_template(self) -> None:
-        tid = self.id_edit.text().strip()
-        name = self.name_edit.text().strip()
-        client = self.client_edit.text().strip()
-        pattern = self.pattern_edit.text().strip()
-        desc = self.desc_edit.toPlainText().strip()
+        name = self.client_name_edit.text().strip()
+        abbr = self.client_abbr_edit.text().strip()
+        suffix = self.suffix_edit.text().strip()
+        start_index, width = _parse_start_index(self.start_index_edit.text())
 
         if not name:
-            QMessageBox.warning(self, "Validation", "Template name is required.")
+            QMessageBox.warning(self, "Validation", "Client Name is required.")
             return
-        if not tid:
-            tid = _slugify(name)
+        if not abbr:
+            QMessageBox.warning(self, "Validation", "Client Abbreviation is required.")
+            return
+        if start_index < 1:
+            QMessageBox.warning(self, "Validation", "Starting Index must be 1 or greater.")
+            return
+
+        tid = self._editing_template_id or _slugify(name)
         if not tid:
             QMessageBox.warning(self, "Validation", "Template ID is required.")
             return
-        if not pattern:
-            QMessageBox.warning(self, "Validation", "Template pattern is required.")
-            return
 
+        pattern = _build_pattern(width, suffix)
         tmpl = RenameTemplate(
             id=tid,
             name=name,
-            client=client or "CLIENT",
+            client=abbr,
             pattern=pattern,
-            description=desc,
+            description=self._current_description,
+            start_index=start_index,
         )
 
         try:
             render_filename(
                 template=tmpl,
-                index=1,
+                index=start_index,
                 ppm=10.0,
                 lat=1.2345,
                 lon=2.3456,
@@ -166,6 +198,60 @@ class TemplateEditorDialog(QDialog):
             if t.id == tid:
                 self.list_widget.setCurrentRow(i)
                 return
+
+    def _update_preview(self) -> None:
+        suffix = self.suffix_edit.text().strip()
+        start_index, width = _parse_start_index(self.start_index_edit.text())
+        pattern = _build_pattern(width, suffix)
+        self.pattern_preview.setText(pattern)
+
+        name = self.client_name_edit.text().strip() or "Client"
+        abbr = self.client_abbr_edit.text().strip() or "CLIENT"
+        tmpl = RenameTemplate(
+            id="preview",
+            name=name,
+            client=abbr,
+            pattern=pattern,
+            description=self._current_description,
+            start_index=start_index,
+        )
+        try:
+            example = render_filename(
+                template=tmpl,
+                index=start_index,
+                ppm=12.3,
+                lat=1.2345,
+                lon=2.3456,
+                orig="IMG_0001",
+            )
+            self.example_preview.setText(f"{example}.jpg")
+        except Exception as e:
+            self.example_preview.setText(f"Pattern error: {e}")
+
+
+def _build_pattern(width: int, suffix: str) -> str:
+    index_token = "{index}" if width == 1 else f"{{index:0{width}d}}"
+    suffix = suffix.strip()
+    return f"{{client}}_{index_token}{suffix}"
+
+
+def _parse_start_index(text: str) -> tuple[int, int]:
+    raw = text.strip() or "0001"
+    digits = re.sub(r"\D", "", raw) or "1"
+    start_index = int(digits)
+    width = max(1, len(digits))
+    return start_index, width
+
+
+def _extract_fields_from_pattern(pattern: str, start_index: int) -> tuple[str, str]:
+    match = re.match(r"^\{client\}_\{index(?::0?(\d+)d)?\}(.*)$", pattern)
+    if not match:
+        return str(max(1, start_index)).zfill(4), ""
+    width = int(match.group(1) or 1)
+    suffix = match.group(2) or ""
+    index_value = max(1, start_index)
+    start_text = str(index_value).zfill(width) if width > 1 else str(index_value)
+    return start_text, suffix
 
 
 def _slugify(text: str) -> str:
