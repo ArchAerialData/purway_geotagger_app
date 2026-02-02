@@ -2,17 +2,19 @@
   "templates": [
     {
       "id": "default",
-      "name": "Default (client_date_index_ppm)",
+      "name": "Default",
       "client": "CLIENT",
-      "pattern": "{client}_{date}_{index:05d}_{ppm}ppm",
-      "description": "CLIENT_YYYYMMDD_00001_123ppm.jpg"
+      "pattern": "{client}_{index:04d}",
+      "description": "CLIENT_0001.jpg",
+      "start_index": 1
     },
     {
       "id": "clientA",
       "name": "Client A (index_orig)",
       "client": "ClientA",
       "pattern": "{client}_{index:06d}_{orig}",
-      "description": "ClientA_000001_originalname.jpg"
+      "description": "ClientA_000001_originalname.jpg",
+      "start_index": 1
     }
   ]
 }
