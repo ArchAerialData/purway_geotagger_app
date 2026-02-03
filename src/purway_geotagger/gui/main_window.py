@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
 
 from PySide6.QtGui import QIcon, QPixmap
 from purway_geotagger.core.settings import AppSettings
+from purway_geotagger.core.utils import resource_path
+
 
 from purway_geotagger.core.modes import RunMode
 from purway_geotagger.gui.widgets.drop_zone import DropZone
@@ -139,9 +141,10 @@ class MainWindow(QMainWindow):
         self._on_theme_changed(self.settings.ui_theme)
         
         # Set App Icon
-        icon_path = Path(__file__).parents[3] / "assets/aallc_logos/AALLC_CircleLogo_2023_V3_White.png"
+        icon_path = resource_path("assets/aallc_logos/AALLC_CircleLogo_2023_V3_White.png")
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
+
 
 
         # ----- Tab 1: Run (Home + Modes) -----
@@ -556,9 +559,10 @@ class MainWindow(QMainWindow):
         # Update Logo
         is_dark = (theme or "light").strip().lower() == "dark"
         fname = "ArchAerial_Logo_White_NoWebsite.png" if is_dark else "ArchAerial_Black&Transparent.png"
-        logo_path = Path(__file__).parents[3] / "assets/aallc_logos" / fname
+        logo_path = resource_path(f"assets/aallc_logos/{fname}")
         
         if logo_path.exists():
+
             pix = QPixmap(str(logo_path))
             # Scale proportionally to fixed height
             if not pix.isNull():
