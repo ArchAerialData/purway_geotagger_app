@@ -17,6 +17,9 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QProgressBar,
+    QFrame,
+    QSizePolicy,
+    QScrollArea,
 )
 
 from purway_geotagger.core.modes import common_parent, default_methane_log_base
@@ -40,29 +43,51 @@ class MethanePage(QWidget):
         self._last_run_folder: Path | None = None
         self.controller.jobs_changed.connect(self._on_jobs_changed)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(12)
+        # Main Layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Scroll Area for content
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        content_widget = QWidget()
+        self.content_layout = QVBoxLayout(content_widget)
+        self.content_layout.setContentsMargins(40, 40, 40, 40)
+        self.content_layout.setSpacing(24)
+        scroll.setWidget(content_widget)
+        main_layout.addWidget(scroll)
+
+        # --- Header ---
         header = QHBoxLayout()
         back_btn = QPushButton("Back")
+        back_btn.setProperty("cssClass", "ghost")
+        back_btn.setCursor(Qt.PointingHandCursor)
         back_btn.clicked.connect(self.back_requested.emit)
         header.addWidget(back_btn)
         header.addStretch(1)
-        layout.addLayout(header)
+        self.content_layout.addLayout(header)
 
         title = QLabel("Methane Reports Only")
-        title_font = title.font()
-        title_font.setBold(True)
-        title_font.setPointSize(title_font.pointSize() + 2)
-        title.setFont(title_font)
-        layout.addWidget(title)
+        title.setProperty("cssClass", "h1")
+        self.content_layout.addWidget(title)
 
-        input_group = QGroupBox("1) Add Inputs")
-        input_layout = QVBoxLayout(input_group)
+        # --- Section 1: Inputs ---
+        input_card = QFrame()
+        input_card.setProperty("cssClass", "card")
+        input_layout = QVBoxLayout(input_card)
+        input_layout.setContentsMargins(20, 20, 20, 20)
+        input_layout.setSpacing(16)
+        
+        lbl_h2_in = QLabel("1) Add Inputs")
+        lbl_h2_in.setProperty("cssClass", "h2")
+        input_layout.addWidget(lbl_h2_in)
+
         input_layout.addWidget(QLabel("Drop Raw Data folders/files below:"))
         self.drop_zone = DropZone()
         self.drop_zone.paths_dropped.connect(self._on_paths_dropped)
-        self.drop_zone.setMinimumHeight(90)
+        self.drop_zone.setMinimumHeight(120) 
         input_layout.addWidget(self.drop_zone)
 
         input_btn_row = QHBoxLayout()
@@ -81,19 +106,36 @@ class MethanePage(QWidget):
         self.inputs_list = QListWidget()
         self.inputs_list.setMinimumHeight(80)
         input_layout.addWidget(self.inputs_list)
-        layout.addWidget(input_group)
+        
+        self.content_layout.addWidget(input_card)
 
-        options_group = QGroupBox("2) Methane Options")
-        options_layout = QVBoxLayout(options_group)
+        # --- Section 2: Options ---
+        options_card = QFrame()
+        options_card.setProperty("cssClass", "card")
+        options_layout = QVBoxLayout(options_card)
+        options_layout.setContentsMargins(20, 20, 20, 20)
+        options_layout.setSpacing(16)
+
+        lbl_h2_opt = QLabel("2) Methane Options")
+        lbl_h2_opt.setProperty("cssClass", "h2")
+        options_layout.addWidget(lbl_h2_opt)
+
         threshold_row = QHBoxLayout()
-        threshold_row.addWidget(QLabel("PPM threshold:"))
+        threshold_lbl = QLabel("PPM threshold:")
+        threshold_lbl.setProperty("cssClass", "subtitle") # Use subtitle style for label
+        threshold_row.addWidget(threshold_lbl)
+        
         self.threshold_spin = QSpinBox()
         self.threshold_spin.setRange(1, 1_000_000)
         self.threshold_spin.setValue(max(1, int(self.state.methane_threshold)))
         self.threshold_spin.valueChanged.connect(self._on_threshold_changed)
         self.threshold_spin.setToolTip("Rows with PPM below this value are filtered out.")
+        self.threshold_spin.setFixedWidth(100)
         threshold_row.addWidget(self.threshold_spin)
-        threshold_row.addWidget(QLabel("PPM"))
+        
+        unit_lbl = QLabel("PPM")
+        unit_lbl.setProperty("cssClass", "subtitle")
+        threshold_row.addWidget(unit_lbl)
         threshold_row.addStretch(1)
         options_layout.addLayout(threshold_row)
 
@@ -103,56 +145,83 @@ class MethanePage(QWidget):
         options_layout.addWidget(self.kmz_chk)
 
         self.cleaned_preview = QLabel()
+        self.cleaned_preview.setProperty("cssClass", "subtitle")
         self.cleaned_preview.setWordWrap(True)
+        
         self.kmz_preview = QLabel()
+        self.kmz_preview.setProperty("cssClass", "subtitle")
         self.kmz_preview.setWordWrap(True)
+        
         options_layout.addWidget(self.cleaned_preview)
         options_layout.addWidget(self.kmz_preview)
-        layout.addWidget(options_group)
+        
+        self.content_layout.addWidget(options_card)
 
-        output_group = QGroupBox("3) Run Logs")
-        output_layout = QVBoxLayout(output_group)
+        # --- Section 3: Logs ---
+        logs_card = QFrame()
+        logs_card.setProperty("cssClass", "card")
+        logs_layout = QVBoxLayout(logs_card)
+        logs_layout.setContentsMargins(20, 20, 20, 20)
+        logs_layout.setSpacing(16)
+
+        lbl_h2_log = QLabel("3) Run Logs")
+        lbl_h2_log.setProperty("cssClass", "h2")
+        logs_layout.addWidget(lbl_h2_log)
+
         output_row = QHBoxLayout()
-        output_row.addWidget(QLabel("Logs saved to:"))
+        log_lbl = QLabel("Logs saved to:")
+        log_lbl.setProperty("cssClass", "subtitle")
+        output_row.addWidget(log_lbl)
+        
         self.log_location_edit = QLineEdit()
         self.log_location_edit.setReadOnly(True)
         output_row.addWidget(self.log_location_edit, 1)
+        
         self.change_log_btn = QPushButton("Select Log Folder…")
-        self.change_log_btn.setFlat(True)
+        # standard button style
         self.change_log_btn.clicked.connect(self._change_log_location)
         output_row.addWidget(self.change_log_btn)
+        
         self.view_log_btn = QPushButton("View log…")
-        self.view_log_btn.setFlat(True)
         self.view_log_btn.setEnabled(False)
         self.view_log_btn.clicked.connect(self._view_log)
         output_row.addWidget(self.view_log_btn)
-        output_layout.addLayout(output_row)
+        logs_layout.addLayout(output_row)
+        
         self.log_note = QLabel("")
+        self.log_note.setProperty("cssClass", "subtitle")
         self.log_note.setWordWrap(True)
-        output_layout.addWidget(self.log_note)
-        layout.addWidget(output_group)
+        logs_layout.addWidget(self.log_note)
+        
+        self.content_layout.addWidget(logs_card)
 
+        # --- Actions ---
         actions_row = QHBoxLayout()
         self.run_btn = QPushButton("Run Methane")
+        self.run_btn.setProperty("cssClass", "primary") # Primary action style
+        self.run_btn.setCursor(Qt.PointingHandCursor)
         self.run_btn.clicked.connect(self._run_methane)
-        self.run_btn.setMinimumHeight(36)
+        self.run_btn.setMinimumHeight(44) 
         actions_row.addWidget(self.run_btn)
+        
         self.view_log_btn2 = QPushButton("View log…")
         self.view_log_btn2.setEnabled(False)
         self.view_log_btn2.clicked.connect(self._view_log)
         actions_row.addWidget(self.view_log_btn2)
         actions_row.addStretch(1)
-        layout.addLayout(actions_row)
+        self.content_layout.addLayout(actions_row)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setVisible(False)
-        layout.addWidget(self.progress)
+        self.content_layout.addWidget(self.progress)
+        
         self.status_label = QLabel("")
+        self.status_label.setProperty("cssClass", "subtitle")
         self.status_label.setWordWrap(True)
-        layout.addWidget(self.status_label)
+        self.content_layout.addWidget(self.status_label)
 
-        layout.addStretch(1)
+        self.content_layout.addStretch(1)
 
         self.refresh_summary()
 

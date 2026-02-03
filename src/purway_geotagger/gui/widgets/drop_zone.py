@@ -16,10 +16,13 @@ class DropZone(QFrame):
         super().__init__()
         self.setFrameShape(QFrame.StyledPanel)
         self.setAcceptDrops(True)
+        # Apply the QSS class
+        self.setProperty("cssClass", "dropzone")
 
         layout = QVBoxLayout(self)
         lbl = QLabel("Drop folders or files here")
         lbl.setAlignment(Qt.AlignCenter)
+        lbl.setStyleSheet("background: transparent; color: #86868B; font-size: 14px; font-weight: 600;")
         layout.addWidget(lbl)
 
     def dragEnterEvent(self, event):

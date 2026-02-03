@@ -67,8 +67,10 @@ pyinstaller --noconfirm --clean \
   --paths "src" \
   --collect-all "PySide6" \
   --add-data "config/default_templates.json:config" \
+  --add-data "assets:assets" \
   "${EXIFTOOL_ARGS[@]}" \
   "src/purway_geotagger/app.py"
+
 
 echo "Build complete. See dist/ (or dist/PurwayGeotagger.app depending on flags)."
 echo "You will likely want a one-folder build (--onedir) for bundling Qt plugins cleanly."

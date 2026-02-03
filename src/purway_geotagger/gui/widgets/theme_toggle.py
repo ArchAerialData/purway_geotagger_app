@@ -3,7 +3,8 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import Signal, Qt, QPointF, QSize
-from PySide6.QtGui import QIcon, QPainter, QPixmap, QColor, QPen, QPalette
+from PySide6.QtGui import QIcon, QPainter, QPixmap, QColor, QPen, QPalette, QPainterPath
+
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QToolButton, QButtonGroup
 
 
@@ -72,25 +73,27 @@ def _sun_pixmap(fg: QColor, bg: QColor) -> QPixmap:
     pm.fill(Qt.transparent)
     painter = QPainter(pm)
     painter.setRenderHint(QPainter.Antialiasing, True)
+    
+    # Draw filled sun with beams
     center = QPointF(size / 2.0, size / 2.0)
-    radius = size * 0.28
-
+    core_radius = size * 0.25
     painter.setBrush(fg)
     painter.setPen(Qt.NoPen)
-    painter.drawEllipse(center, radius, radius)
+    painter.drawEllipse(center, core_radius, core_radius)
 
     pen = QPen(fg)
-    pen.setWidthF(1.4)
+    pen.setWidthF(1.5)
+    pen.setCapStyle(Qt.RoundCap)
     painter.setPen(pen)
-    ray_in = size * 0.38
-    ray_out = size * 0.48
+    
+    beam_inner = size * 0.38
+    beam_outer = size * 0.48
     for angle in range(0, 360, 45):
         rad = math.radians(angle)
-        x1 = center.x() + ray_in * math.cos(rad)
-        y1 = center.y() + ray_in * math.sin(rad)
-        x2 = center.x() + ray_out * math.cos(rad)
-        y2 = center.y() + ray_out * math.sin(rad)
-        painter.drawLine(QPointF(x1, y1), QPointF(x2, y2))
+        p1 = QPointF(center.x() + beam_inner * math.cos(rad), center.y() + beam_inner * math.sin(rad))
+        p2 = QPointF(center.x() + beam_outer * math.cos(rad), center.y() + beam_outer * math.sin(rad))
+        painter.drawLine(p1, p2)
+        
     painter.end()
     return pm
 
@@ -101,15 +104,27 @@ def _moon_pixmap(fg: QColor, bg: QColor) -> QPixmap:
     pm.fill(Qt.transparent)
     painter = QPainter(pm)
     painter.setRenderHint(QPainter.Antialiasing, True)
+    
+    # Draw filled crescent moon
+    # Primary circle
     center = QPointF(size / 2.0, size / 2.0)
-    radius = size * 0.34
-
+    radius = size * 0.40
+    
+    path = QPainterPath()
+    path.addEllipse(center, radius, radius)
+    
+    # Subtraction circle to create crescent
+    cut_radius = size * 0.35
+    cut_center = center + QPointF(size * 0.15, -size * 0.05)
+    
+    cut_path = QPainterPath()
+    cut_path.addEllipse(cut_center, cut_radius, cut_radius)
+    
+    final_path = path.subtracted(cut_path)
+    
     painter.setBrush(fg)
     painter.setPen(Qt.NoPen)
-    painter.drawEllipse(center, radius, radius)
-
-    painter.setBrush(bg)
-    offset = QPointF(size * 0.10, 0)
-    painter.drawEllipse(center + offset, radius, radius)
+    painter.drawPath(final_path)
     painter.end()
     return pm
+

@@ -20,7 +20,10 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QStackedWidget,
     QProgressBar,
+    QFrame,
+    QSizePolicy,
 )
+
 
 from purway_geotagger.core.modes import common_parent, default_methane_log_base, default_encroachment_base
 from purway_geotagger.exif.exiftool_writer import is_exiftool_available
@@ -48,24 +51,25 @@ class CombinedWizard(QWidget):
         self._last_job_stage: str | None = None
         self.controller.jobs_changed.connect(self._on_jobs_changed)
 
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
 
         header = QHBoxLayout()
         back_btn = QPushButton("Back to Home")
+        back_btn.setProperty("cssClass", "ghost")
+        back_btn.setCursor(Qt.PointingHandCursor)
         back_btn.clicked.connect(self.back_requested.emit)
         header.addWidget(back_btn)
         self.step_label = QLabel("")
+        self.step_label.setProperty("cssClass", "subtitle")
         header.addStretch(1)
         header.addWidget(self.step_label)
         layout.addLayout(header)
 
         title = QLabel("Methane + Encroachments")
-        title_font = title.font()
-        title_font.setBold(True)
-        title_font.setPointSize(title_font.pointSize() + 2)
-        title.setFont(title_font)
+        title.setProperty("cssClass", "h1")
         layout.addWidget(title)
 
         self.stack = QStackedWidget()
@@ -83,8 +87,11 @@ class CombinedWizard(QWidget):
 
         nav = QHBoxLayout()
         self.prev_btn = QPushButton("Back")
+        self.prev_btn.setCursor(Qt.PointingHandCursor)
         self.prev_btn.clicked.connect(self._go_prev)
         self.next_btn = QPushButton("Next")
+        self.next_btn.setProperty("cssClass", "primary")
+        self.next_btn.setCursor(Qt.PointingHandCursor)
         self.next_btn.clicked.connect(self._go_next)
         nav.addWidget(self.prev_btn)
         nav.addStretch(1)
@@ -92,6 +99,7 @@ class CombinedWizard(QWidget):
         layout.addLayout(nav)
 
         self.status_label = QLabel("")
+        self.status_label.setProperty("cssClass", "subtitle")
         layout.addWidget(self.status_label)
 
         self.progress = QProgressBar()
@@ -102,6 +110,7 @@ class CombinedWizard(QWidget):
         self._refresh_templates()
         self.refresh_summary()
         self._update_step_ui()
+
 
     def refresh_summary(self) -> None:
         self.inputs_list.clear()
@@ -120,21 +129,23 @@ class CombinedWizard(QWidget):
     def _build_inputs_step(self) -> QWidget:
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setSpacing(12)
+        layout.setSpacing(16)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         step_header = QLabel("Step 1 - Select Input Files/Folders")
-        step_font = step_header.font()
-        step_font.setBold(True)
-        step_font.setPointSize(step_font.pointSize() + 1)
-        step_header.setFont(step_font)
+        step_header.setProperty("cssClass", "h2")
         layout.addWidget(step_header)
 
-        input_group = QGroupBox("1) Add Inputs")
-        input_layout = QVBoxLayout(input_group)
+        input_card = QFrame()
+        input_card.setProperty("cssClass", "card")
+        input_layout = QVBoxLayout(input_card)
+        input_layout.setContentsMargins(20, 20, 20, 20)
+        input_layout.setSpacing(16)
+
         input_layout.addWidget(QLabel("Drop Raw Data folders/files below:"))
         self.drop_zone = DropZone()
         self.drop_zone.paths_dropped.connect(self._on_paths_dropped)
-        self.drop_zone.setMinimumHeight(90)
+        self.drop_zone.setMinimumHeight(120)
         input_layout.addWidget(self.drop_zone)
 
         input_btn_row = QHBoxLayout()
@@ -156,33 +167,46 @@ class CombinedWizard(QWidget):
         self.inputs_required = RequiredMarker()
         input_layout.addWidget(self.inputs_required)
 
-        layout.addWidget(input_group)
-        layout.addStretch(1)
+        layout.addWidget(input_card)
+        # Removed addStretch to allow natural flow
         self.inputs_scroll = _wrap_scroll(content)
         return self.inputs_scroll
+
+
 
     def _build_methane_step(self) -> QWidget:
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setSpacing(12)
+        layout.setSpacing(16)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         step_header = QLabel("Step 2 - Configure Methane Options")
-        step_font = step_header.font()
-        step_font.setBold(True)
-        step_font.setPointSize(step_font.pointSize() + 1)
-        step_header.setFont(step_font)
+        step_header.setProperty("cssClass", "h2")
         layout.addWidget(step_header)
 
-        methane_group = QGroupBox("2) Methane Options")
-        methane_layout = QVBoxLayout(methane_group)
+        methane_card = QFrame()
+        methane_card.setProperty("cssClass", "card")
+        methane_layout = QVBoxLayout(methane_card)
+        methane_layout.setContentsMargins(20, 20, 20, 20)
+        methane_layout.setSpacing(16)
+        
+        methane_layout.addWidget(QLabel("2) Methane Options"))
+
         threshold_row = QHBoxLayout()
-        threshold_row.addWidget(QLabel("PPM threshold:"))
+        threshold_lbl = QLabel("PPM threshold:")
+        threshold_lbl.setProperty("cssClass", "subtitle")
+        threshold_row.addWidget(threshold_lbl)
+        
         self.threshold_spin = QSpinBox()
         self.threshold_spin.setRange(1, 1_000_000)
         self.threshold_spin.setValue(max(1, int(self.state.methane_threshold)))
         self.threshold_spin.valueChanged.connect(self._on_threshold_changed)
+        self.threshold_spin.setFixedWidth(100)
         threshold_row.addWidget(self.threshold_spin)
-        threshold_row.addWidget(QLabel("PPM"))
+        
+        unit_lbl = QLabel("PPM")
+        unit_lbl.setProperty("cssClass", "subtitle")
+        threshold_row.addWidget(unit_lbl)
         threshold_row.addStretch(1)
         methane_layout.addLayout(threshold_row)
 
@@ -192,50 +216,73 @@ class CombinedWizard(QWidget):
         methane_layout.addWidget(self.kmz_chk)
 
         self.cleaned_preview = QLabel()
+        self.cleaned_preview.setProperty("cssClass", "subtitle")
         self.cleaned_preview.setWordWrap(True)
         self.kmz_preview = QLabel()
+        self.kmz_preview.setProperty("cssClass", "subtitle")
         self.kmz_preview.setWordWrap(True)
         methane_layout.addWidget(self.cleaned_preview)
         methane_layout.addWidget(self.kmz_preview)
-        layout.addWidget(methane_group)
+        
+        layout.addWidget(methane_card)
 
-        output_group = QGroupBox("3) Methane Logs")
-        output_layout = QVBoxLayout(output_group)
+        output_card = QFrame()
+        output_card.setProperty("cssClass", "card")
+        output_layout = QVBoxLayout(output_card)
+        output_layout.setContentsMargins(20, 20, 20, 20)
+        output_layout.setSpacing(16)
+        
+        output_layout.addWidget(QLabel("3) Methane Logs"))
+
         output_row = QHBoxLayout()
-        output_row.addWidget(QLabel("Logs saved to:"))
+        log_lbl = QLabel("Logs saved to:")
+        log_lbl.setProperty("cssClass", "subtitle")
+        output_row.addWidget(log_lbl)
+        
         self.log_location_edit = QLineEdit()
         self.log_location_edit.setReadOnly(True)
         output_row.addWidget(self.log_location_edit, 1)
         self.change_log_btn = QPushButton("Select Log Folder…")
-        self.change_log_btn.setFlat(False)
         self.change_log_btn.clicked.connect(self._change_log_location)
         output_row.addWidget(self.change_log_btn)
         output_layout.addLayout(output_row)
+        
         self.log_note = QLabel("")
+        self.log_note.setProperty("cssClass", "subtitle")
         self.log_note.setWordWrap(True)
         output_layout.addWidget(self.log_note)
-        layout.addWidget(output_group)
+        
+        layout.addWidget(output_card)
 
-        layout.addStretch(1)
+        # Removed addStretch
         self.methane_scroll = _wrap_scroll(content)
         return self.methane_scroll
+
+
 
     def _build_encroachment_step(self) -> QWidget:
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setSpacing(12)
+        layout.setSpacing(16)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         step_header = QLabel("Step 3 - Configure Encroachment Options")
-        step_font = step_header.font()
-        step_font.setBold(True)
-        step_font.setPointSize(step_font.pointSize() + 1)
-        step_header.setFont(step_font)
+        step_header.setProperty("cssClass", "h2")
         layout.addWidget(step_header)
 
-        output_group = QGroupBox("4) Encroachment Output Folder (required)")
-        output_layout = QVBoxLayout(output_group)
+        output_card = QFrame()
+        output_card.setProperty("cssClass", "card")
+        output_layout = QVBoxLayout(output_card)
+        output_layout.setContentsMargins(20, 20, 20, 20)
+        output_layout.setSpacing(16)
+
+        output_layout.addWidget(QLabel("4) Encroachment Output Folder (required)"))
+
         output_row = QHBoxLayout()
-        output_row.addWidget(QLabel("Encroachment output:"))
+        out_lbl = QLabel("Encroachment output:")
+        out_lbl.setProperty("cssClass", "subtitle")
+        output_row.addWidget(out_lbl)
+        
         self.output_edit = QLineEdit()
         self.output_edit.textChanged.connect(self._on_output_changed)
         output_row.addWidget(self.output_edit, 1)
@@ -243,22 +290,35 @@ class CombinedWizard(QWidget):
         output_btn.clicked.connect(self._select_output_folder)
         output_row.addWidget(output_btn)
         output_layout.addLayout(output_row)
+        
         self.output_required = RequiredMarker()
         output_layout.addWidget(self.output_required)
+        
         output_help = QLabel("Defaults to Encroachment_Output under the common input root.")
+        output_help.setProperty("cssClass", "subtitle")
         output_help.setWordWrap(True)
         output_layout.addWidget(output_help)
-        layout.addWidget(output_group)
+        
+        layout.addWidget(output_card)
 
-        rename_group = QGroupBox("5) Renaming (optional)")
-        rename_layout = QVBoxLayout(rename_group)
+        rename_card = QFrame()
+        rename_card.setProperty("cssClass", "card")
+        rename_layout = QVBoxLayout(rename_card)
+        rename_layout.setContentsMargins(20, 20, 20, 20)
+        rename_layout.setSpacing(16)
+
+        rename_layout.addWidget(QLabel("5) Renaming (optional)"))
+
         self.rename_chk = QCheckBox("Enable renaming")
         self.rename_chk.setChecked(bool(self.state.encroachment_rename_enabled))
         self.rename_chk.toggled.connect(self._on_rename_toggled)
         rename_layout.addWidget(self.rename_chk)
 
         template_row = QHBoxLayout()
-        template_row.addWidget(QLabel("Template:"))
+        tmpl_lbl = QLabel("Template:")
+        tmpl_lbl.setProperty("cssClass", "subtitle")
+        template_row.addWidget(tmpl_lbl)
+        
         self.template_combo = QComboBox()
         self.template_combo.currentIndexChanged.connect(self._on_template_changed)
         template_row.addWidget(self.template_combo, 1)
@@ -268,19 +328,25 @@ class CombinedWizard(QWidget):
         rename_layout.addLayout(template_row)
 
         self.template_preview = QLabel("")
+        self.template_preview.setProperty("cssClass", "subtitle")
         self.template_preview.setWordWrap(True)
         rename_layout.addWidget(self.template_preview)
 
         manual_row = QHBoxLayout()
         self.client_label = QLabel("Client Abbreviation:")
+        self.client_label.setProperty("cssClass", "subtitle")
         manual_row.addWidget(self.client_label)
+        
         self.client_edit = QLineEdit(self.state.encroachment_client_abbr)
         self.client_edit.textChanged.connect(self._on_manual_changed)
         manual_row.addWidget(self.client_edit)
         self.client_required = RequiredMarker()
         manual_row.addWidget(self.client_required)
+        
         self.start_index_label = QLabel("Start Index:")
+        self.start_index_label.setProperty("cssClass", "subtitle")
         manual_row.addWidget(self.start_index_label)
+        
         self.start_index_spin = QSpinBox()
         self.start_index_spin.setRange(1, 10_000_000)
         self.start_index_spin.setValue(max(1, int(self.state.encroachment_start_index)))
@@ -289,42 +355,56 @@ class CombinedWizard(QWidget):
         rename_layout.addLayout(manual_row)
 
         self.rename_note = QLabel("")
+        self.rename_note.setProperty("cssClass", "subtitle")
         self.rename_note.setWordWrap(True)
-        self.rename_note.setStyleSheet("color: #777777;")
         rename_layout.addWidget(self.rename_note)
-        layout.addWidget(rename_group)
+        
+        layout.addWidget(rename_card)
 
-        layout.addStretch(1)
+        # Removed addStretch
         self.encroachment_scroll = _wrap_scroll(content)
         return self.encroachment_scroll
+
+
 
     def _build_confirm_step(self) -> QWidget:
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setSpacing(12)
+        layout.setSpacing(16)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         step_header = QLabel("Step 4 - Confirm Settings & Run")
-        step_font = step_header.font()
-        step_font.setBold(True)
-        step_font.setPointSize(step_font.pointSize() + 1)
-        step_header.setFont(step_font)
+        step_header.setProperty("cssClass", "h2")
         layout.addWidget(step_header)
 
-        summary_group = QGroupBox("Confirm settings")
-        summary_layout = QVBoxLayout(summary_group)
+        summary_card = QFrame()
+        summary_card.setProperty("cssClass", "card")
+        summary_layout = QVBoxLayout(summary_card)
+        summary_layout.setContentsMargins(20, 20, 20, 20)
+        summary_layout.setSpacing(16)
+        
+        summary_layout.addWidget(QLabel("Confirm settings"))
+
         self.summary_label = QLabel("")
         self.summary_label.setWordWrap(True)
         self.summary_label.setTextFormat(Qt.RichText)
+        self.summary_label.setProperty("cssClass", "subtitle")
         summary_layout.addWidget(self.summary_label)
-        layout.addWidget(summary_group)
+        
+        layout.addWidget(summary_card)
 
         note = QLabel("Review the settings above, then click Run Combined to start.")
+        note.setProperty("cssClass", "subtitle")
         note.setWordWrap(True)
         layout.addWidget(note)
 
-        layout.addStretch(1)
+        layout.addWidget(note)
+
+        # Removed addStretch
         self.confirm_scroll = _wrap_scroll(content)
         return self.confirm_scroll
+
+
 
     def _update_step_ui(self) -> None:
         idx = self.stack.currentIndex()
@@ -751,8 +831,13 @@ class CombinedWizard(QWidget):
 def _wrap_scroll(widget: QWidget) -> QScrollArea:
     scroll = QScrollArea()
     scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QFrame.NoFrame)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     scroll.setWidget(widget)
     return scroll
+
+
 
 
 def _scroll_to(scroll: QScrollArea, child: QWidget) -> None:
