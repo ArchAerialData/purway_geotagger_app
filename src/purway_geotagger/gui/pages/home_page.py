@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Signal, Qt
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFrame, QSizePolicy
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QSizePolicy
 
 from purway_geotagger.core.modes import RunMode
+from purway_geotagger.exif.exiftool_writer import is_exiftool_available
+from purway_geotagger.core.utils import resource_path
+from PySide6.QtGui import QPixmap, QIcon
+from pathlib import Path
 
 
 class HomePage(QWidget):
@@ -16,9 +20,15 @@ class HomePage(QWidget):
         layout.setSpacing(24)
         layout.setContentsMargins(40, 40, 40, 40)
 
-        # Header Section
-        header_layout = QVBoxLayout()
-        header_layout.setSpacing(8)
+        # Header Container (Horizontal split)
+        header_container = QWidget()
+        header_layout = QHBoxLayout(header_container)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(40)
+
+        # Left: Text
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(8)
         
         title = QLabel("Select a report type")
         title.setProperty("cssClass", "h1")
@@ -32,10 +42,56 @@ class HomePage(QWidget):
         self._last_mode_label.setStyleSheet("color: #0A84FF; font-weight: 600;")
         self._last_mode_label.setWordWrap(True)
 
-        header_layout.addWidget(title)
-        header_layout.addWidget(subtitle)
-        header_layout.addWidget(self._last_mode_label)
-        layout.addLayout(header_layout)
+        text_layout.addWidget(title)
+        text_layout.addWidget(subtitle)
+        text_layout.addWidget(self._last_mode_label)
+        
+        # Right: System Status Card
+        status_card = QFrame()
+        status_card.setProperty("cssClass", "card")
+        status_card.setFixedWidth(280)
+        status_layout = QVBoxLayout(status_card)
+        status_layout.setContentsMargins(16, 16, 16, 16)
+        status_layout.setSpacing(10)
+        
+        st_title = QLabel("System Status")
+        st_title.setProperty("cssClass", "h2")
+        st_title.setStyleSheet("font-size: 14px; margin-bottom: 4px;")
+        
+        # ExifTool Check
+        et_row = QWidget()
+        et_layout = QHBoxLayout(et_row)
+        et_layout.setContentsMargins(0, 0, 0, 0)
+        et_layout.setSpacing(8)
+        
+        has_et = is_exiftool_available()
+        et_icon = QLabel()
+        if has_et:
+            # Checkmark
+            et_icon.setText("✓")
+            et_icon.setStyleSheet("color: #32D74B; font-weight: bold; font-size: 16px;")
+        else:
+            # X mark
+            et_icon.setText("✕")
+            et_icon.setStyleSheet("color: #FF453A; font-weight: bold; font-size: 16px;")
+            
+        et_lbl = QLabel("ExifTool Ready")
+        if not has_et:
+            et_lbl.setText("ExifTool Missing")
+            et_lbl.setStyleSheet("color: #FF453A;")
+            
+        et_layout.addWidget(et_icon)
+        et_layout.addWidget(et_lbl)
+        et_layout.addStretch()
+        
+        status_layout.addWidget(st_title)
+        status_layout.addWidget(et_row)
+        status_layout.addStretch()
+
+        header_layout.addLayout(text_layout, 1) # Text takes available space
+        header_layout.addWidget(status_card)    # Card is fixed width
+
+        layout.addWidget(header_container)
 
         # Cards Section
         layout.addWidget(
