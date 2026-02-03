@@ -33,8 +33,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = settings
         self.setWindowTitle("Purway Geotagger")
-        self.resize(980, 680)
-        self.setMinimumSize(780, 560)
+        self.resize(1100, 800)
+        self.setMinimumSize(900, 650)
 
         self.controller = JobController(settings=settings)
         self.controller.jobs_changed.connect(self._on_jobs_changed)

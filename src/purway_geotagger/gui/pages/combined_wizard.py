@@ -51,9 +51,10 @@ class CombinedWizard(QWidget):
         self._last_job_stage: str | None = None
         self.controller.jobs_changed.connect(self._on_jobs_changed)
 
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 40, 40, 40)
-        layout.setSpacing(24)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
 
         header = QHBoxLayout()
         back_btn = QPushButton("Back to Home")
@@ -167,9 +168,10 @@ class CombinedWizard(QWidget):
         input_layout.addWidget(self.inputs_required)
 
         layout.addWidget(input_card)
-        layout.addStretch(1)
+        # Removed addStretch to allow natural flow
         self.inputs_scroll = _wrap_scroll(content)
         return self.inputs_scroll
+
 
 
     def _build_methane_step(self) -> QWidget:
@@ -252,9 +254,10 @@ class CombinedWizard(QWidget):
         
         layout.addWidget(output_card)
 
-        layout.addStretch(1)
+        # Removed addStretch
         self.methane_scroll = _wrap_scroll(content)
         return self.methane_scroll
+
 
 
     def _build_encroachment_step(self) -> QWidget:
@@ -358,9 +361,10 @@ class CombinedWizard(QWidget):
         
         layout.addWidget(rename_card)
 
-        layout.addStretch(1)
+        # Removed addStretch
         self.encroachment_scroll = _wrap_scroll(content)
         return self.encroachment_scroll
+
 
 
     def _build_confirm_step(self) -> QWidget:
@@ -394,9 +398,12 @@ class CombinedWizard(QWidget):
         note.setWordWrap(True)
         layout.addWidget(note)
 
-        layout.addStretch(1)
+        layout.addWidget(note)
+
+        # Removed addStretch
         self.confirm_scroll = _wrap_scroll(content)
         return self.confirm_scroll
+
 
 
     def _update_step_ui(self) -> None:
@@ -825,8 +832,11 @@ def _wrap_scroll(widget: QWidget) -> QScrollArea:
     scroll = QScrollArea()
     scroll.setWidgetResizable(True)
     scroll.setFrameShape(QFrame.NoFrame)
+    scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    scroll.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
     scroll.setWidget(widget)
     return scroll
+
 
 
 
