@@ -15,12 +15,11 @@ def test_dry_run_pipeline_copy_rename_sort_flatten(tmp_path: Path) -> None:
     jpg.write_text("x", encoding="utf-8")
 
     csv_path = input_dir / "data.csv"
-    csv_path.write_text(
-        "Latitude,Longitude,PPM,Photo\n"
-        "1.0,2.0,123,IMG_0001.jpg\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    with csv_path.open("w", encoding="utf-8", newline="") as f:
+        f.write(
+            "Latitude,Longitude,PPM,Photo\n"
+            "1.0,2.0,123,IMG_0001.jpg\n"
+        )
 
     run_folder = tmp_path / "PurwayGeotagger_TEST"
 

@@ -30,7 +30,7 @@ from purway_geotagger.gui.widgets.settings_dialog import SettingsDialog
 from purway_geotagger.gui.widgets.template_editor import TemplateEditorDialog
 from purway_geotagger.templates.models import RenameTemplate
 from purway_geotagger.templates.template_manager import render_filename
-from purway_geotagger.gui.widgets.log_viewer import LogViewerDialog
+from purway_geotagger.gui.widgets.run_report_view import RunReportDialog
 
 
 class EncroachmentPage(QWidget):
@@ -419,11 +419,10 @@ class EncroachmentPage(QWidget):
         self.view_log_btn.setEnabled(bool(path and path.exists()))
 
     def _view_log(self) -> None:
-        path = self._log_path()
-        if not path or not path.exists():
+        if not self._last_run_folder:
             QMessageBox.information(self, "Log not available", "Run log not available yet.")
             return
-        dlg = LogViewerDialog(path, parent=self)
+        dlg = RunReportDialog(self._last_run_folder, parent=self)
         dlg.exec()
 
     def _on_jobs_changed(self) -> None:
@@ -444,4 +443,18 @@ class EncroachmentPage(QWidget):
             else:
                 msg = job.state.message or "Job failed."
                 self.status_label.setText(f"Failed: {msg}")
+                self._show_failure_popup(msg)
             self._update_view_log_button()
+
+    def _show_failure_popup(self, message: str) -> None:
+        if not message:
+            message = "Job failed."
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Encroachment run failed")
+        msg.setText(message)
+        view_btn = msg.addButton("View Log", QMessageBox.AcceptRole)
+        msg.addButton(QMessageBox.Ok)
+        msg.exec()
+        if msg.clickedButton() == view_btn:
+            self._view_log()

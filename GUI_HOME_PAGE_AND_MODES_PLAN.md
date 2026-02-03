@@ -428,22 +428,26 @@ Templates editor must remain accessible (as a dedicated tab).
 - All file operations must use `pathlib`; avoid shell commands.
 
 **Verification**
-- [ ] Unit tests for cleaned CSV output.
-- [ ] Unit tests for KMZ generation (Placemark label text and row count).
-- [ ] Unit tests for chronological rename ordering.
-- [ ] Unit tests for run summary content (EXIF/CSV/KMZ status fields).
-- [ ] Unit tests for backup relocation into run folder backups.
-- [ ] Manual combined run on sample data.
-- [ ] Record tests run and results in this file.
+- [x] Unit tests for cleaned CSV output.
+- [x] Unit tests for KMZ generation (Placemark label text and row count).
+- [x] Unit tests for chronological rename ordering.
+- [x] Unit tests for run summary content (EXIF/CSV/KMZ status fields).
+- [x] Unit tests for backup relocation into run folder backups.
+- [x] Manual combined run on sample data.
+- [x] Record tests run and results in this file.
 
 **Gate**
-- [ ] All three backend behaviors are verified.
+- [x] All three backend behaviors are verified.
 
 **Phase Notes (required)**
-- [ ] Update this file with date completed, tests run, and any issues/failures.
-Phase Notes (in progress, 2026-02-03):
+- [x] Update this file with date completed, tests run, and any issues/failures.
+Phase Notes (completed, 2026-02-03):
 - Implemented methane cleaned CSV + KMZ generation, chronological renaming, combined split flow, run_summary.json, and backup relocation.
-- Tests not run (pytest not installed in this environment). Manual combined run pending.
+- Tests run:
+  - `python3 -m pytest tests/test_methane_outputs.py tests/test_kmz_writer.py tests/test_renamer_chronological.py tests/test_run_summary.py tests/test_backup_location.py tests/test_ops_phase3.py tests/test_pipeline_phase3_e2e.py tests/test_pipeline_artifacts.py`
+- Manual verification:
+  - Combined mode dry-run on a small sample input (2 JPGs + methane CSV) produced cleaned CSV + KMZ next to source CSV, encroachment copies in a single output folder with chronological renaming, and `run_summary.json` in the run folder.
+- Issues/Deviations: None.
 
 ---
 
@@ -451,10 +455,10 @@ Phase Notes (in progress, 2026-02-03):
 **Goal:** Users can review results and find failures quickly.
 
 **Work items**
-- [ ] Add “Run Report / Logs” view in GUI (tab or pane).
-- [ ] Parse `manifest.csv` to surface failures prominently.
-- [ ] Add completion popup on failures with “View logs” button.
-- [ ] Log viewer shows: run summary (from `run_summary.json`), failure list, and a collapsible raw log view (`run_log.txt`).
+- [x] Add “Run Report / Logs” view in GUI (tab or pane).
+- [x] Parse `manifest.csv` to surface failures prominently.
+- [x] Add completion popup on failures with “View logs” button.
+- [x] Log viewer shows: run summary (from `run_summary.json`), failure list, and a collapsible raw log view (`run_log.txt`).
 
 **Files (add/modify)**
 - Add: `src/purway_geotagger/gui/widgets/run_report_view.py`
@@ -465,12 +469,18 @@ Phase Notes (in progress, 2026-02-03):
 - Log viewer must open inside the app (no external viewer dependency).
 
 **Verification**
-- [ ] Unit test: manifest parsing for failures.
+- [x] Unit test: manifest parsing for failures.
 - [ ] Manual test: failure popup appears and routes to logs.
 - [ ] Record tests run and results in this file.
 
 **Gate**
 - [ ] Logs/report UI is usable and failures are easy to find.
+
+**Phase Notes (in progress, 2026-02-03)**
+- Tests run:
+  - `python3 -m pytest tests/test_run_report_parser.py`
+- Manual verification pending.
+- Enabled Run Combined action now that Phase 6 pipeline is ready; added combined run status + failure popup with report link.
 
 **Phase Notes (required)**
 - [ ] Update this file with date completed, tests run, and any issues/failures.

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QMessageBox,
     QGroupBox,
     QListWidget,
     QFileDialog,
@@ -18,13 +19,17 @@ from PySide6.QtWidgets import (
     QComboBox,
     QScrollArea,
     QStackedWidget,
+    QProgressBar,
 )
 
 from purway_geotagger.core.modes import common_parent, default_methane_log_base, default_encroachment_base
+from purway_geotagger.exif.exiftool_writer import is_exiftool_available
 from purway_geotagger.gui.controllers import JobController
 from purway_geotagger.gui.mode_state import ModeState
 from purway_geotagger.gui.widgets.drop_zone import DropZone
 from purway_geotagger.gui.widgets.required_marker import RequiredMarker
+from purway_geotagger.gui.widgets.run_report_view import RunReportDialog
+from purway_geotagger.gui.widgets.settings_dialog import SettingsDialog
 from purway_geotagger.gui.widgets.template_editor import TemplateEditorDialog
 from purway_geotagger.templates.models import RenameTemplate
 from purway_geotagger.templates.template_manager import render_filename
@@ -38,6 +43,10 @@ class CombinedWizard(QWidget):
         self.state = state
         self.controller = controller
         self._output_auto = True
+        self._last_job_id: str | None = None
+        self._last_run_folder: Path | None = None
+        self._last_job_stage: str | None = None
+        self.controller.jobs_changed.connect(self._on_jobs_changed)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 16, 20, 16)
@@ -81,6 +90,14 @@ class CombinedWizard(QWidget):
         nav.addStretch(1)
         nav.addWidget(self.next_btn)
         layout.addLayout(nav)
+
+        self.status_label = QLabel("")
+        layout.addWidget(self.status_label)
+
+        self.progress = QProgressBar()
+        self.progress.setRange(0, 100)
+        self.progress.setVisible(False)
+        layout.addWidget(self.progress)
 
         self._refresh_templates()
         self.refresh_summary()
@@ -301,7 +318,7 @@ class CombinedWizard(QWidget):
         summary_layout.addWidget(self.summary_label)
         layout.addWidget(summary_group)
 
-        note = QLabel("Combined run will be enabled after Phase 6 pipeline updates.")
+        note = QLabel("Review the settings above, then click Run Combined to start.")
         note.setWordWrap(True)
         layout.addWidget(note)
 
@@ -315,7 +332,7 @@ class CombinedWizard(QWidget):
         self.prev_btn.setEnabled(idx > 0)
         if idx == 3:
             self.next_btn.setText("Run Combined")
-            self.next_btn.setEnabled(False)
+            self.next_btn.setEnabled(True)
             self._update_confirm_summary()
         else:
             self.next_btn.setText("Next")
@@ -334,6 +351,9 @@ class CombinedWizard(QWidget):
         if idx < 3:
             self.stack.setCurrentIndex(idx + 1)
             self._update_step_ui()
+            return
+        if idx == 3:
+            self._run_combined()
 
     def _validate_current_step(self) -> bool:
         idx = self.stack.currentIndex()
@@ -401,6 +421,107 @@ class CombinedWizard(QWidget):
                 summary += f"• Client Abbreviation: {manual}<br/>"
             summary += f"• Start Index: {start_index}<br/>"
         self.summary_label.setText(summary)
+
+    def _validate_for_run(self) -> bool:
+        missing_inputs = len(self.state.inputs) == 0
+        if missing_inputs:
+            self.inputs_required.show_required(True)
+            self.stack.setCurrentIndex(0)
+            self._update_step_ui()
+            _scroll_to(self.inputs_scroll, self.inputs_required)
+            return False
+
+        missing_output = not self.state.encroachment_output_base
+        missing_client = False
+        if self.rename_chk.isChecked() and not self.template_combo.currentData():
+            missing_client = not self.client_edit.text().strip()
+            self.client_required.show_required(missing_client)
+        else:
+            self.client_required.show_required(False)
+
+        if missing_output or missing_client:
+            self.output_required.show_required(missing_output)
+            self.stack.setCurrentIndex(2)
+            self._update_step_ui()
+            if missing_output:
+                _scroll_to(self.encroachment_scroll, self.output_required)
+            else:
+                _scroll_to(self.encroachment_scroll, self.client_required)
+            return False
+
+        return True
+
+    def _run_combined(self) -> None:
+        if not self._validate_for_run():
+            return
+        if not is_exiftool_available():
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Warning)
+            msg.setWindowTitle("ExifTool required")
+            msg.setText(
+                "ExifTool is required to write EXIF metadata.\n\n"
+                "Install ExifTool or set its path in Settings."
+            )
+            open_btn = msg.addButton("Open Settings", QMessageBox.AcceptRole)
+            msg.addButton(QMessageBox.Cancel)
+            msg.exec()
+            if msg.clickedButton() == open_btn:
+                dlg = SettingsDialog(self.controller.settings, parent=self)
+                dlg.exec()
+            return
+
+        confirm = QMessageBox.question(
+            self,
+            "Confirm combined run",
+            "Combined mode writes EXIF metadata in-place for methane inputs and copies encroachment photos.\n\nContinue?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        self.progress.setVisible(True)
+        self.next_btn.setEnabled(False)
+        self.prev_btn.setEnabled(False)
+        self.status_label.setText("Running combined job...")
+        job = self.controller.start_job_from_mode_state(self.state, self.progress)
+        self._last_job_id = job.id if job else None
+        self._last_run_folder = job.run_folder if job else None
+
+    def _on_jobs_changed(self) -> None:
+        if not self._last_job_id:
+            return
+        job = next((j for j in self.controller.jobs if j.id == self._last_job_id), None)
+        if not job:
+            return
+        if self._last_run_folder is None:
+            self._last_run_folder = job.run_folder
+        if job.state.stage != self._last_job_stage:
+            self._last_job_stage = job.state.stage
+        if job.state.stage in ("DONE", "FAILED", "CANCELLED"):
+            self.next_btn.setEnabled(True)
+            self.prev_btn.setEnabled(True)
+            if job.state.stage == "DONE":
+                self.status_label.setText("Completed successfully.")
+            elif job.state.stage == "CANCELLED":
+                self.status_label.setText("Cancelled.")
+            else:
+                msg = job.state.message or "Job failed."
+                self.status_label.setText(f"Failed: {msg}")
+                self._show_failure_popup(msg)
+
+    def _show_failure_popup(self, message: str) -> None:
+        if not message:
+            message = "Job failed."
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Combined run failed")
+        msg.setText(message)
+        view_btn = msg.addButton("View Log", QMessageBox.AcceptRole)
+        msg.addButton(QMessageBox.Ok)
+        msg.exec()
+        if msg.clickedButton() == view_btn and self._last_run_folder:
+            dlg = RunReportDialog(self._last_run_folder, parent=self)
+            dlg.exec()
 
     def _on_paths_dropped(self, paths: list[str]) -> None:
         self._add_inputs([Path(p) for p in paths])

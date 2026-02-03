@@ -23,7 +23,7 @@ from purway_geotagger.core.modes import common_parent, default_methane_log_base
 from purway_geotagger.exif.exiftool_writer import is_exiftool_available
 from purway_geotagger.gui.controllers import JobController
 from purway_geotagger.gui.mode_state import ModeState
-from purway_geotagger.gui.widgets.log_viewer import LogViewerDialog
+from purway_geotagger.gui.widgets.run_report_view import RunReportDialog
 from purway_geotagger.gui.widgets.settings_dialog import SettingsDialog
 from purway_geotagger.gui.widgets.drop_zone import DropZone
 
@@ -298,11 +298,10 @@ class MethanePage(QWidget):
         self.view_log_btn2.setEnabled(enabled)
 
     def _view_log(self) -> None:
-        log_path = self._log_path()
-        if not log_path or not log_path.exists():
+        if not self._last_run_folder:
             QMessageBox.information(self, "Log not available", "Run log not available yet.")
             return
-        dlg = LogViewerDialog(log_path, parent=self)
+        dlg = RunReportDialog(self._last_run_folder, parent=self)
         dlg.exec()
 
     def _show_failure_popup(self, message: str) -> None:

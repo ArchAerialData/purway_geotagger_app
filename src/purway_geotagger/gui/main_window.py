@@ -23,6 +23,7 @@ from purway_geotagger.gui.widgets.theme_toggle import ThemeToggle
 from purway_geotagger.gui.widgets.settings_dialog import SettingsDialog
 from purway_geotagger.gui.widgets.preview_dialog import PreviewDialog
 from purway_geotagger.gui.widgets.schema_dialog import SchemaDialog
+from purway_geotagger.gui.widgets.run_report_view import RunReportDialog
 from purway_geotagger.gui.workers import PreviewWorker
 from purway_geotagger.gui.theme import apply_theme
 from purway_geotagger.exif.exiftool_writer import is_exiftool_available
@@ -122,10 +123,14 @@ class MainWindow(QMainWindow):
         self.export_manifest_btn = QPushButton("Export manifest.csv")
         self.export_manifest_btn.clicked.connect(self._export_selected_manifest)
         self.export_manifest_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
+        self.view_report_btn = QPushButton("View run report")
+        self.view_report_btn.clicked.connect(self._view_selected_report)
+        self.view_report_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogInfoView))
         act_row.addWidget(self.cancel_btn)
         act_row.addWidget(self.open_out_btn)
         act_row.addWidget(self.rerun_failed_btn)
         act_row.addWidget(self.export_manifest_btn)
+        act_row.addWidget(self.view_report_btn)
         jobs_layout.addLayout(act_row)
 
         # ----- Templates tab -----
@@ -347,6 +352,7 @@ class MainWindow(QMainWindow):
             self.open_out_btn.setEnabled(False)
             self.export_manifest_btn.setEnabled(False)
             self.rerun_failed_btn.setEnabled(False)
+            self.view_report_btn.setEnabled(False)
             return
         stage = job.state.stage
         can_cancel = stage not in ("DONE", "FAILED", "CANCELLED")
@@ -357,6 +363,15 @@ class MainWindow(QMainWindow):
         self.open_out_btn.setEnabled(has_run_folder)
         self.export_manifest_btn.setEnabled(manifest is not None)
         self.rerun_failed_btn.setEnabled(manifest is not None)
+        self.view_report_btn.setEnabled(has_run_folder)
+
+    def _view_selected_report(self) -> None:
+        job = self._selected_job()
+        if not job or not job.run_folder:
+            QMessageBox.information(self, "Run report not available", "Run report is not available yet.")
+            return
+        dlg = RunReportDialog(job.run_folder, parent=self)
+        dlg.exec()
 
     def _preview_matches(self) -> None:
         if not self.controller.inputs:
