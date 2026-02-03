@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -18,6 +18,9 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QMessageBox,
     QProgressBar,
+    QFrame,
+    QSizePolicy,
+    QScrollArea,
 )
 
 from purway_geotagger.core.modes import default_encroachment_base
@@ -45,29 +48,51 @@ class EncroachmentPage(QWidget):
         self._last_run_folder: Path | None = None
         self.controller.jobs_changed.connect(self._on_jobs_changed)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 16, 20, 16)
-        layout.setSpacing(12)
+        # Main Layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        # Scroll Area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        content_widget = QWidget()
+        self.content_layout = QVBoxLayout(content_widget)
+        self.content_layout.setContentsMargins(40, 40, 40, 40)
+        self.content_layout.setSpacing(24)
+        scroll.setWidget(content_widget)
+        main_layout.addWidget(scroll)
+
+        # --- Header ---
         header = QHBoxLayout()
         back_btn = QPushButton("Back")
+        back_btn.setProperty("cssClass", "ghost")
+        back_btn.setCursor(Qt.PointingHandCursor)
         back_btn.clicked.connect(self.back_requested.emit)
         header.addWidget(back_btn)
         header.addStretch(1)
-        layout.addLayout(header)
+        self.content_layout.addLayout(header)
 
         title = QLabel("Encroachment Reports Only")
-        title_font = title.font()
-        title_font.setBold(True)
-        title_font.setPointSize(title_font.pointSize() + 2)
-        title.setFont(title_font)
-        layout.addWidget(title)
+        title.setProperty("cssClass", "h1")
+        self.content_layout.addWidget(title)
 
-        input_group = QGroupBox("1) Add Inputs")
-        input_layout = QVBoxLayout(input_group)
+        # --- Section 1: Inputs ---
+        input_card = QFrame()
+        input_card.setProperty("cssClass", "card")
+        input_layout = QVBoxLayout(input_card)
+        input_layout.setContentsMargins(20, 20, 20, 20)
+        input_layout.setSpacing(16)
+
+        lbl_h2_in = QLabel("1) Add Inputs")
+        lbl_h2_in.setProperty("cssClass", "h2")
+        input_layout.addWidget(lbl_h2_in)
+
         input_layout.addWidget(QLabel("Drop Raw Data folders/files below:"))
         self.drop_zone = DropZone()
         self.drop_zone.paths_dropped.connect(self._on_paths_dropped)
-        self.drop_zone.setMinimumHeight(90)
+        self.drop_zone.setMinimumHeight(120) 
         input_layout.addWidget(self.drop_zone)
 
         input_btn_row = QHBoxLayout()
@@ -86,55 +111,92 @@ class EncroachmentPage(QWidget):
         self.inputs_list = QListWidget()
         self.inputs_list.setMinimumHeight(80)
         input_layout.addWidget(self.inputs_list)
-        layout.addWidget(input_group)
+        
+        self.content_layout.addWidget(input_card)
 
-        output_group = QGroupBox("2) Output Folder (required)")
-        output_layout = QVBoxLayout(output_group)
+        # --- Section 2: Output ---
+        output_card = QFrame()
+        output_card.setProperty("cssClass", "card")
+        output_layout = QVBoxLayout(output_card)
+        output_layout.setContentsMargins(20, 20, 20, 20)
+        output_layout.setSpacing(16)
+
+        lbl_h2_out = QLabel("2) Output Folder (required)")
+        lbl_h2_out.setProperty("cssClass", "h2")
+        output_layout.addWidget(lbl_h2_out)
+
         output_row = QHBoxLayout()
-        output_row.addWidget(QLabel("Encroachment output:"))
+        out_lbl = QLabel("Encroachment output:")
+        out_lbl.setProperty("cssClass", "subtitle")
+        output_row.addWidget(out_lbl)
+        
         self.output_edit = QLineEdit()
         self.output_edit.textChanged.connect(self._on_output_changed)
         output_row.addWidget(self.output_edit, 1)
+        
         output_btn = QPushButton("Select Output Folder…")
         output_btn.clicked.connect(self._select_output_folder)
         output_row.addWidget(output_btn)
         output_layout.addLayout(output_row)
+        
         output_help = QLabel("Defaults to Encroachment_Output under the common input root.")
+        output_help.setProperty("cssClass", "subtitle")
         output_help.setWordWrap(True)
         output_layout.addWidget(output_help)
-        layout.addWidget(output_group)
+        
+        self.content_layout.addWidget(output_card)
 
-        rename_group = QGroupBox("3) Renaming (optional)")
-        rename_layout = QVBoxLayout(rename_group)
+        # --- Section 3: Renaming ---
+        rename_card = QFrame()
+        rename_card.setProperty("cssClass", "card")
+        rename_layout = QVBoxLayout(rename_card)
+        rename_layout.setContentsMargins(20, 20, 20, 20)
+        rename_layout.setSpacing(16)
+
+        lbl_h2_rename = QLabel("3) Renaming (optional)")
+        lbl_h2_rename.setProperty("cssClass", "h2")
+        rename_layout.addWidget(lbl_h2_rename)
+
         self.rename_chk = QCheckBox("Enable renaming")
         self.rename_chk.setChecked(bool(self.state.encroachment_rename_enabled))
         self.rename_chk.toggled.connect(self._on_rename_toggled)
         rename_layout.addWidget(self.rename_chk)
 
         template_row = QHBoxLayout()
-        template_row.addWidget(QLabel("Template:"))
+        tmpl_lbl = QLabel("Template:")
+        tmpl_lbl.setProperty("cssClass", "subtitle")
+        template_row.addWidget(tmpl_lbl)
+        
         self.template_combo = QComboBox()
         self.template_combo.currentIndexChanged.connect(self._on_template_changed)
         template_row.addWidget(self.template_combo, 1)
+        
         edit_btn = QPushButton("Edit Templates…")
         edit_btn.clicked.connect(self._open_template_editor)
         template_row.addWidget(edit_btn)
         rename_layout.addLayout(template_row)
 
         self.template_preview = QLabel("")
+        self.template_preview.setProperty("cssClass", "subtitle")
         self.template_preview.setWordWrap(True)
         rename_layout.addWidget(self.template_preview)
 
         manual_row = QHBoxLayout()
         self.client_label = QLabel("Client Abbreviation:")
+        self.client_label.setProperty("cssClass", "subtitle")
         manual_row.addWidget(self.client_label)
+        
         self.client_edit = QLineEdit(self.state.encroachment_client_abbr)
         self.client_edit.textChanged.connect(self._on_manual_changed)
         manual_row.addWidget(self.client_edit)
+        
         self.client_required = RequiredMarker()
         manual_row.addWidget(self.client_required)
+        
         self.start_index_label = QLabel("Start Index:")
+        self.start_index_label.setProperty("cssClass", "subtitle")
         manual_row.addWidget(self.start_index_label)
+        
         self.start_index_spin = QSpinBox()
         self.start_index_spin.setRange(1, 10_000_000)
         self.start_index_spin.setValue(max(1, int(self.state.encroachment_start_index)))
@@ -143,32 +205,41 @@ class EncroachmentPage(QWidget):
         rename_layout.addLayout(manual_row)
 
         self.rename_note = QLabel("")
+        self.rename_note.setProperty("cssClass", "subtitle")
         self.rename_note.setWordWrap(True)
-        self.rename_note.setStyleSheet("color: #777777;")
+        # We can rely on cssClass subtitle, which is already grey. 
+        # But if we want it distinctly lighter, subtitle should be fine.
         rename_layout.addWidget(self.rename_note)
-        layout.addWidget(rename_group)
+        
+        self.content_layout.addWidget(rename_card)
 
+        # --- A ctions ---
         actions_row = QHBoxLayout()
         self.run_btn = QPushButton("Run Encroachment")
+        self.run_btn.setProperty("cssClass", "primary")
+        self.run_btn.setCursor(Qt.PointingHandCursor)
         self.run_btn.clicked.connect(self._run_encroachment)
-        self.run_btn.setMinimumHeight(36)
+        self.run_btn.setMinimumHeight(44) 
         actions_row.addWidget(self.run_btn)
+        
         self.view_log_btn = QPushButton("View log…")
         self.view_log_btn.setEnabled(False)
         self.view_log_btn.clicked.connect(self._view_log)
         actions_row.addWidget(self.view_log_btn)
         actions_row.addStretch(1)
-        layout.addLayout(actions_row)
+        self.content_layout.addLayout(actions_row)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setVisible(False)
-        layout.addWidget(self.progress)
+        self.content_layout.addWidget(self.progress)
+        
         self.status_label = QLabel("")
+        self.status_label.setProperty("cssClass", "subtitle")
         self.status_label.setWordWrap(True)
-        layout.addWidget(self.status_label)
+        self.content_layout.addWidget(self.status_label)
 
-        layout.addStretch(1)
+        self.content_layout.addStretch(1)
 
         self._refresh_templates()
         self.refresh_summary()
