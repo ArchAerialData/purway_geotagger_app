@@ -8,12 +8,26 @@ from typing import Optional
 
 from purway_geotagger.util.timeparse import parse_csv_timestamp, parse_photo_timestamp_from_name, format_exif_datetime
 from purway_geotagger.util.errors import CorrelationError
+from purway_geotagger.core.pac_calculator import calculate_pac
 
 PHOTO_COL_CANDIDATES = ["photo", "image", "filename", "file", "sourcefile"]
 LAT_COL_CANDIDATES = ["latitude", "lat", "gpslatitude"]
 LON_COL_CANDIDATES = ["longitude", "lon", "lng", "gpslongitude"]
 TIME_COL_CANDIDATES = ["timestamp", "time", "datetime", "date"]
-PPM_COL_CANDIDATES = ["concentration", "ppm", "methane", "ch4"]
+PPM_COL_CANDIDATES = ["concentration", "ppm", "methane", "ch4", "methane_concentration"]
+
+# Extended metadata column candidates
+ALT_COL_CANDIDATES = ["altitude", "alt", "gpsaltitude"]
+REL_ALT_COL_CANDIDATES = ["relative_altitude", "rel_alt", "agl", "height_agl"]
+LIGHT_COL_CANDIDATES = ["light_intensity", "light", "lux", "brightness"]
+UAV_PITCH_CANDIDATES = ["uav_pitch", "pitch"]
+UAV_ROLL_CANDIDATES = ["uav_roll", "roll"]
+UAV_YAW_CANDIDATES = ["uav_yaw", "yaw", "heading"]
+GIMBAL_PITCH_CANDIDATES = ["gimbal_pitch", "cam_pitch"]
+GIMBAL_ROLL_CANDIDATES = ["gimbal_roll", "cam_roll"]
+GIMBAL_YAW_CANDIDATES = ["gimbal_yaw", "cam_yaw"]
+FOCAL_LENGTH_CANDIDATES = ["camera_focal_length", "focal_length", "focal", "lens_focal"]
+ZOOM_CANDIDATES = ["camera_zoom", "zoom", "digital_zoom", "zoom_ratio"]
 
 REASON_NO_PHOTO_OR_TIMESTAMP = "no explicit Photo column correlation and no timestamped CSV rows available"
 REASON_NO_FILENAME_TIMESTAMP = "no filename timestamp and no explicit Photo column correlation"
@@ -39,6 +53,19 @@ class PurwayRecord:
     ppm: float
     timestamp: object  # datetime or None
     photo_ref: str | None
+    # Extended fields
+    altitude: float | None = None
+    relative_altitude: float | None = None
+    light_intensity: float | None = None
+    uav_pitch: float | None = None
+    uav_roll: float | None = None
+    uav_yaw: float | None = None
+    gimbal_pitch: float | None = None
+    gimbal_roll: float | None = None
+    gimbal_yaw: float | None = None
+    camera_focal_length: float | None = None
+    camera_zoom: float | None = None
+    timestamp_raw: str | None = None
 
 @dataclass(frozen=True)
 class PhotoMatch:
@@ -49,6 +76,20 @@ class PhotoMatch:
     datetime_original: str | None
     image_description: str
     join_method: str  # FILENAME|TIMESTAMP
+    # Extended fields
+    altitude: float | None = None
+    relative_altitude: float | None = None
+    light_intensity: float | None = None
+    uav_pitch: float | None = None
+    uav_roll: float | None = None
+    uav_yaw: float | None = None
+    gimbal_pitch: float | None = None
+    gimbal_roll: float | None = None
+    gimbal_yaw: float | None = None
+    camera_focal_length: float | None = None
+    camera_zoom: float | None = None
+    timestamp_raw: str | None = None
+    pac: float | None = None  # Derived: ppm / relative_altitude
 
 class PurwayCSVIndex:
     def __init__(self, records: list[PurwayRecord]) -> None:
@@ -117,6 +158,7 @@ def _to_match(r: PurwayRecord, join_method: str) -> PhotoMatch:
     dto = format_exif_datetime(r.timestamp) if r.timestamp else None
     ppm_int = int(round(r.ppm))
     desc = f"ppm={ppm_int}; source_csv={r.csv_path.name}"
+    pac = calculate_pac(r.ppm, r.relative_altitude)
     return PhotoMatch(
         csv_path=str(r.csv_path),
         lat=r.lat,
@@ -125,6 +167,19 @@ def _to_match(r: PurwayRecord, join_method: str) -> PhotoMatch:
         datetime_original=dto,
         image_description=desc,
         join_method=join_method,
+        altitude=r.altitude,
+        relative_altitude=r.relative_altitude,
+        light_intensity=r.light_intensity,
+        uav_pitch=r.uav_pitch,
+        uav_roll=r.uav_roll,
+        uav_yaw=r.uav_yaw,
+        gimbal_pitch=r.gimbal_pitch,
+        gimbal_roll=r.gimbal_roll,
+        gimbal_yaw=r.gimbal_yaw,
+        camera_focal_length=r.camera_focal_length,
+        camera_zoom=r.camera_zoom,
+        timestamp_raw=r.timestamp_raw,
+        pac=pac,
     )
 
 def _parse_single_csv(path: Path) -> list[PurwayRecord]:
@@ -146,9 +201,30 @@ def _parse_single_csv(path: Path) -> list[PurwayRecord]:
     lon_col = _pick_col(cols, LON_COL_CANDIDATES)
     time_col = _pick_col(cols, TIME_COL_CANDIDATES)
     ppm_col = _pick_col(cols, PPM_COL_CANDIDATES)
+    
+    # Extended column lookups
+    alt_col = _pick_col(cols, ALT_COL_CANDIDATES)
+    rel_alt_col = _pick_col(cols, REL_ALT_COL_CANDIDATES)
+    light_col = _pick_col(cols, LIGHT_COL_CANDIDATES)
+    uav_pitch_col = _pick_col(cols, UAV_PITCH_CANDIDATES)
+    uav_roll_col = _pick_col(cols, UAV_ROLL_CANDIDATES)
+    uav_yaw_col = _pick_col(cols, UAV_YAW_CANDIDATES)
+    gimbal_pitch_col = _pick_col(cols, GIMBAL_PITCH_CANDIDATES)
+    gimbal_roll_col = _pick_col(cols, GIMBAL_ROLL_CANDIDATES)
+    gimbal_yaw_col = _pick_col(cols, GIMBAL_YAW_CANDIDATES)
+    focal_col = _pick_col(cols, FOCAL_LENGTH_CANDIDATES)
+    zoom_col = _pick_col(cols, ZOOM_CANDIDATES)
 
     if not lat_col or not lon_col:
         return []  # ignore CSVs without coordinate columns
+
+    def _safe_float(row: dict, col: str | None) -> float | None:
+        if not col or row.get(col) in (None, ""):
+            return None
+        try:
+            return float(str(row.get(col)).strip())
+        except ValueError:
+            return None
 
     out: list[PurwayRecord] = []
     for r in rows:
@@ -166,9 +242,11 @@ def _parse_single_csv(path: Path) -> list[PurwayRecord]:
                 ppm = 0.0
 
         ts = None
+        ts_raw = None
         if time_col and r.get(time_col):
+            ts_raw = str(r.get(time_col)).strip()
             try:
-                ts = parse_csv_timestamp(str(r.get(time_col)))
+                ts = parse_csv_timestamp(ts_raw)
             except Exception:
                 ts = None
 
@@ -181,6 +259,18 @@ def _parse_single_csv(path: Path) -> list[PurwayRecord]:
             ppm=ppm,
             timestamp=ts,
             photo_ref=photo_ref,
+            altitude=_safe_float(r, alt_col),
+            relative_altitude=_safe_float(r, rel_alt_col),
+            light_intensity=_safe_float(r, light_col),
+            uav_pitch=_safe_float(r, uav_pitch_col),
+            uav_roll=_safe_float(r, uav_roll_col),
+            uav_yaw=_safe_float(r, uav_yaw_col),
+            gimbal_pitch=_safe_float(r, gimbal_pitch_col),
+            gimbal_roll=_safe_float(r, gimbal_roll_col),
+            gimbal_yaw=_safe_float(r, gimbal_yaw_col),
+            camera_focal_length=_safe_float(r, focal_col),
+            camera_zoom=_safe_float(r, zoom_col),
+            timestamp_raw=ts_raw,
         ))
     return out
 

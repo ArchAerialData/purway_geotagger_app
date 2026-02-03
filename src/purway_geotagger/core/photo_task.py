@@ -25,6 +25,23 @@ class PhotoTask:
     datetime_original: str | None = None
     image_description: str = ""
 
+    # Extended metadata from CSV
+    altitude: float | None = None
+    relative_altitude: float | None = None
+    light_intensity: float | None = None
+    uav_pitch: float | None = None
+    uav_roll: float | None = None
+    uav_yaw: float | None = None
+    gimbal_pitch: float | None = None
+    gimbal_roll: float | None = None
+    gimbal_yaw: float | None = None
+    camera_focal_length: float | None = None
+    camera_zoom: float | None = None
+    timestamp_raw: str | None = None
+
+    # Derived fields
+    pac: float | None = None  # Path Average Concentration: ppm / relative_altitude
+
     # Results
     status: str = "PENDING"  # SUCCESS|FAILED|SKIPPED|PENDING
     reason: str = ""

@@ -1,0 +1,43 @@
+# ExifTool configuration file for Purway Geotagger
+# Defines custom XMP namespace for ArchAerial metadata fields
+#
+# Usage: exiftool -config /path/to/exiftool_config.txt ...
+
+%Image::ExifTool::UserDefined = (
+    'Image::ExifTool::XMP::Main' => {
+        ArchAerial => {
+            SubDirectory => {
+                TagTable => 'Image::ExifTool::UserDefined::ArchAerial',
+            },
+        },
+    },
+);
+
+%Image::ExifTool::UserDefined::ArchAerial = (
+    GROUPS => { 0 => 'XMP', 1 => 'XMP-ArchAerial', 2 => 'Other' },
+    NAMESPACE => { 'ArchAerial' => 'http://ns.archaerial.com/1.0/' },
+    WRITABLE => 'string',
+    
+    # Methane / Gas Detection
+    MethaneConcentration => { Writable => 'real', Description => 'Methane concentration in PPM' },
+    PAC => { Writable => 'real', Description => 'Path Average Concentration (PPM / Altitude)' },
+    LightIntensity => { Writable => 'real', Description => 'Ambient light intensity' },
+    
+    # Altitude
+    RelativeAltitude => { Writable => 'real', Description => 'Altitude above ground level (AGL) in meters' },
+    
+    # UAV Orientation
+    UAVPitch => { Writable => 'real', Description => 'UAV pitch angle in degrees' },
+    UAVRoll => { Writable => 'real', Description => 'UAV roll angle in degrees' },
+    UAVYaw => { Writable => 'real', Description => 'UAV yaw/heading angle in degrees' },
+    
+    # Gimbal Orientation
+    GimbalPitch => { Writable => 'real', Description => 'Gimbal/camera pitch angle in degrees' },
+    GimbalRoll => { Writable => 'real', Description => 'Gimbal/camera roll angle in degrees' },
+    GimbalYaw => { Writable => 'real', Description => 'Gimbal/camera yaw angle in degrees' },
+    
+    # Capture Time
+    CaptureTime => { Writable => 'string', Description => 'Original capture timestamp from CSV' },
+);
+
+1; # End of config - required for Perl modules

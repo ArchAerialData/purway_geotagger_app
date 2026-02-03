@@ -16,6 +16,12 @@ class ManifestRow:
     csv_path: str
     join_method: str  # FILENAME|TIMESTAMP|NONE
     exif_written: str  # YES|NO
+    # Extended fields
+    altitude: str = ""
+    relative_altitude: str = ""
+    light_intensity: str = ""
+    pac: str = ""
+    uav_yaw: str = ""
 
 class ManifestWriter:
     def __init__(self, path: Path) -> None:
@@ -29,7 +35,8 @@ class ManifestWriter:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(asdict(self._rows[0]).keys()) if self._rows else [
-                "source_path","output_path","status","reason","lat","lon","ppm","csv_path","join_method","exif_written"
+                "source_path","output_path","status","reason","lat","lon","ppm","csv_path","join_method","exif_written",
+                "altitude", "relative_altitude", "light_intensity", "pac", "uav_yaw"
             ])
             w.writeheader()
             for r in self._rows:

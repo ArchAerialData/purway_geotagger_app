@@ -143,6 +143,22 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
                 t.ppm = match.ppm
                 t.datetime_original = match.datetime_original
                 t.image_description = match.image_description
+                
+                # Extended fields
+                t.altitude = match.altitude
+                t.relative_altitude = match.relative_altitude
+                t.light_intensity = match.light_intensity
+                t.uav_pitch = match.uav_pitch
+                t.uav_roll = match.uav_roll
+                t.uav_yaw = match.uav_yaw
+                t.gimbal_pitch = match.gimbal_pitch
+                t.gimbal_roll = match.gimbal_roll
+                t.gimbal_yaw = match.gimbal_yaw
+                t.camera_focal_length = match.camera_focal_length
+                t.camera_zoom = match.camera_zoom
+                t.timestamp_raw = match.timestamp_raw
+                t.pac = match.pac
+
                 if opts.purway_payload:
                     if t.image_description:
                         t.image_description = f"{t.image_description}; purway_payload={opts.purway_payload}"
@@ -362,6 +378,21 @@ def _clone_tasks_for_copy(
             clone.status = base.status
             clone.reason = base.reason
             clone.exif_written = base.exif_written
+            
+            # Extended fields
+            clone.altitude = base.altitude
+            clone.relative_altitude = base.relative_altitude
+            clone.light_intensity = base.light_intensity
+            clone.uav_pitch = base.uav_pitch
+            clone.uav_roll = base.uav_roll
+            clone.uav_yaw = base.uav_yaw
+            clone.gimbal_pitch = base.gimbal_pitch
+            clone.gimbal_roll = base.gimbal_roll
+            clone.gimbal_yaw = base.gimbal_yaw
+            clone.camera_focal_length = base.camera_focal_length
+            clone.camera_zoom = base.camera_zoom
+            clone.timestamp_raw = base.timestamp_raw
+            clone.pac = base.pac
         clones.append(clone)
     return clones
 
@@ -458,6 +489,12 @@ def _write_manifest(
                 csv_path=t.csv_path,
                 join_method=t.join_method,
                 exif_written="YES" if t.exif_written else "NO",
+                # Extended fields
+                altitude="" if t.altitude is None else str(t.altitude),
+                relative_altitude="" if t.relative_altitude is None else str(t.relative_altitude),
+                light_intensity="" if t.light_intensity is None else str(t.light_intensity),
+                pac="" if t.pac is None else str(t.pac),
+                uav_yaw="" if t.uav_yaw is None else str(t.uav_yaw),
             ))
     else:
         for p in scanned_photos:
