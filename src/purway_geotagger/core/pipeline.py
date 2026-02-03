@@ -494,7 +494,15 @@ def _write_manifest(
                 relative_altitude="" if t.relative_altitude is None else str(t.relative_altitude),
                 light_intensity="" if t.light_intensity is None else str(t.light_intensity),
                 pac="" if t.pac is None else str(t.pac),
+                uav_pitch="" if t.uav_pitch is None else str(t.uav_pitch),
+                uav_roll="" if t.uav_roll is None else str(t.uav_roll),
                 uav_yaw="" if t.uav_yaw is None else str(t.uav_yaw),
+                gimbal_pitch="" if t.gimbal_pitch is None else str(t.gimbal_pitch),
+                gimbal_roll="" if t.gimbal_roll is None else str(t.gimbal_roll),
+                gimbal_yaw="" if t.gimbal_yaw is None else str(t.gimbal_yaw),
+                camera_focal_length="" if t.camera_focal_length is None else str(t.camera_focal_length),
+                camera_zoom="" if t.camera_zoom is None else str(t.camera_zoom),
+                capture_time=t.timestamp_raw or "",
             ))
     else:
         for p in scanned_photos:

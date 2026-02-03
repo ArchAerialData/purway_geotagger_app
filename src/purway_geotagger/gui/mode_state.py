@@ -19,7 +19,7 @@ class ModeState:
     inputs: list[Path] = field(default_factory=list)
 
     methane_threshold: int = 1000
-    methane_generate_kmz: bool = False
+    methane_generate_kmz: bool = True
     methane_log_base: Path | None = None
 
     encroachment_output_base: Path | None = None
