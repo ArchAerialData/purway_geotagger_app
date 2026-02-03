@@ -22,18 +22,18 @@ jobs:
       - name: Build app + run tests
         run: bash scripts/ci/macos_build.sh
 
-      - name: Sign + notarize (optional)
-        if: ${{ secrets.MACOS_CERT_P12 != '' && secrets.MACOS_CERT_PASSWORD != '' && secrets.APPLE_KEY_ID != '' && secrets.APPLE_ISSUER_ID != '' && secrets.APPLE_API_KEY_P8 != '' }}
-        run: bash scripts/ci/macos_sign_and_notarize.sh
-        env:
-          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
-          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
-          APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
-          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+      # - name: Sign + notarize (optional)
+      #   if: ${{ secrets.MACOS_CERT_P12 != '' && secrets.MACOS_CERT_PASSWORD != '' && secrets.APPLE_KEY_ID != '' && secrets.APPLE_ISSUER_ID != '' && secrets.APPLE_API_KEY_P8 != '' }}
+      #   run: bash scripts/ci/macos_sign_and_notarize.sh
+      #   env:
+      #     MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      #     MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      #     APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+      #     APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+      #     APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
 
       - name: Package DMG (unsigned)
-        if: ${{ !(secrets.MACOS_CERT_P12 != '' && secrets.MACOS_CERT_PASSWORD != '' && secrets.APPLE_KEY_ID != '' && secrets.APPLE_ISSUER_ID != '' && secrets.APPLE_API_KEY_P8 != '') }}
+        # if: ${{ !(secrets.MACOS_CERT_P12 != '' && secrets.MACOS_CERT_PASSWORD != '' && secrets.APPLE_KEY_ID != '' && secrets.APPLE_ISSUER_ID != '' && secrets.APPLE_API_KEY_P8 != '') }}
         run: bash scripts/ci/macos_package.sh
 
       - name: Upload DMG
