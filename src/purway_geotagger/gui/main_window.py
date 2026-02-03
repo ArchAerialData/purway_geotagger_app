@@ -8,10 +8,13 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QCheckBox, QSpinBox, QLineEdit, QProgressBar, QTableView,
     QMessageBox, QComboBox, QTabWidget, QGroupBox, QListWidget, QToolButton,
-    QStyle, QApplication, QStackedWidget
+    QStyle, QApplication, QStackedWidget, QButtonGroup
 )
 
+
+from PySide6.QtGui import QIcon, QPixmap
 from purway_geotagger.core.settings import AppSettings
+
 from purway_geotagger.core.modes import RunMode
 from purway_geotagger.gui.widgets.drop_zone import DropZone
 from purway_geotagger.gui.models.job_table_model import JobTableModel
@@ -53,22 +56,106 @@ class MainWindow(QMainWindow):
         root = QWidget()
         self.setCentralWidget(root)
         layout = QVBoxLayout(root)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        tabs = QTabWidget()
-        layout.addWidget(tabs)
+        # ----- Main Stack for Tabs -----
+        self.main_stack = QStackedWidget()
+
+        # ----- Header with Inline Nav -----
+        header_widget = QWidget()
+        header_widget.setObjectName("mainHeader")
+        header_widget.setStyleSheet("#mainHeader { background-color: palette(window); border-bottom: 1px solid palette(mid); }")
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(24, 12, 24, 12)
+        header_layout.setSpacing(24)
+        
+        # 1. Logo
+        self.logo_label = QLabel()
+        self.logo_label.setScaledContents(True)
+        self.logo_label.setFixedHeight(90)
+        # Explicit alignment
+        header_layout.addWidget(self.logo_label, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        # 2. Navigation Buttons (acting as tabs)
+        # Wrap in a container widget to enforce vertical centering in the main header layout
+        nav_container = QWidget()
+        nav_layout = QHBoxLayout(nav_container)
+        nav_layout.setContentsMargins(0, 0, 0, 0)
+        nav_layout.setSpacing(8)
+        
+        self.nav_group = QButtonGroup(self)
+        self.nav_group.setExclusive(True)
+
+        def _create_nav_btn(text: str, index: int) -> QPushButton:
+            btn = QPushButton(text)
+            btn.setCheckable(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            # Basic styling for nav buttons
+            btn.setStyleSheet("""
+                QPushButton {
+                    border: none;
+                    font-weight: bold;
+                    font-size: 16px;
+                    color: palette(text);
+                    padding: 8px 16px;
+                    border-radius: 6px;
+                }
+                QPushButton:checked {
+                    background-color: palette(midlight);
+                    color: palette(link);
+                }
+                QPushButton:hover:!checked {
+                    background-color: palette(midlight);
+                }
+            """)
+            self.nav_group.addButton(btn, index)
+            # Use lambda with default arg to capture index correctly
+            btn.clicked.connect(lambda checked=False, idx=index: self.main_stack.setCurrentIndex(idx))
+            nav_layout.addWidget(btn)
+            return btn
+
+        self.btn_run = _create_nav_btn("Run", 0)
+        self.btn_jobs = _create_nav_btn("Jobs", 1)
+        self.btn_templates = _create_nav_btn("Templates", 2)
+        self.btn_help = _create_nav_btn("Help", 3)
+        self.btn_run.setChecked(True)
+
+        # Add the container with Center alignment
+        header_layout.addWidget(nav_container, alignment=Qt.AlignmentFlag.AlignVCenter)
+        
+        header_layout.addStretch(1)
+        
+        # 3. Theme Toggle
         self.theme_toggle = ThemeToggle(self.settings.ui_theme)
         self.theme_toggle.theme_changed.connect(self._on_theme_changed)
-        tabs.setCornerWidget(self.theme_toggle, Qt.TopRightCorner)
+        header_layout.addWidget(self.theme_toggle, alignment=Qt.AlignmentFlag.AlignVCenter)
 
-        # ----- Run tab (home + modes) -----
+        
+        layout.addWidget(header_widget)
+        layout.addWidget(self.main_stack) # Add the stack where the tabs used to be
+
+        # Re-apply theme to ensure logo is set
+        self._on_theme_changed(self.settings.ui_theme)
+        
+        # Set App Icon
+        icon_path = Path(__file__).parents[3] / "assets/aallc_logos/AALLC_CircleLogo_2023_V3_White.png"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+
+
+        # ----- Tab 1: Run (Home + Modes) -----
         run_tab = QWidget()
         run_layout = QVBoxLayout(run_tab)
-        tabs.addTab(run_tab, "Run")
+        # Add some padding to the content area since we removed global margins
+        run_layout.setContentsMargins(20, 20, 20, 20) 
+        self.main_stack.addWidget(run_tab)
 
         self.run_stack = QStackedWidget()
         run_layout.addWidget(self.run_stack, 1)
 
         self.home_page = HomePage()
+
         self.home_page.set_last_mode(self._last_mode)
         self.home_page.mode_selected.connect(self._on_mode_selected)
 
@@ -97,12 +184,14 @@ class MainWindow(QMainWindow):
         self.progress.setVisible(False)
         run_layout.addWidget(self.progress)
 
-        # ----- Jobs tab -----
+        # ----- Tab 2: Jobs -----
         jobs_tab = QWidget()
         jobs_layout = QVBoxLayout(jobs_tab)
-        tabs.addTab(jobs_tab, "Jobs")
+        jobs_layout.setContentsMargins(20, 20, 20, 20)
+        self.main_stack.addWidget(jobs_tab)
 
         self.table = QTableView()
+
         self.model = JobTableModel(self.controller)
         self.table.setModel(self.model)
         self.table.setSelectionBehavior(QTableView.SelectRows)
@@ -133,12 +222,14 @@ class MainWindow(QMainWindow):
         act_row.addWidget(self.view_report_btn)
         jobs_layout.addLayout(act_row)
 
-        # ----- Templates tab -----
+        # ----- Tab 3: Templates -----
         templates_tab = QWidget()
         templates_layout = QVBoxLayout(templates_tab)
-        tabs.addTab(templates_tab, "Templates")
+        templates_layout.setContentsMargins(20, 20, 20, 20)
+        self.main_stack.addWidget(templates_tab)
 
         templates_layout.addWidget(QLabel("Templates are used when renaming is enabled on the Run tab."))
+
         self.templates_list = QListWidget()
         templates_layout.addWidget(self.templates_list, 1)
         tmpl_btn_row = QHBoxLayout()
@@ -150,12 +241,14 @@ class MainWindow(QMainWindow):
         tmpl_btn_row.addWidget(self.template_refresh_btn)
         templates_layout.addLayout(tmpl_btn_row)
 
-        # ----- Help tab -----
+        # ----- Tab 4: Help -----
         help_tab = QWidget()
         help_layout = QVBoxLayout(help_tab)
-        tabs.addTab(help_tab, "Help")
+        help_layout.setContentsMargins(20, 20, 20, 20)
+        self.main_stack.addWidget(help_tab)
 
         help_text = QLabel(
+
             "Quick start:\n"
             "1) Open the Run tab and select a report type.\n"
             "2) Add inputs and configure options for that mode.\n"
@@ -167,12 +260,13 @@ class MainWindow(QMainWindow):
 
         help_actions = QHBoxLayout()
         self.help_run_btn = QPushButton("Go to Run tab")
-        self.help_run_btn.clicked.connect(lambda: tabs.setCurrentIndex(0))
+        self.help_run_btn.clicked.connect(lambda: self.main_stack.setCurrentIndex(0) or self.btn_run.setChecked(True))
         self.help_jobs_btn = QPushButton("Go to Jobs tab")
-        self.help_jobs_btn.clicked.connect(lambda: tabs.setCurrentIndex(1))
+        self.help_jobs_btn.clicked.connect(lambda: self.main_stack.setCurrentIndex(1) or self.btn_jobs.setChecked(True))
         help_actions.addWidget(self.help_run_btn)
         help_actions.addWidget(self.help_jobs_btn)
         help_layout.addLayout(help_actions)
+
 
         self._refresh_templates()
         self._update_inputs_state()
@@ -455,7 +549,27 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app:
             apply_theme(app, theme)
-        self.theme_toggle.refresh_icons()
+        if hasattr(self, "theme_toggle"):
+            self.theme_toggle.set_theme(theme)
+            self.theme_toggle.refresh_icons()
+        
+        # Update Logo
+        is_dark = (theme or "light").strip().lower() == "dark"
+        fname = "ArchAerial_Logo_White_NoWebsite.png" if is_dark else "ArchAerial_Black&Transparent.png"
+        logo_path = Path(__file__).parents[3] / "assets/aallc_logos" / fname
+        
+        if logo_path.exists():
+            pix = QPixmap(str(logo_path))
+            # Scale proportionally to fixed height
+            if not pix.isNull():
+                aspect = pix.width() / pix.height()
+                target_h = 90
+                target_w = int(target_h * aspect)
+                self.logo_label.setFixedWidth(target_w)
+                self.logo_label.setPixmap(pix)
+        else:
+            self.logo_label.clear()
+
 
     def _help_btn(self, text: str) -> QToolButton:
         btn = QToolButton()
