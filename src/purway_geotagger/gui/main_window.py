@@ -22,7 +22,11 @@ from purway_geotagger.gui.widgets.drop_zone import DropZone
 from purway_geotagger.gui.models.job_table_model import JobTableModel
 from purway_geotagger.gui.controllers import JobController
 from purway_geotagger.gui.mode_state import ModeState
-from purway_geotagger.gui.pages import HomePage, MethanePage, EncroachmentPage, CombinedWizard
+from purway_geotagger.gui.pages.home_page import HomePage
+from purway_geotagger.gui.pages.methane_page import MethanePage
+from purway_geotagger.gui.pages.encroachment_page import EncroachmentPage
+from purway_geotagger.gui.pages.combined_wizard import CombinedWizard
+from purway_geotagger.gui.pages.help_page import HelpPage
 from purway_geotagger.gui.widgets.template_editor import TemplateEditorDialog
 from purway_geotagger.gui.widgets.theme_toggle import ThemeToggle
 from purway_geotagger.gui.widgets.settings_dialog import SettingsDialog
@@ -244,30 +248,14 @@ class MainWindow(QMainWindow):
         templates_layout.addLayout(tmpl_btn_row)
 
         # ----- Tab 4: Help -----
-        help_tab = QWidget()
-        help_layout = QVBoxLayout(help_tab)
-        help_layout.setContentsMargins(20, 20, 20, 20)
-        self.main_stack.addWidget(help_tab)
-
-        help_text = QLabel(
-
-            "Quick start:\n"
-            "1) Open the Run tab and select a report type.\n"
-            "2) Add inputs and configure options for that mode.\n"
-            "3) Confirm settings and run.\n\n"
-            "Templates are managed under the Templates tab."
-        )
-        help_text.setWordWrap(True)
-        help_layout.addWidget(help_text)
-
-        help_actions = QHBoxLayout()
-        self.help_run_btn = QPushButton("Go to Run tab")
-        self.help_run_btn.clicked.connect(lambda: self.main_stack.setCurrentIndex(0) or self.btn_run.setChecked(True))
-        self.help_jobs_btn = QPushButton("Go to Jobs tab")
-        self.help_jobs_btn.clicked.connect(lambda: self.main_stack.setCurrentIndex(1) or self.btn_jobs.setChecked(True))
-        help_actions.addWidget(self.help_run_btn)
-        help_actions.addWidget(self.help_jobs_btn)
-        help_layout.addLayout(help_actions)
+        self.help_page = HelpPage()
+        
+        # Link action buttons inside Help Page if we add them, 
+        # but for now it's just content. 
+        # If we wanted to keep the "Start Now" buttons we could add them to HelpPage
+        # or wrapping widget here. For now, the clean doc is better.
+        
+        self.main_stack.addWidget(self.help_page)
 
 
         self._refresh_templates()
