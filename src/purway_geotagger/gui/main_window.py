@@ -113,6 +113,20 @@ class MainWindow(QMainWindow):
         
         header_layout.addStretch(1)
         
+        # 4. Version / Status
+        self.version_label = QLabel("v1.0.0")
+        self.version_label.setProperty("cssClass", "subtitle")
+        # Add right margin to separate from buttons
+        self.version_label.setStyleSheet("margin-right: 8px;")
+        header_layout.addWidget(self.version_label, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        # 5. Settings Button
+        self.settings_btn = QPushButton("Settings")
+        self.settings_btn.setCursor(Qt.PointingHandCursor)
+        self.settings_btn.setProperty("cssClass", "nav_btn")
+        self.settings_btn.clicked.connect(self._open_settings)
+        header_layout.addWidget(self.settings_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+        
         # 3. Theme Toggle
         self.theme_toggle = ThemeToggle(self.settings.ui_theme)
         self.theme_toggle.theme_changed.connect(self._on_theme_changed)
