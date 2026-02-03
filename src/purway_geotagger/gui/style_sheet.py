@@ -35,6 +35,10 @@ def get_stylesheet(theme: str) -> str:
         c_dropzone_border = "#48484A"
         c_dropzone_hover = "rgba(10, 132, 255, 0.15)"
         
+        # Nav
+        c_nav_hover = "rgba(255, 255, 255, 0.1)"
+        c_nav_checked_bg = "rgba(10, 132, 255, 0.2)"
+        
     else:
         # Backgrounds
         c_window_bg = "#F5F5F7"       # Soft off-white
@@ -63,6 +67,10 @@ def get_stylesheet(theme: str) -> str:
         c_dropzone_bg = "rgba(255, 255, 255, 0.6)"
         c_dropzone_border = "#C7C7CC"
         c_dropzone_hover = "rgba(0, 122, 255, 0.05)"
+
+        # Nav
+        c_nav_hover = "rgba(0, 0, 0, 0.05)"
+        c_nav_checked_bg = "rgba(0, 122, 255, 0.1)"
 
     # Typography (System Font San Francisco equivalent)
     font_family = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
@@ -215,6 +223,26 @@ def get_stylesheet(theme: str) -> str:
     QPushButton[cssClass="ghost"]:hover {{
         color: {c_primary_hover};
         text-decoration: underline;
+    }}
+
+    /* Navigation Button (Header) */
+    QPushButton[cssClass="nav_btn"] {{
+        background-color: transparent;
+        border: none;
+        font-weight: 700;
+        font-size: 15px;
+        color: {c_text_primary};
+        padding: 8px 16px;
+        border-radius: 6px;
+    }}
+    
+    QPushButton[cssClass="nav_btn"]:hover {{
+        background-color: {c_nav_hover};
+    }}
+    
+    QPushButton[cssClass="nav_btn"]:checked {{
+        background-color: {c_nav_checked_bg};
+        color: {c_primary};
     }}
 
     /* --- Inputs --- */
