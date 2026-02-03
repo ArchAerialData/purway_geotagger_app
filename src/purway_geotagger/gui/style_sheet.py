@@ -122,8 +122,14 @@ def get_stylesheet(theme: str) -> str:
         font-size: 14px;
         color: {c_text_secondary};
     }}
+
+    QLabel[cssClass="error"] {{
+        color: {c_error};
+        font-weight: 600;
+    }}
     
     /* --- Cards --- */
+
     QFrame[cssClass="card"] {{
         background-color: {c_surface_bg};
         border: 1px solid {c_border};
