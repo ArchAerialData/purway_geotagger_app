@@ -65,7 +65,6 @@ pyinstaller --noconfirm --clean \
   --onedir \
   --osx-bundle-identifier "${BUNDLE_ID}" \
   --paths "src" \
-  --collect-all "PySide6" \
   --add-data "config/default_templates.json:config" \
   --add-data "assets:assets" \
   "${EXIFTOOL_ARGS[@]}" \
