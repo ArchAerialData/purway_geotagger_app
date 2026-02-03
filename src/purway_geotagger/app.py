@@ -13,6 +13,7 @@ import os
 from PySide6.QtWidgets import QApplication
 
 from purway_geotagger.gui.main_window import MainWindow
+from purway_geotagger.gui.theme import apply_theme
 from purway_geotagger.core.settings import AppSettings
 from purway_geotagger.util.platform import configure_macos_app_identity
 
@@ -23,6 +24,7 @@ def main() -> int:
     app = QApplication(sys.argv)
 
     settings = AppSettings.load()
+    apply_theme(app, settings.ui_theme)
     if settings.exiftool_path:
         os.environ["PURWAY_EXIFTOOL_PATH"] = settings.exiftool_path
     win = MainWindow(settings=settings)

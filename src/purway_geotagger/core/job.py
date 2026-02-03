@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from purway_geotagger.templates.models import RenameTemplate
+from purway_geotagger.core.modes import RunMode
 
 @dataclass
 class JobOptions:
@@ -24,6 +25,14 @@ class JobOptions:
     enable_renaming: bool
     rename_template: Optional[RenameTemplate]
     start_index: int
+
+    # mode-specific (future use)
+    run_mode: RunMode | None = None
+    methane_threshold: int = 1000
+    methane_generate_kmz: bool = False
+    methane_log_base: Path | None = None
+    encroachment_output_base: Path | None = None
+    output_photos_root: Path | None = None
 
 @dataclass
 class JobState:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -20,6 +21,8 @@ from purway_geotagger.templates.template_manager import TemplateManager, render_
 
 
 class TemplateEditorDialog(QDialog):
+    templates_changed = Signal()
+
     def __init__(self, manager: TemplateManager, parent=None) -> None:
         super().__init__(parent)
         self.manager = manager
@@ -181,6 +184,7 @@ class TemplateEditorDialog(QDialog):
         self.manager.upsert(tmpl)
         self._refresh_list()
         self._select_template_id(tid)
+        self.templates_changed.emit()
 
     def _delete_template(self) -> None:
         t = self._current_template()
@@ -191,6 +195,7 @@ class TemplateEditorDialog(QDialog):
             return
         self.manager.delete(t.id)
         self._refresh_list()
+        self.templates_changed.emit()
 
     def _select_template_id(self, tid: str) -> None:
         templates = self.manager.list_templates()

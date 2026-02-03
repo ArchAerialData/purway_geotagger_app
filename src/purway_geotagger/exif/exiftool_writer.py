@@ -54,10 +54,12 @@ class ExifToolWriter:
         import_csv = work_dir / "_exiftool_import.csv"
         self._write_import_csv(import_csv, matched)
 
+        files = [str(t.output_path.expanduser().resolve()) for t in matched]
         cmd = [
             self.exiftool_path,
             "-overwrite_original",
             f"-csv={import_csv}",
+            *files,
         ]
 
         try:

@@ -8,18 +8,23 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QCheckBox, QSpinBox, QLineEdit, QProgressBar, QTableView,
     QMessageBox, QComboBox, QTabWidget, QGroupBox, QListWidget, QToolButton,
-    QStyle
+    QStyle, QApplication, QStackedWidget
 )
 
 from purway_geotagger.core.settings import AppSettings
+from purway_geotagger.core.modes import RunMode
 from purway_geotagger.gui.widgets.drop_zone import DropZone
 from purway_geotagger.gui.models.job_table_model import JobTableModel
 from purway_geotagger.gui.controllers import JobController
+from purway_geotagger.gui.mode_state import ModeState
+from purway_geotagger.gui.pages import HomePage, MethanePage, EncroachmentPage, CombinedWizard
 from purway_geotagger.gui.widgets.template_editor import TemplateEditorDialog
+from purway_geotagger.gui.widgets.theme_toggle import ThemeToggle
 from purway_geotagger.gui.widgets.settings_dialog import SettingsDialog
 from purway_geotagger.gui.widgets.preview_dialog import PreviewDialog
 from purway_geotagger.gui.widgets.schema_dialog import SchemaDialog
 from purway_geotagger.gui.workers import PreviewWorker
+from purway_geotagger.gui.theme import apply_theme
 from purway_geotagger.exif.exiftool_writer import is_exiftool_available
 
 class MainWindow(QMainWindow):
@@ -27,9 +32,19 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = settings
         self.setWindowTitle("Purway Geotagger")
+        self.resize(980, 680)
+        self.setMinimumSize(780, 560)
 
         self.controller = JobController(settings=settings)
         self.controller.jobs_changed.connect(self._on_jobs_changed)
+
+        self._mode_states = {
+            RunMode.METHANE: ModeState(mode=RunMode.METHANE),
+            RunMode.ENCROACHMENT: ModeState(mode=RunMode.ENCROACHMENT),
+            RunMode.COMBINED: ModeState(mode=RunMode.COMBINED),
+        }
+        self._last_mode = self._parse_last_mode(self.settings.last_mode)
+        self._mode_pages: dict[RunMode, QWidget] = {}
 
         self._build_ui()
 
@@ -40,139 +55,45 @@ class MainWindow(QMainWindow):
 
         tabs = QTabWidget()
         layout.addWidget(tabs)
+        self.theme_toggle = ThemeToggle(self.settings.ui_theme)
+        self.theme_toggle.theme_changed.connect(self._on_theme_changed)
+        tabs.setCornerWidget(self.theme_toggle, Qt.TopRightCorner)
 
-        # ----- Run tab -----
+        # ----- Run tab (home + modes) -----
         run_tab = QWidget()
         run_layout = QVBoxLayout(run_tab)
         tabs.addTab(run_tab, "Run")
 
-        input_group = QGroupBox("1) Add Inputs")
-        input_layout = QVBoxLayout(input_group)
-        input_layout.addWidget(QLabel("Drag & drop folders/files below (parent folder or many folders supported):"))
-        self.drop_zone = DropZone()
-        self.drop_zone.paths_dropped.connect(self._on_paths_dropped)
-        input_layout.addWidget(self.drop_zone)
-        run_layout.addWidget(input_group)
+        self.run_stack = QStackedWidget()
+        run_layout.addWidget(self.run_stack, 1)
 
-        out_group = QGroupBox("2) Output Folder")
-        out_row = QHBoxLayout(out_group)
-        self.out_dir_edit = QLineEdit(self.settings.last_output_dir)
-        self.out_browse_btn = QPushButton("Select Output Folder…")
-        self.out_browse_btn.clicked.connect(self._select_output_folder)
-        out_row.addWidget(QLabel("Output:"))
-        out_row.addWidget(self.out_dir_edit, 1)
-        out_row.addWidget(self.out_browse_btn)
-        out_row.addWidget(self._help_btn("Choose where processed files and logs will be saved."))
-        run_layout.addWidget(out_group)
+        self.home_page = HomePage()
+        self.home_page.set_last_mode(self._last_mode)
+        self.home_page.mode_selected.connect(self._on_mode_selected)
 
-        basic_group = QGroupBox("3) Basic Options")
-        basic_row = QHBoxLayout(basic_group)
-        self.overwrite_chk = QCheckBox("Overwrite originals")
-        self.overwrite_chk.setChecked(self.settings.overwrite_originals_default)
-        self.overwrite_chk.setToolTip("Writes metadata into original JPGs in place.")
-        self.dry_run_chk = QCheckBox("Dry run (no EXIF write)")
-        self.dry_run_chk.setChecked(self.settings.dry_run_default)
-        self.dry_run_chk.setToolTip("Match only; do not write EXIF/XMP.")
-        basic_row.addWidget(self.overwrite_chk)
-        basic_row.addWidget(self.dry_run_chk)
-        basic_row.addWidget(self._help_btn("Tip: Most pilots can leave Basic Options unchecked and just press Run."))
-        run_layout.addWidget(basic_group)
+        self.methane_page = MethanePage(self._mode_states[RunMode.METHANE], self.controller)
+        self.encroachment_page = EncroachmentPage(self._mode_states[RunMode.ENCROACHMENT], self.controller)
+        self.combined_page = CombinedWizard(self._mode_states[RunMode.COMBINED], self.controller)
 
-        self.advanced_group = QGroupBox("Advanced options (optional)")
-        self.advanced_group.setCheckable(True)
-        self.advanced_group.setChecked(False)
-        self.advanced_group.toggled.connect(self._on_advanced_toggled)
-        adv_layout = QVBoxLayout(self.advanced_group)
-        self.advanced_container = QWidget()
-        adv_container_layout = QVBoxLayout(self.advanced_container)
+        self.methane_page.back_requested.connect(self._show_home)
+        self.encroachment_page.back_requested.connect(self._show_home)
+        self.combined_page.back_requested.connect(self._show_home)
 
-        adv_row1 = QHBoxLayout()
-        self.flatten_chk = QCheckBox("Flatten to single folder")
-        self.flatten_chk.setChecked(self.settings.flatten_default)
-        self.flatten_chk.setToolTip("Move all successful JPGs into JPG_FLAT.")
-        self.flatten_chk.toggled.connect(self._on_flatten_toggle)
-        self.cleanup_chk = QCheckBox("Cleanup empty dirs")
-        self.cleanup_chk.setChecked(self.settings.cleanup_empty_dirs_default)
-        self.cleanup_chk.setEnabled(self.flatten_chk.isChecked())
-        self.cleanup_chk.setToolTip("Removes empty folders after flattening (scoped safely).")
-        self.sort_chk = QCheckBox("Sort by PPM bins")
-        self.sort_chk.setChecked(self.settings.sort_by_ppm_default)
-        self.sort_chk.setToolTip("Copies output JPGs into PPM bin folders.")
-        adv_row1.addWidget(self.flatten_chk)
-        adv_row1.addWidget(self.cleanup_chk)
-        adv_row1.addWidget(self.sort_chk)
-        adv_container_layout.addLayout(adv_row1)
+        self.run_stack.addWidget(self.home_page)
+        self.run_stack.addWidget(self.methane_page)
+        self.run_stack.addWidget(self.encroachment_page)
+        self.run_stack.addWidget(self.combined_page)
+        self._mode_pages = {
+            RunMode.METHANE: self.methane_page,
+            RunMode.ENCROACHMENT: self.encroachment_page,
+            RunMode.COMBINED: self.combined_page,
+        }
 
-        adv_row2 = QHBoxLayout()
-        self.write_xmp_chk = QCheckBox("Write XMP")
-        self.write_xmp_chk.setChecked(self.settings.write_xmp_default)
-        self.write_xmp_chk.setToolTip("Also write XMP GPS/Description tags.")
-        adv_row2.addWidget(self.write_xmp_chk)
-        adv_container_layout.addLayout(adv_row2)
-
-        rename_row = QHBoxLayout()
-        self.rename_chk = QCheckBox("Enable renaming")
-        self.rename_chk.setChecked(False)
-        self.rename_chk.setToolTip("Rename output JPGs using a template.")
-        self.rename_chk.toggled.connect(self._on_rename_toggle)
-        self.template_combo = QComboBox()
-        self.template_combo.setEnabled(False)
-        self.template_combo.currentIndexChanged.connect(self._on_template_changed)
-        self._template_user_selected = False
-        self.template_combo.setToolTip("Select a rename template.")
-        self.start_index_spin = QSpinBox()
-        self.start_index_spin.setMinimum(1)
-        self.start_index_spin.setMaximum(10_000_000)
-        self.start_index_spin.setValue(1)
-        self.start_index_spin.setEnabled(False)
-        self.start_index_spin.setToolTip("Starting index for rename templates.")
-        rename_row.addWidget(self.rename_chk)
-        rename_row.addWidget(QLabel("Template:"))
-        rename_row.addWidget(self.template_combo, 1)
-        rename_row.addWidget(QLabel("Start index:"))
-        rename_row.addWidget(self.start_index_spin)
-        adv_container_layout.addLayout(rename_row)
-
-        payload_row = QHBoxLayout()
-        self.payload_edit = QLineEdit()
-        self.payload_edit.setToolTip("Optional string stored in ImageDescription for downstream use.")
-        payload_row.addWidget(QLabel("Purway payload (optional):"))
-        payload_row.addWidget(self.payload_edit, 1)
-        adv_container_layout.addLayout(payload_row)
-
-        tools_row = QHBoxLayout()
-        self.preview_btn = QPushButton("Preview matches")
-        self.preview_btn.clicked.connect(self._preview_matches)
-        self.preview_btn.setToolTip("Preview up to 20 matches before running.")
-        self.preview_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogHelpButton))
-        self.schema_btn = QPushButton("CSV schema")
-        self.schema_btn.clicked.connect(self._show_schema)
-        self.schema_btn.setToolTip("Show detected CSV columns and matches.")
-        self.schema_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
-        self.settings_btn = QPushButton("Settings…")
-        self.settings_btn.clicked.connect(self._open_settings)
-        self.settings_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogContentsView))
-        tools_row.addWidget(self.preview_btn)
-        tools_row.addWidget(self.schema_btn)
-        tools_row.addWidget(self.settings_btn)
-        adv_container_layout.addLayout(tools_row)
-
-        adv_layout.addWidget(self.advanced_container)
-        self.advanced_container.setVisible(False)
-        run_layout.addWidget(self.advanced_group)
-
-        run_actions = QHBoxLayout()
-        self.run_btn = QPushButton("Run Job")
-        self.run_btn.clicked.connect(self._run_job)
-        self._style_primary_button(self.run_btn)
-        self.clear_btn = QPushButton("Clear Inputs")
-        self.clear_btn.clicked.connect(self._clear_inputs)
-        run_actions.addWidget(self.run_btn)
-        run_actions.addWidget(self.clear_btn)
-        run_layout.addLayout(run_actions)
+        self.run_stack.setCurrentWidget(self.home_page)
 
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
+        self.progress.setVisible(False)
         run_layout.addWidget(self.progress)
 
         # ----- Jobs tab -----
@@ -231,10 +152,10 @@ class MainWindow(QMainWindow):
 
         help_text = QLabel(
             "Quick start:\n"
-            "1) Drag & drop your Purway output folders.\n"
-            "2) Choose an output folder.\n"
-            "3) Click Run Job.\n\n"
-            "Advanced options are optional. Use Preview if you want to validate a few matches first."
+            "1) Open the Run tab and select a report type.\n"
+            "2) Add inputs and configure options for that mode.\n"
+            "3) Confirm settings and run.\n\n"
+            "Templates are managed under the Templates tab."
         )
         help_text.setWordWrap(True)
         help_layout.addWidget(help_text)
@@ -250,6 +171,37 @@ class MainWindow(QMainWindow):
 
         self._refresh_templates()
         self._update_inputs_state()
+
+    def _on_mode_selected(self, mode: RunMode) -> None:
+        self._show_mode(mode)
+
+    def _show_mode(self, mode: RunMode) -> None:
+        page = self._mode_pages.get(mode)
+        if not page:
+            return
+        self._set_last_mode(mode)
+        refresh = getattr(page, "refresh_summary", None)
+        if callable(refresh):
+            refresh()
+        self.run_stack.setCurrentWidget(page)
+
+    def _show_home(self) -> None:
+        self.run_stack.setCurrentWidget(self.home_page)
+        self.home_page.set_last_mode(self._last_mode)
+
+    def _set_last_mode(self, mode: RunMode) -> None:
+        self._last_mode = mode
+        self.settings.last_mode = mode.value
+        self.settings.save()
+        self.home_page.set_last_mode(mode)
+
+    def _parse_last_mode(self, value: str) -> RunMode | None:
+        if not value:
+            return None
+        try:
+            return RunMode(value)
+        except ValueError:
+            return None
 
     @Slot(list)
     def _on_paths_dropped(self, paths: list[str]) -> None:
@@ -337,12 +289,19 @@ class MainWindow(QMainWindow):
     def _open_settings(self) -> None:
         dlg = SettingsDialog(self.settings, parent=self)
         if dlg.exec():
-            self.cleanup_chk.setChecked(self.settings.cleanup_empty_dirs_default)
-            self.write_xmp_chk.setChecked(self.settings.write_xmp_default)
+            if hasattr(self, "cleanup_chk"):
+                self.cleanup_chk.setChecked(self.settings.cleanup_empty_dirs_default)
+            if hasattr(self, "write_xmp_chk"):
+                self.write_xmp_chk.setChecked(self.settings.write_xmp_default)
             if self.settings.exiftool_path:
                 os.environ["PURWAY_EXIFTOOL_PATH"] = self.settings.exiftool_path
             else:
                 os.environ.pop("PURWAY_EXIFTOOL_PATH", None)
+            app = QApplication.instance()
+            if app:
+                apply_theme(app, self.settings.ui_theme)
+            if hasattr(self, "theme_toggle"):
+                self.theme_toggle.set_theme(self.settings.ui_theme)
 
     def _open_template_editor(self) -> None:
         dlg = TemplateEditorDialog(self.controller.template_manager, parent=self)
@@ -350,9 +309,10 @@ class MainWindow(QMainWindow):
             self._refresh_templates()
 
     def _refresh_templates(self) -> None:
-        self.template_combo.clear()
-        for t in self.controller.template_manager.list_templates():
-            self.template_combo.addItem(t.name, userData=t.id)
+        if hasattr(self, "template_combo"):
+            self.template_combo.clear()
+            for t in self.controller.template_manager.list_templates():
+                self.template_combo.addItem(t.name, userData=t.id)
         if hasattr(self, "templates_list"):
             self.templates_list.clear()
             for t in self.controller.template_manager.list_templates():
@@ -392,11 +352,11 @@ class MainWindow(QMainWindow):
         can_cancel = stage not in ("DONE", "FAILED", "CANCELLED")
         self.cancel_btn.setEnabled(can_cancel)
 
-        done = stage == "DONE"
-        self.open_out_btn.setEnabled(done)
+        has_run_folder = job.run_folder is not None
         manifest = self.controller.export_manifest_path(job)
-        self.export_manifest_btn.setEnabled(done and manifest is not None)
-        self.rerun_failed_btn.setEnabled(done and manifest is not None)
+        self.open_out_btn.setEnabled(has_run_folder)
+        self.export_manifest_btn.setEnabled(manifest is not None)
+        self.rerun_failed_btn.setEnabled(manifest is not None)
 
     def _preview_matches(self) -> None:
         if not self.controller.inputs:
@@ -453,6 +413,8 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "No failed photos", "No failed photos found to re-run.")
 
     def _auto_select_template(self) -> None:
+        if not hasattr(self, "rename_chk") or not hasattr(self, "template_combo"):
+            return
         if not self.rename_chk.isChecked() or self._template_user_selected:
             return
         suggested = self.controller.suggest_template_id(self.controller.inputs)
@@ -471,6 +433,14 @@ class MainWindow(QMainWindow):
             if tmpl:
                 value = max(1, int(tmpl.start_index))
                 self.start_index_spin.setValue(min(value, self.start_index_spin.maximum()))
+
+    def _on_theme_changed(self, theme: str) -> None:
+        self.settings.ui_theme = theme
+        self.settings.save()
+        app = QApplication.instance()
+        if app:
+            apply_theme(app, theme)
+        self.theme_toggle.refresh_icons()
 
     def _help_btn(self, text: str) -> QToolButton:
         btn = QToolButton()
@@ -499,7 +469,12 @@ class MainWindow(QMainWindow):
             self.cleanup_chk.setChecked(False)
 
     def _update_inputs_state(self) -> None:
+        if not hasattr(self, "run_btn"):
+            return
         has_inputs = len(self.controller.inputs) > 0
         self.run_btn.setEnabled(has_inputs)
-        self.preview_btn.setEnabled(has_inputs and self.advanced_group.isChecked())
-        self.schema_btn.setEnabled(has_inputs and self.advanced_group.isChecked())
+        advanced_enabled = bool(getattr(self, "advanced_group", None) and self.advanced_group.isChecked())
+        if hasattr(self, "preview_btn"):
+            self.preview_btn.setEnabled(has_inputs and advanced_enabled)
+        if hasattr(self, "schema_btn"):
+            self.schema_btn.setEnabled(has_inputs and advanced_enabled)

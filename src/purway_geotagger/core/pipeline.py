@@ -68,11 +68,14 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
         job.state.stage = "COPY" if not opts.overwrite_originals else "PREPARE"
         progress_cb(10, "Preparing target photos...")
         logger.log("Preparing target photos (copy/backup as needed)...")
+        copy_root = opts.output_photos_root
         target_map = ensure_target_photos(
             photos=scan.photos,
             run_folder=run_folder,
             overwrite=opts.overwrite_originals,
             create_backup_on_overwrite=opts.create_backup_on_overwrite,
+            copy_root=copy_root,
+            use_subdir=(copy_root is None),
         )
 
         tasks = [

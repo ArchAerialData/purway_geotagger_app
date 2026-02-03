@@ -11,6 +11,8 @@ def ensure_target_photos(
     run_folder: Path,
     overwrite: bool,
     create_backup_on_overwrite: bool,
+    copy_root: Path | None = None,
+    use_subdir: bool = True,
 ) -> dict[Path, Path]:
     """Prepare target photos.
 
@@ -30,7 +32,8 @@ def ensure_target_photos(
             out[p] = p
         return out
 
-    geotagged_dir = ensure_dir(run_folder / "GEOTAGGED")
+    root = copy_root or run_folder
+    geotagged_dir = ensure_dir(root / "GEOTAGGED") if use_subdir else ensure_dir(root)
     for p in photos:
         # Default copy behavior: keep original filename, collision-safe
         tgt = geotagged_dir / p.name

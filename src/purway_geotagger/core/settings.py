@@ -31,6 +31,8 @@ class AppSettings:
     write_xmp_default: bool = True
     dry_run_default: bool = False
     exiftool_path: str = ""
+    ui_theme: str = "light"
+    last_mode: str = ""
 
     @classmethod
     def load(cls) -> "AppSettings":
