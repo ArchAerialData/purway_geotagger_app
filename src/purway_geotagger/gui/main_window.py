@@ -94,23 +94,8 @@ class MainWindow(QMainWindow):
             btn.setCheckable(True)
             btn.setCursor(Qt.PointingHandCursor)
             # Basic styling for nav buttons
-            btn.setStyleSheet("""
-                QPushButton {
-                    border: none;
-                    font-weight: bold;
-                    font-size: 16px;
-                    color: palette(text);
-                    padding: 8px 16px;
-                    border-radius: 6px;
-                }
-                QPushButton:checked {
-                    background-color: palette(midlight);
-                    color: palette(link);
-                }
-                QPushButton:hover:!checked {
-                    background-color: palette(midlight);
-                }
-            """)
+            btn.setProperty("cssClass", "nav_btn")
+
             self.nav_group.addButton(btn, index)
             # Use lambda with default arg to capture index correctly
             btn.clicked.connect(lambda checked=False, idx=index: self.main_stack.setCurrentIndex(idx))

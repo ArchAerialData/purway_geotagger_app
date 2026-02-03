@@ -201,8 +201,25 @@ Provide `scripts/macos/run_gui.sh` to activate venv and run the GUI.
 
 ### 7.3 Building a `.app`
 Provide `scripts/macos/build_app.sh` using **PyInstaller**:
-- produce `dist/PurwayGeotagger.app`
-- note: signing/notarization is out of scope but leave placeholder comments
+- produce `dist/PurwayGeotagger.dmg` (containing .app)
+
+## 7.5 Running the Unsigned App (Important)
+
+Since this application is not signed with an Apple Developer ID, macOS Gatekeeper may block it from opening with a "damaged" or "malicious software" error.
+
+**To run the app:**
+
+1.  **Option A (GUI):**
+    - Right-click (or Control-click) the `PurwayGeotagger` app in Finder.
+    - Select **Open**.
+    - Click **Open** in the warning dialog.
+
+2.  **Option B (Terminal - Guaranteed):**
+    - Drag the app to your Applications folder.
+    - Run this command in Terminal to remove the quarantine attribute:
+      ```bash
+      xattr -cr /Applications/PurwayGeotagger.app
+      ```
 
 ---
 
