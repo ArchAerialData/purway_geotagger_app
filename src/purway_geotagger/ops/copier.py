@@ -13,6 +13,8 @@ def ensure_target_photos(
     create_backup_on_overwrite: bool,
     copy_root: Path | None = None,
     use_subdir: bool = True,
+    backup_root: Path | None = None,
+    backup_rel_base: Path | None = None,
 ) -> dict[Path, Path]:
     """Prepare target photos.
 
@@ -24,10 +26,12 @@ def ensure_target_photos(
     out: dict[Path, Path] = {}
 
     if overwrite:
+        backup_dir = backup_root or (run_folder / "BACKUPS")
         for p in photos:
             if create_backup_on_overwrite:
-                bak = p.with_suffix(p.suffix + ".bak")
+                bak = _backup_target(p, backup_dir, backup_rel_base)
                 if not bak.exists():
+                    bak.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(p, bak)
             out[p] = p
         return out
@@ -55,3 +59,16 @@ def _collision_safe(path: Path) -> Path:
         if not cand.exists():
             return cand
         i += 1
+
+
+def _backup_target(path: Path, backup_root: Path, backup_rel_base: Path | None) -> Path:
+    suffix = path.suffix + ".bak"
+    if backup_rel_base:
+        try:
+            rel = path.relative_to(backup_rel_base)
+            candidate = backup_root / rel.parent / f"{path.stem}{suffix}"
+            return _collision_safe(candidate)
+        except ValueError:
+            pass
+    candidate = backup_root / f"{path.stem}{suffix}"
+    return _collision_safe(candidate)

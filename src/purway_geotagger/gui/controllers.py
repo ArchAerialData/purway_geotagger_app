@@ -125,7 +125,8 @@ class JobController(QObject):
             output_photos_root = resolved.encroachment_output_base
             output_base = encroachment_run_base(output_photos_root) if output_photos_root else None
         else:
-            output_base = resolved.encroachment_output_base
+            output_photos_root = resolved.encroachment_output_base
+            output_base = encroachment_run_base(output_photos_root) if output_photos_root else None
         output_base = output_base or Path.home()
         run_folder = AppSettings.new_run_folder(output_base)
 
@@ -156,6 +157,11 @@ class JobController(QObject):
             enable_renaming = False
         elif state.mode == RunMode.ENCROACHMENT:
             overwrite_originals = False
+            flatten = False
+            cleanup_empty_dirs = False
+            sort_by_ppm = False
+        elif state.mode == RunMode.COMBINED:
+            overwrite_originals = True
             flatten = False
             cleanup_empty_dirs = False
             sort_by_ppm = False

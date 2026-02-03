@@ -399,18 +399,18 @@ Templates editor must remain accessible (as a dedicated tab).
 **Goal:** Required backend features match the new UI.
 
 **Work items**
-- [ ] Implement cleaned methane CSV generation with custom threshold.
-- [ ] Implement optional KMZ generation from cleaned methane CSVs (Placemark label text = PPM value; only rows with **PPM ≥ threshold**).
-- [ ] Implement chronological indexing for encroachment renaming.
-- [ ] Implement combined mode split behavior (methane in-place + encroachment copies).
-- [ ] Ensure cleaned CSV + KMZ naming match the agreed convention.
-- [ ] Add a per-run summary payload (e.g., `run_summary.json`) that records:
+- [x] Implement cleaned methane CSV generation with custom threshold.
+- [x] Implement optional KMZ generation from cleaned methane CSVs (Placemark label text = PPM value; only rows with **PPM ≥ threshold**).
+- [x] Implement chronological indexing for encroachment renaming.
+- [x] Implement combined mode split behavior (methane in-place + encroachment copies).
+- [x] Ensure cleaned CSV + KMZ naming match the agreed convention.
+- [x] Add a per-run summary payload (e.g., `run_summary.json`) that records:
   - EXIF injection totals (success/failed/total JPGs)
   - cleaned CSV status per source CSV (success/failed/skipped)
   - KMZ status per source CSV (success/failed/skipped)
   - run settings snapshot (threshold, KMZ enabled, mode)
-- [ ] Update run logging to include clear “EXIF injected X/Y” and “Cleaned CSV / KMZ: success|failed|skipped” lines even if those outputs are not yet implemented.
-- [ ] Move `.bak` backups (overwrite mode) into a dedicated backups folder under the run folder to keep source folders clean.
+- [x] Update run logging to include clear “EXIF injected X/Y” and “Cleaned CSV / KMZ: success|failed|skipped” lines even if those outputs are not yet implemented.
+- [x] Move `.bak` backups (overwrite mode) into a dedicated backups folder under the run folder to keep source folders clean.
 
 **Files (add/modify)**
 - Add: `src/purway_geotagger/ops/methane_outputs.py` (cleaned CSV + KMZ writer).
@@ -441,6 +441,9 @@ Templates editor must remain accessible (as a dedicated tab).
 
 **Phase Notes (required)**
 - [ ] Update this file with date completed, tests run, and any issues/failures.
+Phase Notes (in progress, 2026-02-03):
+- Implemented methane cleaned CSV + KMZ generation, chronological renaming, combined split flow, run_summary.json, and backup relocation.
+- Tests not run (pytest not installed in this environment). Manual combined run pending.
 
 ---
 

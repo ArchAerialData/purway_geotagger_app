@@ -6,7 +6,9 @@ import json
 import time
 from dataclasses import asdict, is_dataclass
 
-from purway_geotagger.core.job import Job
+from purway_geotagger.core.job import Job, JobOptions
+from purway_geotagger.core.modes import RunMode, common_parent
+from purway_geotagger.core.run_summary import RunSummary, ExifSummary, MethaneOutputSummary, write_run_summary
 from purway_geotagger.core.scanner import scan_inputs, ScanResult
 from purway_geotagger.core.photo_task import PhotoTask
 from purway_geotagger.core.manifest import ManifestRow, ManifestWriter
@@ -17,7 +19,8 @@ from purway_geotagger.ops.copier import ensure_target_photos
 from purway_geotagger.ops.sorter import sort_into_ppm_bins
 from purway_geotagger.ops.renamer import maybe_rename
 from purway_geotagger.ops.flattener import maybe_flatten
-from purway_geotagger.util.errors import UserCancelledError, CorrelationError
+from purway_geotagger.ops.methane_outputs import generate_methane_outputs, MethaneCsvResult
+from purway_geotagger.util.errors import UserCancelledError, CorrelationError, ExifToolError
 
 ProgressCb = Callable[[int, str], None]  # percent, message
 CancelCb = Callable[[], bool]  # returns True if cancelled
@@ -29,6 +32,7 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
       - run_config.json
       - run_log.txt
       - manifest.csv
+      - run_summary.json
     """
     opts = job.options
     run_folder = opts.output_root
@@ -38,11 +42,15 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
     logger = RunLogger(run_folder / "run_log.txt")
     logger.log("Job started.")
     logger.log(f"Inputs: {[str(p) for p in job.inputs]}")
+    _log_run_settings(logger, opts)
 
     _write_run_config(job, run_folder)
 
     scan: ScanResult = ScanResult(photos=[], csvs=[])
     tasks: list[PhotoTask] = []
+    tasks_for_manifest: list[PhotoTask] = []
+    methane_results: list[MethaneCsvResult] = []
+    exif_summary = ExifSummary(total=0, success=0, failed=0)
     error_message = ""
     cancelled = False
 
@@ -62,20 +70,48 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
         logger.log("Parsing CSV files...")
         csv_index = PurwayCSVIndex.from_csv_files(scan.csvs)
 
+        methane_failure_count = 0
+        if opts.run_mode in (RunMode.METHANE, RunMode.COMBINED):
+            job.state.stage = "METHANE_OUTPUTS"
+            progress_cb(8, "Generating cleaned methane CSVs...")
+            logger.log("Generating cleaned methane CSVs...")
+            methane_results = generate_methane_outputs(
+                csv_paths=scan.csvs,
+                threshold=opts.methane_threshold,
+                generate_kmz=opts.methane_generate_kmz,
+            )
+            methane_failure_count = _log_methane_results(
+                logger,
+                methane_results,
+                opts.methane_generate_kmz,
+            )
+
         if cancel_cb():
             raise UserCancelledError()
 
-        job.state.stage = "COPY" if not opts.overwrite_originals else "PREPARE"
+        overwrite = opts.overwrite_originals
+        if opts.run_mode == RunMode.METHANE:
+            overwrite = True
+        elif opts.run_mode == RunMode.ENCROACHMENT:
+            overwrite = False
+        elif opts.run_mode == RunMode.COMBINED:
+            overwrite = True
+
+        job.state.stage = "COPY" if not overwrite else "PREPARE"
         progress_cb(10, "Preparing target photos...")
         logger.log("Preparing target photos (copy/backup as needed)...")
-        copy_root = opts.output_photos_root
+        copy_root = opts.output_photos_root if opts.run_mode == RunMode.ENCROACHMENT else None
+        backup_root = run_folder / "BACKUPS"
+        backup_rel_base = common_parent(job.inputs)
         target_map = ensure_target_photos(
             photos=scan.photos,
             run_folder=run_folder,
-            overwrite=opts.overwrite_originals,
+            overwrite=overwrite,
             create_backup_on_overwrite=opts.create_backup_on_overwrite,
             copy_root=copy_root,
             use_subdir=(copy_root is None),
+            backup_root=backup_root,
+            backup_rel_base=backup_rel_base,
         )
 
         tasks = [
@@ -131,36 +167,69 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
         progress_cb(55, "Writing EXIF/XMP via ExifTool...")
         logger.log("Writing EXIF/XMP via ExifTool...")
         writer = ExifToolWriter(write_xmp=opts.write_xmp, dry_run=opts.dry_run)
-        results = writer.write_tasks(
-            tasks=tasks,
-            work_dir=run_folder,
-            progress_cb=lambda done, total: progress_cb(
-                55 + int(25 * (done / max(1, total))),
-                f"Writing metadata {done}/{total}..."
-            ),
-            cancel_cb=cancel_cb,
-        )
+        try:
+            results = writer.write_tasks(
+                tasks=tasks,
+                work_dir=run_folder,
+                progress_cb=lambda done, total: progress_cb(
+                    55 + int(25 * (done / max(1, total))),
+                    f"Writing metadata {done}/{total}..."
+                ),
+                cancel_cb=cancel_cb,
+            )
 
-        for t in tasks:
-            if t.status == "FAILED" or not t.matched:
-                continue
-            res = results.get(t.output_path)
-            if res and res.success:
-                t.status = "SUCCESS"
-                t.exif_written = (not opts.dry_run)
-                job.state.success += 1
-            else:
+            for t in tasks:
+                if t.status == "FAILED" or not t.matched:
+                    continue
+                res = results.get(t.output_path)
+                if res and res.success:
+                    t.status = "SUCCESS"
+                    t.exif_written = (not opts.dry_run)
+                    job.state.success += 1
+                else:
+                    t.status = "FAILED"
+                    t.reason = (res.error if res else "unknown exiftool error")
+                    job.state.failed += 1
+        except ExifToolError as exc:
+            error_message = str(exc)
+            logger.log(f"EXIF write failed: {error_message}")
+            for t in tasks:
+                if not t.matched or t.status == "FAILED":
+                    continue
                 t.status = "FAILED"
-                t.reason = (res.error if res else "unknown exiftool error")
+                t.reason = error_message
                 job.state.failed += 1
+
+        exif_summary = _summarize_exif(tasks)
+        logger.log(f"EXIF injected: {exif_summary.success}/{exif_summary.total} photos.")
 
         if cancel_cb():
             raise UserCancelledError()
 
+        post_tasks = tasks
+        if opts.run_mode == RunMode.COMBINED:
+            job.state.stage = "ENCROACHMENT_COPY"
+            progress_cb(78, "Preparing encroachment copies...")
+            logger.log("Preparing encroachment copies...")
+            copy_root = opts.output_photos_root or opts.encroachment_output_base or run_folder
+            copy_map = ensure_target_photos(
+                photos=scan.photos,
+                run_folder=run_folder,
+                overwrite=False,
+                create_backup_on_overwrite=False,
+                copy_root=copy_root,
+                use_subdir=False,
+                backup_root=None,
+                backup_rel_base=None,
+            )
+            post_tasks = _clone_tasks_for_copy(tasks, copy_map)
+
+        tasks_for_manifest = post_tasks
+
         job.state.stage = "RENAME"
         progress_cb(82, "Renaming (if enabled)...")
         logger.log("Renaming (if enabled)...")
-        maybe_rename(job, tasks)
+        maybe_rename(job, post_tasks)
 
         if cancel_cb():
             raise UserCancelledError()
@@ -169,7 +238,7 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
         progress_cb(88, "Sorting by PPM (if enabled)...")
         logger.log("Sorting by PPM (if enabled)...")
         if opts.sort_by_ppm:
-            sort_into_ppm_bins(job, tasks)
+            sort_into_ppm_bins(job, post_tasks)
 
         if cancel_cb():
             raise UserCancelledError()
@@ -177,7 +246,13 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
         job.state.stage = "FLATTEN"
         progress_cb(94, "Flattening/moving JPGs (if enabled)...")
         logger.log("Flattening/moving JPGs (if enabled)...")
-        maybe_flatten(job, tasks)
+        maybe_flatten(job, post_tasks)
+
+        if not error_message and methane_failure_count:
+            error_message = f"Methane outputs failed for {methane_failure_count} CSV(s)."
+
+        if error_message:
+            raise RuntimeError(error_message)
 
         job.state.stage = "DONE"
         logger.log("Job finished.")
@@ -193,7 +268,144 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
         raise
     finally:
         logger.log("Writing manifest...")
-        _write_manifest(run_folder, tasks, scan.photos, error_message if (cancelled or error_message) else "")
+        manifest_tasks = tasks_for_manifest or tasks
+        _write_manifest(
+            run_folder,
+            manifest_tasks,
+            scan.photos,
+            error_message if (cancelled or error_message) else "",
+        )
+        try:
+            summary = _build_run_summary(job, exif_summary, methane_results)
+            write_run_summary(run_folder / "run_summary.json", summary)
+        except Exception as exc:  # pragma: no cover - do not crash on summary failures
+            logger.log(f"Run summary failed: {exc}")
+
+def _log_run_settings(logger: RunLogger, opts: JobOptions) -> None:
+    mode = opts.run_mode.value if isinstance(opts.run_mode, RunMode) else "custom"
+    logger.log(f"Run mode: {mode}")
+    if opts.run_mode in (RunMode.METHANE, RunMode.COMBINED):
+        logger.log(f"Methane threshold: {opts.methane_threshold}")
+        logger.log(f"KMZ enabled: {'Yes' if opts.methane_generate_kmz else 'No'}")
+    if opts.run_mode in (RunMode.ENCROACHMENT, RunMode.COMBINED):
+        if opts.output_photos_root:
+            logger.log(f"Encroachment output: {opts.output_photos_root}")
+        if opts.enable_renaming:
+            template_id = opts.rename_template.id if opts.rename_template else "manual"
+            logger.log(f"Renaming: enabled ({template_id}), start_index={opts.start_index}")
+        else:
+            logger.log("Renaming: disabled")
+    logger.log(f"Dry run: {'Yes' if opts.dry_run else 'No'}")
+
+
+def _log_methane_results(
+    logger: RunLogger,
+    results: list[MethaneCsvResult],
+    kmz_enabled: bool,
+) -> int:
+    if not results:
+        logger.log("No methane CSVs found for cleaned outputs.")
+        return 0
+
+    cleaned_success = sum(1 for r in results if r.cleaned_status == "success")
+    cleaned_failed = sum(1 for r in results if r.cleaned_status == "failed")
+    cleaned_skipped = sum(1 for r in results if r.cleaned_status == "skipped")
+
+    kmz_success = sum(1 for r in results if r.kmz_status == "success")
+    kmz_failed = sum(1 for r in results if r.kmz_status == "failed")
+    kmz_skipped = sum(1 for r in results if r.kmz_status == "skipped")
+
+    logger.log(
+        f"Cleaned CSVs: {cleaned_success} success, {cleaned_failed} failed, {cleaned_skipped} skipped."
+    )
+    if kmz_enabled:
+        logger.log(
+            f"KMZ outputs: {kmz_success} success, {kmz_failed} failed, {kmz_skipped} skipped."
+        )
+    else:
+        logger.log("KMZ outputs: skipped (disabled).")
+
+    for r in results:
+        if r.cleaned_status == "failed":
+            logger.log(f"Cleaned CSV failed for {r.source_csv}: {r.cleaned_error}")
+        if r.kmz_status == "failed":
+            logger.log(f"KMZ failed for {r.source_csv}: {r.kmz_error}")
+
+    return cleaned_failed + kmz_failed
+
+
+def _summarize_exif(tasks: list[PhotoTask]) -> ExifSummary:
+    total = len(tasks)
+    success = sum(1 for t in tasks if t.status == "SUCCESS")
+    failed = total - success
+    return ExifSummary(total=total, success=success, failed=failed)
+
+
+def _clone_tasks_for_copy(
+    source_tasks: list[PhotoTask],
+    copy_map: dict[Path, Path],
+) -> list[PhotoTask]:
+    by_src = {t.src_path: t for t in source_tasks}
+    clones: list[PhotoTask] = []
+    for src, dest in copy_map.items():
+        base = by_src.get(src)
+        clone = PhotoTask(src_path=src, work_path=dest, output_path=dest)
+        if base:
+            clone.matched = base.matched
+            clone.join_method = base.join_method
+            clone.csv_path = base.csv_path
+            clone.lat = base.lat
+            clone.lon = base.lon
+            clone.ppm = base.ppm
+            clone.datetime_original = base.datetime_original
+            clone.image_description = base.image_description
+            clone.status = base.status
+            clone.reason = base.reason
+            clone.exif_written = base.exif_written
+        clones.append(clone)
+    return clones
+
+
+def _build_run_summary(
+    job: Job,
+    exif_summary: ExifSummary,
+    methane_results: list[MethaneCsvResult],
+) -> RunSummary:
+    outputs: list[MethaneOutputSummary] = []
+    for r in methane_results:
+        outputs.append(MethaneOutputSummary(
+            source_csv=str(r.source_csv),
+            cleaned_csv=str(r.cleaned_csv) if r.cleaned_csv else None,
+            cleaned_status=r.cleaned_status,
+            cleaned_rows=r.cleaned_rows,
+            cleaned_error=r.cleaned_error,
+            kmz=str(r.kmz) if r.kmz else None,
+            kmz_status=r.kmz_status,
+            kmz_rows=r.kmz_rows,
+            kmz_error=r.kmz_error,
+        ))
+
+    opts = job.options
+    mode = opts.run_mode.value if isinstance(opts.run_mode, RunMode) else None
+    settings = {
+        "methane_threshold": opts.methane_threshold,
+        "methane_generate_kmz": opts.methane_generate_kmz,
+        "enable_renaming": opts.enable_renaming,
+        "start_index": opts.start_index,
+        "dry_run": opts.dry_run,
+        "overwrite_originals": opts.overwrite_originals,
+        "output_photos_root": str(opts.output_photos_root) if opts.output_photos_root else None,
+        "encroachment_output_base": str(opts.encroachment_output_base) if opts.encroachment_output_base else None,
+    }
+
+    return RunSummary(
+        run_id=job.id,
+        run_mode=mode,
+        inputs=[str(p) for p in job.inputs],
+        settings=settings,
+        exif=exif_summary,
+        methane_outputs=outputs,
+    )
 
 def _write_run_config(job: Job, run_folder: Path) -> None:
     path = run_folder / "run_config.json"
