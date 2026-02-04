@@ -102,10 +102,6 @@ class CombinedWizard(QWidget):
         self.status_label.setProperty("cssClass", "subtitle")
         layout.addWidget(self.status_label)
 
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
-        self.progress.setVisible(False)
-        layout.addWidget(self.progress)
 
         self._refresh_templates()
         self.refresh_summary()
@@ -559,11 +555,13 @@ class CombinedWizard(QWidget):
         if confirm != QMessageBox.Yes:
             return
 
-        self.progress.setVisible(True)
+        progress_bar = self.window().progress if hasattr(self.window(), "progress") else None
+        if progress_bar:
+            progress_bar.setVisible(True)
         self.next_btn.setEnabled(False)
         self.prev_btn.setEnabled(False)
         self.status_label.setText("Running combined job...")
-        job = self.controller.start_job_from_mode_state(self.state, self.progress)
+        job = self.controller.start_job_from_mode_state(self.state, progress_bar)
         self._last_job_id = job.id if job else None
         self._last_run_folder = job.run_folder if job else None
 

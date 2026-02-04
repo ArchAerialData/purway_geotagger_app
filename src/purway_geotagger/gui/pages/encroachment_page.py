@@ -229,10 +229,6 @@ class EncroachmentPage(QWidget):
         actions_row.addStretch(1)
         self.content_layout.addLayout(actions_row)
 
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
-        self.progress.setVisible(False)
-        self.content_layout.addWidget(self.progress)
         
         self.status_label = QLabel("")
         self.status_label.setProperty("cssClass", "subtitle")
@@ -472,10 +468,12 @@ class EncroachmentPage(QWidget):
                 dlg.exec()
             return
 
-        self.progress.setVisible(True)
+        progress_bar = self.window().progress if hasattr(self.window(), "progress") else None
+        if progress_bar:
+            progress_bar.setVisible(True)
         self.run_btn.setEnabled(False)
         self.status_label.setText("Running encroachment job...")
-        job = self.controller.start_job_from_mode_state(self.state, self.progress)
+        job = self.controller.start_job_from_mode_state(self.state, progress_bar)
         self._last_job_id = job.id if job else None
         self._last_run_folder = job.run_folder if job else None
         self._update_view_log_button()

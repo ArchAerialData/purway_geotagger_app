@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QCheckBox, QSpinBox, QLineEdit, QProgressBar, QTableView,
     QMessageBox, QComboBox, QTabWidget, QGroupBox, QListWidget, QToolButton,
-    QStyle, QApplication, QStackedWidget, QButtonGroup
+    QStyle, QApplication, QStackedWidget, QButtonGroup, QSizePolicy
 )
 
 
@@ -42,8 +42,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.settings = settings
         self.setWindowTitle("Purway Geotagger")
-        self.resize(1100, 800)
-        self.setMinimumSize(900, 650)
+        self.resize(1100, 900)
+        self.setMinimumSize(900, 750)
 
         self.controller = JobController(settings=settings)
         self.controller.jobs_changed.connect(self._on_jobs_changed)
@@ -138,7 +138,7 @@ class MainWindow(QMainWindow):
 
         
         layout.addWidget(header_widget)
-        layout.addWidget(self.main_stack) # Add the stack where the tabs used to be
+        layout.addWidget(self.main_stack, 1) # Give stack stretch factor 1
 
         # Re-apply theme to ensure logo is set
         self._on_theme_changed(self.settings.ui_theme)
@@ -185,10 +185,14 @@ class MainWindow(QMainWindow):
 
         self.run_stack.setCurrentWidget(self.home_page)
 
+        # Footer with Global Progress Bar
         self.progress = QProgressBar()
+        self.progress.setObjectName("globalProgress")
         self.progress.setRange(0, 100)
+        self.progress.setFixedHeight(40) 
         self.progress.setVisible(False)
-        run_layout.addWidget(self.progress)
+        
+        layout.addWidget(self.progress, 0) # Give footer stretch factor 0
 
         # ----- Tab 2: Jobs -----
         jobs_tab = QWidget()
@@ -507,8 +511,10 @@ class MainWindow(QMainWindow):
         job = self._selected_job()
         if not job:
             return
+        self.progress.setVisible(True)
         new_job = self.controller.rerun_failed_only(job, self.progress)
         if not new_job:
+            self.progress.setVisible(False)
             QMessageBox.information(self, "No failed photos", "No failed photos found to re-run.")
 
     def _auto_select_template(self) -> None:

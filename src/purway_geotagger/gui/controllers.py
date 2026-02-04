@@ -240,6 +240,9 @@ class JobController(QObject):
         job.state.progress = pct
         job.state.message = msg
         if bar:
+            bar.setProperty("status", "running")
+            bar.style().unpolish(bar)
+            bar.style().polish(bar)
             bar.setValue(pct)
             bar.setFormat(f"{pct}% — {msg}")
         self.jobs_changed.emit()
@@ -247,6 +250,9 @@ class JobController(QObject):
     def _on_finished(self, job: Job) -> None:
         bar = self._progress_bars.get(job.id)
         if bar:
+            bar.setProperty("status", "success")
+            bar.style().unpolish(bar)
+            bar.style().polish(bar)
             bar.setValue(100)
             bar.setFormat("100% — Done.")
         self._workers.pop(job.id, None)
@@ -259,6 +265,9 @@ class JobController(QObject):
         job.state.message = err
         bar = self._progress_bars.get(job.id)
         if bar:
+            bar.setProperty("status", "error")
+            bar.style().unpolish(bar)
+            bar.style().polish(bar)
             msg = err.strip() if err else "Failed."
             if len(msg) > 120:
                 msg = msg[:117] + "..."
@@ -272,6 +281,9 @@ class JobController(QObject):
     def _start_worker(self, job: Job) -> None:
         bar = self._progress_bars.get(job.id)
         if bar:
+            bar.setProperty("status", "starting")
+            bar.style().unpolish(bar)
+            bar.style().polish(bar)
             bar.setValue(0)
             bar.setFormat("0% — Starting...")
         worker = JobWorker(job=job)

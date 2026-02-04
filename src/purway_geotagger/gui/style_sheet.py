@@ -325,5 +325,45 @@ def get_stylesheet(theme: str) -> str:
         padding: 4px;
         border-radius: 4px;
     }}
+
+    /* --- Progress Bar --- */
+    QProgressBar {{
+        background-color: {c['input_bg']};
+        border: 1px solid {c['border']};
+        border-radius: 4px;
+        text-align: center;
+        color: {c['text_primary']};
+        font-weight: 700;
+        font-size: 13px;
+        height: 40px;
+    }}
+
+    QProgressBar::chunk {{
+        background-color: {c['primary']};
+        border-radius: 0px;
+    }}
+
+    QProgressBar#globalProgress {{
+        height: 40px;
+        border: none;
+        border-top: 1px solid {c['primary']};
+        margin: 0;
+    }}
+
+    QProgressBar[status="success"]::chunk {{
+        background-color: {c['success']};
+    }}
+
+    QProgressBar#globalProgress[status="success"] {{
+        border-top: 1px solid {c['success']};
+    }}
+
+    QProgressBar[status="error"]::chunk {{
+        background-color: {c['error']};
+    }}
+
+    QProgressBar#globalProgress[status="error"] {{
+        border-top: 1px solid {c['error']};
+    }}
     """
     return qss
