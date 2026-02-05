@@ -38,6 +38,10 @@
     
     # Capture Time
     CaptureTime => { Writable => 'string', Description => 'Original capture timestamp from CSV' },
+
+    # Camera metadata from CSV (preserve original EXIF focal length)
+    CameraFocalLength => { Writable => 'real', Description => 'Camera focal length from CSV (mm)' },
+    CameraZoom => { Writable => 'real', Description => 'Camera zoom ratio from CSV' },
 );
 
 1; # End of config - required for Perl modules

@@ -104,8 +104,6 @@ class ExifToolWriter:
             "GPSAltitude",
             "DateTimeOriginal",
             "ImageDescription",
-            "FocalLength",
-            "DigitalZoomRatio",
         ]
         
         # Custom XMP-ArchAerial fields
@@ -121,6 +119,8 @@ class ExifToolWriter:
             "XMP-ArchAerial:GimbalRoll",
             "XMP-ArchAerial:GimbalYaw",
             "XMP-ArchAerial:CaptureTime",
+            "XMP-ArchAerial:CameraFocalLength",
+            "XMP-ArchAerial:CameraZoom",
         ]
         fields += xmp_extended_fields
         
@@ -146,8 +146,6 @@ class ExifToolWriter:
                     "GPSAltitude": _val(t.altitude),
                     "DateTimeOriginal": t.datetime_original or "",
                     "ImageDescription": t.image_description,
-                    "FocalLength": _val(t.camera_focal_length),
-                    "DigitalZoomRatio": _val(t.camera_zoom),
                     # Custom XMP-ArchAerial fields
                     "XMP-ArchAerial:MethaneConcentration": _val(t.ppm),
                     "XMP-ArchAerial:PAC": _val(t.pac),
@@ -160,6 +158,8 @@ class ExifToolWriter:
                     "XMP-ArchAerial:GimbalRoll": _val(t.gimbal_roll),
                     "XMP-ArchAerial:GimbalYaw": _val(t.gimbal_yaw),
                     "XMP-ArchAerial:CaptureTime": _val(t.timestamp_raw),
+                    "XMP-ArchAerial:CameraFocalLength": _val(t.camera_focal_length),
+                    "XMP-ArchAerial:CameraZoom": _val(t.camera_zoom),
                 }
                 if self.write_xmp:
                     row["XMP:GPSLatitude"] = t.lat
