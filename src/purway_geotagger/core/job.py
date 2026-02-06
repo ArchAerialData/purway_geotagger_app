@@ -29,7 +29,7 @@ class JobOptions:
     # mode-specific (future use)
     run_mode: RunMode | None = None
     methane_threshold: int = 1000
-    methane_generate_kmz: bool = False
+    methane_generate_kmz: bool = True
     methane_log_base: Path | None = None
     encroachment_output_base: Path | None = None
     output_photos_root: Path | None = None

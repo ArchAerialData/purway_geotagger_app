@@ -4,10 +4,11 @@ from pathlib import Path
 import csv
 import json
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QGroupBox, QTableWidget, QTableWidgetItem,
-    QTextEdit, QPushButton, QHBoxLayout
+    QTextEdit, QPushButton, QHBoxLayout, QWidget, QHeaderView
 )
 
 
@@ -64,18 +65,124 @@ def format_run_summary(summary: dict | None) -> str:
             cleaned_status = out.get("cleaned_status", "unknown")
             cleaned_rows = out.get("cleaned_rows", 0)
             kmz_status = out.get("kmz_status", "unknown")
+            extras = []
+            if out.get("photo_col_missing"):
+                extras.append("photo column missing → PPM-only")
+            missing_rows = out.get("missing_photo_rows", 0)
+            if missing_rows:
+                extras.append(f"missing JPG rows: {missing_rows}")
+            extra_txt = f" — {', '.join(extras)}" if extras else ""
             lines.append(
-                f"• {name}: Cleaned {cleaned_status} ({cleaned_rows} rows), KMZ {kmz_status}"
+                f"• {name}: Cleaned {cleaned_status} ({cleaned_rows} rows), KMZ {kmz_status}{extra_txt}"
             )
 
     return "<br/>".join(lines)
+
+
+def parse_manifest_outputs(path: Path) -> list[Path]:
+    if not path.exists():
+        return []
+    outputs: list[Path] = []
+    with path.open("r", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            if (row.get("status") or "").upper() != "SUCCESS":
+                continue
+            out_path = (row.get("output_path") or "").strip()
+            if not out_path:
+                continue
+            outputs.append(Path(out_path))
+    return outputs
+
+
+def collect_output_files(summary: dict | None, run_folder: Path) -> list[dict[str, str]]:
+    if not summary:
+        return []
+    outputs: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def _add(kind: str, path: Path | None) -> None:
+        if not path:
+            return
+        path_str = str(path)
+        if path_str in seen:
+            return
+        seen.add(path_str)
+        outputs.append({"type": kind, "path": path_str})
+
+    def _under_base(path: Path, base: Path | None) -> bool:
+        if base is None:
+            return True
+        try:
+            path.resolve().relative_to(base.resolve())
+            return True
+        except ValueError:
+            return False
+
+    run_mode = (summary.get("run_mode") or "").lower()
+    settings = summary.get("settings", {})
+
+    if run_mode in ("methane", "combined"):
+        for out in summary.get("methane_outputs", []):
+            cleaned_path = out.get("cleaned_csv")
+            if out.get("cleaned_status") == "success" and cleaned_path:
+                path = Path(cleaned_path)
+                if path.exists():
+                    _add("Cleaned CSV", path)
+            kmz_path = out.get("kmz")
+            if out.get("kmz_status") == "success" and kmz_path:
+                path = Path(kmz_path)
+                if path.exists():
+                    _add("KMZ", path)
+
+    if run_mode in ("encroachment", "combined"):
+        enc_base = settings.get("encroachment_output_base") or settings.get("output_photos_root")
+        enc_base_path = Path(enc_base) if enc_base else None
+        for out_path in parse_manifest_outputs(run_folder / "manifest.csv"):
+            if _under_base(out_path, enc_base_path):
+                if out_path.exists():
+                    _add("Photo", out_path)
+
+    return outputs
+
+
+class _OpenFilePill(QWidget):
+    clicked = Signal()
+
+    def __init__(self, text: str, parent=None) -> None:
+        super().__init__(parent)
+        self.setProperty("cssClass", "open_file_pill")
+        self.setFixedSize(110, 30)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setAttribute(Qt.WA_Hover, True)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        self.label = QLabel(text)
+        self.label.setProperty("cssClass", "open_file_pill_label")
+        self.label.setAlignment(Qt.AlignCenter)
+        self.label.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        layout.addStretch(1)
+        layout.addWidget(self.label)
+        layout.addStretch(1)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton and self.isEnabled():
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+    def setEnabled(self, enabled: bool) -> None:
+        super().setEnabled(enabled)
+        self.label.setEnabled(enabled)
+        self.setCursor(Qt.PointingHandCursor if enabled else Qt.ArrowCursor)
 
 
 class RunReportDialog(QDialog):
     def __init__(self, run_folder: Path, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Run Report")
-        self.resize(800, 560)
+        self.resize(980, 720)
+        self.setMinimumSize(900, 640)
         self.run_folder = run_folder
         self._build_ui()
 
@@ -91,6 +198,45 @@ class RunReportDialog(QDialog):
         summary_layout.addWidget(summary_label)
         layout.addWidget(summary_group)
 
+        outputs_group = QGroupBox("Outputs")
+        outputs_layout = QVBoxLayout(outputs_group)
+        outputs = collect_output_files(summary, self.run_folder)
+        if not outputs:
+            outputs_layout.addWidget(QLabel("No outputs recorded."))
+        else:
+            table = QTableWidget(len(outputs), 3)
+            table.setHorizontalHeaderLabels(["Type", "File", "Action"])
+            table.setProperty("cssClass", "outputs_table")
+            table.setEditTriggers(QTableWidget.NoEditTriggers)
+            table.setSelectionMode(QTableWidget.NoSelection)
+            table.setSelectionBehavior(QTableWidget.SelectRows)
+            table.setAlternatingRowColors(True)
+            table.setShowGrid(False)
+            table.verticalHeader().setVisible(False)
+            for row_idx, row in enumerate(outputs):
+                path = row.get("path", "")
+                table.setItem(row_idx, 0, QTableWidgetItem(row.get("type", "")))
+                name_item = QTableWidgetItem(Path(path).name)
+                name_item.setToolTip(path)
+                table.setItem(row_idx, 1, name_item)
+                btn = _OpenFilePill("Open File")
+                btn.setToolTip(path)
+                target = Path(path)
+                if not target.exists():
+                    btn.setEnabled(False)
+                    btn.setToolTip("File or folder not found.")
+                btn.clicked.connect(lambda _checked=False, p=target: self._open_path(p))
+                table.setCellWidget(row_idx, 2, btn)
+                table.setRowHeight(row_idx, 36)
+            table.resizeColumnsToContents()
+            header = table.horizontalHeader()
+            header.setStretchLastSection(False)
+            header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+            header.setSectionResizeMode(1, QHeaderView.Stretch)
+            header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+            outputs_layout.addWidget(table)
+        layout.addWidget(outputs_group)
+
         failure_group = QGroupBox("Failures")
         failure_layout = QVBoxLayout(failure_group)
         failures = parse_manifest_failures(self.run_folder / "manifest.csv")
@@ -105,6 +251,11 @@ class RunReportDialog(QDialog):
                 "CSV",
                 "Join",
             ])
+            table.setProperty("cssClass", "outputs_table")
+            table.setEditTriggers(QTableWidget.NoEditTriggers)
+            table.setSelectionBehavior(QTableWidget.SelectRows)
+            table.setAlternatingRowColors(True)
+            table.verticalHeader().setVisible(False)
             for row_idx, row in enumerate(failures):
                 table.setItem(row_idx, 0, QTableWidgetItem(row.get("source_path", "")))
                 table.setItem(row_idx, 1, QTableWidgetItem(row.get("output_path", "")))
@@ -147,3 +298,8 @@ class RunReportDialog(QDialog):
 
     def _toggle_log(self, checked: bool) -> None:
         self.log_view.setVisible(checked)
+
+    def _open_path(self, path: Path) -> None:
+        if not path.exists():
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))

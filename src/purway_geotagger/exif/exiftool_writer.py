@@ -11,6 +11,7 @@ from typing import Callable
 
 from purway_geotagger.core.photo_task import PhotoTask
 from purway_geotagger.util.errors import ExifToolError, UserCancelledError
+from purway_geotagger.core.utils import resource_path
 
 @dataclass
 class ExifWriteResult:
@@ -55,8 +56,16 @@ class ExifToolWriter:
         self._write_import_csv(import_csv, matched)
 
         files = [str(t.output_path.expanduser().resolve()) for t in matched]
+        
+        # Get path to ExifTool config for custom XMP namespace
+        config_path = resource_path("config/exiftool_config.txt")
+        config_args = []
+        if config_path and config_path.exists():
+            config_args = [f"-config", str(config_path)]
+        
         cmd = [
             self.exiftool_path,
+            *config_args,
             "-overwrite_original",
             f"-csv={import_csv}",
             *files,
@@ -92,11 +101,35 @@ class ExifToolWriter:
             "GPSLongitude",
             "GPSLatitudeRef",
             "GPSLongitudeRef",
+            "GPSAltitude",
             "DateTimeOriginal",
             "ImageDescription",
         ]
+        
+        # Custom XMP-ArchAerial fields
+        xmp_extended_fields = [
+            "XMP-ArchAerial:MethaneConcentration",
+            "XMP-ArchAerial:PAC",
+            "XMP-ArchAerial:RelativeAltitude",
+            "XMP-ArchAerial:LightIntensity",
+            "XMP-ArchAerial:UAVPitch",
+            "XMP-ArchAerial:UAVRoll",
+            "XMP-ArchAerial:UAVYaw",
+            "XMP-ArchAerial:GimbalPitch",
+            "XMP-ArchAerial:GimbalRoll",
+            "XMP-ArchAerial:GimbalYaw",
+            "XMP-ArchAerial:CaptureTime",
+            "XMP-ArchAerial:CameraFocalLength",
+            "XMP-ArchAerial:CameraZoom",
+        ]
+        fields += xmp_extended_fields
+        
         if self.write_xmp:
             fields += ["XMP:GPSLatitude", "XMP:GPSLongitude", "XMP:Description"]
+
+        def _val(v) -> str:
+            """Convert value to string, returning empty string for None."""
+            return "" if v is None else str(v)
 
         with path.open("w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=fields)
@@ -110,8 +143,23 @@ class ExifToolWriter:
                     "GPSLongitude": t.lon,
                     "GPSLatitudeRef": _gps_lat_ref(t.lat),
                     "GPSLongitudeRef": _gps_lon_ref(t.lon),
+                    "GPSAltitude": _val(t.altitude),
                     "DateTimeOriginal": t.datetime_original or "",
                     "ImageDescription": t.image_description,
+                    # Custom XMP-ArchAerial fields
+                    "XMP-ArchAerial:MethaneConcentration": _val(t.ppm),
+                    "XMP-ArchAerial:PAC": _val(t.pac),
+                    "XMP-ArchAerial:RelativeAltitude": _val(t.relative_altitude),
+                    "XMP-ArchAerial:LightIntensity": _val(t.light_intensity),
+                    "XMP-ArchAerial:UAVPitch": _val(t.uav_pitch),
+                    "XMP-ArchAerial:UAVRoll": _val(t.uav_roll),
+                    "XMP-ArchAerial:UAVYaw": _val(t.uav_yaw),
+                    "XMP-ArchAerial:GimbalPitch": _val(t.gimbal_pitch),
+                    "XMP-ArchAerial:GimbalRoll": _val(t.gimbal_roll),
+                    "XMP-ArchAerial:GimbalYaw": _val(t.gimbal_yaw),
+                    "XMP-ArchAerial:CaptureTime": _val(t.timestamp_raw),
+                    "XMP-ArchAerial:CameraFocalLength": _val(t.camera_focal_length),
+                    "XMP-ArchAerial:CameraZoom": _val(t.camera_zoom),
                 }
                 if self.write_xmp:
                     row["XMP:GPSLatitude"] = t.lat

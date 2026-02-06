@@ -1,0 +1,34 @@
+{
+  "folder": "raw_data/test_copies/American Brine/20260128053631_Flight_01",
+  "threshold": 1000,
+  "jpg_count": 13,
+  "jpg_samples": [
+    "20260128_053834.jpg",
+    "20260128_053838.jpg",
+    "20260128_053850.jpg",
+    "20260128_053853.jpg",
+    "20260128_053924.jpg",
+    "20260128_054010.jpg",
+    "20260128_054038.jpg",
+    "20260128_054042.jpg",
+    "20260128_054052.jpg",
+    "20260128_054125.jpg"
+  ],
+  "methane_csv": "raw_data/test_copies/American Brine/20260128053631_Flight_01/methane20260128053631.csv",
+  "rows_total": 17583,
+  "rows_ppm_ge_threshold": 5,
+  "rows_file_present": 13,
+  "rows_file_match": 13,
+  "rows_ppm_and_file_match": 3,
+  "rows_ppm_blank_filename": 2,
+  "rows_ppm_no_match_filename": 0,
+  "ppm_min": 0.0,
+  "ppm_max": 1434.0,
+  "ppm_match_min": 1013.0,
+  "ppm_match_max": 1434.0,
+  "blank_filename_samples": [
+    "<blank>",
+    "<blank>"
+  ],
+  "no_match_filename_samples": []
+}

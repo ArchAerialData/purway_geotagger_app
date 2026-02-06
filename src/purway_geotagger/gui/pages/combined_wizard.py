@@ -33,13 +33,15 @@ from purway_geotagger.gui.widgets.drop_zone import DropZone
 from purway_geotagger.gui.widgets.required_marker import RequiredMarker
 from purway_geotagger.gui.widgets.run_report_view import RunReportDialog
 from purway_geotagger.gui.widgets.settings_dialog import SettingsDialog
+from purway_geotagger.gui.widgets.sticky_nav_row import StickyNavRow
 from purway_geotagger.gui.widgets.template_editor import TemplateEditorDialog
 from purway_geotagger.templates.models import RenameTemplate
 from purway_geotagger.templates.template_manager import render_filename
 
 
 class CombinedWizard(QWidget):
-    back_requested = Signal()
+    home_requested = Signal()
+    run_another_requested = Signal()
 
     def __init__(self, state: ModeState, controller: JobController, parent=None) -> None:
         super().__init__(parent)
@@ -53,20 +55,27 @@ class CombinedWizard(QWidget):
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout = QVBoxLayout(self)
+        self._outer_layout = layout
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
 
-        header = QHBoxLayout()
-        back_btn = QPushButton("Back to Home")
-        back_btn.setProperty("cssClass", "ghost")
-        back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.clicked.connect(self.back_requested.emit)
-        header.addWidget(back_btn)
+        nav_container = QWidget()
+        nav_layout = QHBoxLayout(nav_container)
+        self._nav_layout = nav_layout
+        nav_layout.setContentsMargins(0, 0, 0, 0)
+        nav_layout.setSpacing(8)
+        self.nav_row = StickyNavRow()
+        self.nav_row.back_requested.connect(self._go_prev)
+        self.nav_row.home_requested.connect(self.home_requested.emit)
+        self.nav_context = QLabel("Run / Combined")
+        self.nav_context.setProperty("cssClass", "breadcrumb")
+        nav_layout.addWidget(self.nav_row, 0, Qt.AlignLeft | Qt.AlignVCenter)
+        nav_layout.addWidget(self.nav_context, 0, Qt.AlignLeft | Qt.AlignVCenter)
+        nav_layout.addStretch(1)
         self.step_label = QLabel("")
         self.step_label.setProperty("cssClass", "subtitle")
-        header.addStretch(1)
-        header.addWidget(self.step_label)
-        layout.addLayout(header)
+        nav_layout.addWidget(self.step_label, alignment=Qt.AlignRight | Qt.AlignVCenter)
+        layout.addWidget(nav_container)
 
         title = QLabel("Methane + Encroachments")
         title.setProperty("cssClass", "h1")
@@ -89,12 +98,21 @@ class CombinedWizard(QWidget):
         self.prev_btn = QPushButton("Back")
         self.prev_btn.setCursor(Qt.PointingHandCursor)
         self.prev_btn.clicked.connect(self._go_prev)
+        self.view_outputs_btn = QPushButton("View output files…")
+        self.view_outputs_btn.setVisible(False)
+        self.view_outputs_btn.setEnabled(False)
+        self.view_outputs_btn.clicked.connect(self._view_outputs)
         self.next_btn = QPushButton("Next")
         self.next_btn.setProperty("cssClass", "primary")
         self.next_btn.setCursor(Qt.PointingHandCursor)
         self.next_btn.clicked.connect(self._go_next)
         nav.addWidget(self.prev_btn)
+        nav.addWidget(self.view_outputs_btn)
         nav.addStretch(1)
+        self.run_another_btn = QPushButton("Run another folder")
+        self.run_another_btn.setVisible(False)
+        self.run_another_btn.clicked.connect(self._run_another)
+        nav.addWidget(self.run_another_btn)
         nav.addWidget(self.next_btn)
         layout.addLayout(nav)
 
@@ -102,14 +120,30 @@ class CombinedWizard(QWidget):
         self.status_label.setProperty("cssClass", "subtitle")
         layout.addWidget(self.status_label)
 
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
-        self.progress.setVisible(False)
-        layout.addWidget(self.progress)
 
         self._refresh_templates()
         self.refresh_summary()
         self._update_step_ui()
+        self._apply_responsive_spacing(self.width())
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._apply_responsive_spacing(event.size().width())
+
+    def _apply_responsive_spacing(self, width: int) -> None:
+        # CHG-007: keep nav/title spacing balanced between 13" and 16" layouts.
+        if width >= 1500:
+            side, top, bottom, spacing = 28, 22, 22, 16
+        elif width >= 1200:
+            side, top, bottom, spacing = 22, 18, 20, 14
+        elif width >= 1000:
+            side, top, bottom, spacing = 18, 14, 16, 12
+        else:
+            side, top, bottom, spacing = 14, 12, 14, 10
+        self._outer_layout.setContentsMargins(side, top, side, bottom)
+        self._outer_layout.setSpacing(spacing)
+        self._nav_layout.setSpacing(max(6, spacing - 4))
+        self.nav_context.setVisible(width >= 980)
 
 
     def refresh_summary(self) -> None:
@@ -398,8 +432,6 @@ class CombinedWizard(QWidget):
         note.setWordWrap(True)
         layout.addWidget(note)
 
-        layout.addWidget(note)
-
         # Removed addStretch
         self.confirm_scroll = _wrap_scroll(content)
         return self.confirm_scroll
@@ -410,13 +442,24 @@ class CombinedWizard(QWidget):
         idx = self.stack.currentIndex()
         self.step_label.setText(f"Step {idx + 1} of 4")
         self.prev_btn.setEnabled(idx > 0)
+        self.nav_row.back_btn.setEnabled(idx > 0)
         if idx == 3:
             self.next_btn.setText("Run Combined")
             self.next_btn.setEnabled(True)
+            self._set_next_button_class("run")
             self._update_confirm_summary()
         else:
             self.next_btn.setText("Next")
             self.next_btn.setEnabled(True)
+            self._set_next_button_class("primary")
+
+    def _set_next_button_class(self, css_class: str) -> None:
+        if self.next_btn.property("cssClass") == css_class:
+            return
+        self.next_btn.setProperty("cssClass", css_class)
+        self.next_btn.style().unpolish(self.next_btn)
+        self.next_btn.style().polish(self.next_btn)
+        self.next_btn.update()
 
     def _go_prev(self) -> None:
         idx = self.stack.currentIndex()
@@ -550,20 +593,22 @@ class CombinedWizard(QWidget):
                 dlg.exec()
             return
 
-        confirm = QMessageBox.question(
-            self,
-            "Confirm combined run",
+        self.run_another_btn.setVisible(False)
+        self.view_outputs_btn.setVisible(False)
+        if not self._confirm_run(
             "Combined mode writes EXIF metadata in-place for methane inputs and copies encroachment photos.\n\nContinue?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        if confirm != QMessageBox.Yes:
+            "confirm_combined",
+            "Confirm combined run",
+        ):
             return
 
-        self.progress.setVisible(True)
+        progress_bar = self.window().progress if hasattr(self.window(), "progress") else None
+        if progress_bar:
+            progress_bar.setVisible(True)
         self.next_btn.setEnabled(False)
         self.prev_btn.setEnabled(False)
         self.status_label.setText("Running combined job...")
-        job = self.controller.start_job_from_mode_state(self.state, self.progress)
+        job = self.controller.start_job_from_mode_state(self.state, progress_bar)
         self._last_job_id = job.id if job else None
         self._last_run_folder = job.run_folder if job else None
 
@@ -575,6 +620,7 @@ class CombinedWizard(QWidget):
             return
         if self._last_run_folder is None:
             self._last_run_folder = job.run_folder
+            self._update_view_outputs_button()
         if job.state.stage != self._last_job_stage:
             self._last_job_stage = job.state.stage
         if job.state.stage in ("DONE", "FAILED", "CANCELLED"):
@@ -582,12 +628,68 @@ class CombinedWizard(QWidget):
             self.prev_btn.setEnabled(True)
             if job.state.stage == "DONE":
                 self.status_label.setText("Completed successfully.")
+                self.view_outputs_btn.setVisible(True)
+                self._update_view_outputs_button()
+                self.run_another_btn.setVisible(True)
             elif job.state.stage == "CANCELLED":
                 self.status_label.setText("Cancelled.")
+                self.view_outputs_btn.setVisible(True)
+                self._update_view_outputs_button()
+                self.run_another_btn.setVisible(True)
             else:
                 msg = job.state.message or "Job failed."
                 self.status_label.setText(f"Failed: {msg}")
                 self._show_failure_popup(msg)
+                self.view_outputs_btn.setVisible(True)
+                self._update_view_outputs_button()
+                self.run_another_btn.setVisible(True)
+
+    def reset_for_new_run(self) -> None:
+        self._last_job_id = None
+        self._last_run_folder = None
+        self._last_job_stage = None
+        self.status_label.setText("")
+        self.run_another_btn.setVisible(False)
+        self.view_outputs_btn.setVisible(False)
+        self._output_auto = True
+        self.state.inputs = []
+        self.state.methane_threshold = 1000
+        self.state.methane_generate_kmz = True
+        self.state.methane_log_base = None
+        self.state.encroachment_output_base = None
+        self.state.encroachment_rename_enabled = False
+        self.state.encroachment_template_id = None
+        self.state.encroachment_client_abbr = ""
+        self.state.encroachment_start_index = 1
+        self.stack.setCurrentIndex(0)
+        self.refresh_summary()
+        self._update_step_ui()
+        self._update_view_outputs_button()
+
+    def _run_another(self) -> None:
+        self.run_another_requested.emit()
+        main = self.window()
+        progress = getattr(main, "progress", None)
+        if progress is not None:
+            progress.setValue(0)
+            progress.setVisible(False)
+        self.home_requested.emit()
+
+    def _summary_path(self) -> Path | None:
+        if not self._last_run_folder:
+            return None
+        return self._last_run_folder / "run_summary.json"
+
+    def _update_view_outputs_button(self) -> None:
+        summary_path = self._summary_path()
+        self.view_outputs_btn.setEnabled(bool(summary_path and summary_path.exists()))
+
+    def _view_outputs(self) -> None:
+        if not self._last_run_folder:
+            QMessageBox.information(self, "Outputs not available", "Run outputs not available yet.")
+            return
+        dlg = RunReportDialog(self._last_run_folder, parent=self)
+        dlg.exec()
 
     def _show_failure_popup(self, message: str) -> None:
         if not message:
@@ -602,6 +704,26 @@ class CombinedWizard(QWidget):
         if msg.clickedButton() == view_btn and self._last_run_folder:
             dlg = RunReportDialog(self._last_run_folder, parent=self)
             dlg.exec()
+
+    def _confirm_run(self, message: str, setting_attr: str, title: str) -> bool:
+        settings = self.controller.settings
+        if not getattr(settings, setting_attr, True):
+            return True
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Question)
+        msg.setWindowTitle(title)
+        msg.setText(message)
+        checkbox = QCheckBox("Don't show again")
+        msg.setCheckBox(checkbox)
+        yes_btn = msg.addButton("Yes", QMessageBox.AcceptRole)
+        msg.addButton("No", QMessageBox.RejectRole)
+        msg.exec()
+        if msg.clickedButton() == yes_btn:
+            if checkbox.isChecked():
+                setattr(settings, setting_attr, False)
+                settings.save()
+            return True
+        return False
 
     def _on_paths_dropped(self, paths: list[str]) -> None:
         self._add_inputs([Path(p) for p in paths])

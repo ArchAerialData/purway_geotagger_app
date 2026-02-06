@@ -34,10 +34,13 @@ from purway_geotagger.gui.widgets.template_editor import TemplateEditorDialog
 from purway_geotagger.templates.models import RenameTemplate
 from purway_geotagger.templates.template_manager import render_filename
 from purway_geotagger.gui.widgets.run_report_view import RunReportDialog
+from purway_geotagger.gui.widgets.sticky_nav_row import StickyNavRow
 
 
 class EncroachmentPage(QWidget):
     back_requested = Signal()
+    home_requested = Signal()
+    run_another_requested = Signal()
 
     def __init__(self, state: ModeState, controller: JobController, parent=None) -> None:
         super().__init__(parent)
@@ -53,6 +56,21 @@ class EncroachmentPage(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
+        nav_container = QWidget()
+        nav_layout = QHBoxLayout(nav_container)
+        self._nav_layout = nav_layout
+        nav_layout.setContentsMargins(40, 16, 40, 0)
+        nav_layout.setSpacing(8)
+        self.nav_row = StickyNavRow()
+        self.nav_row.back_requested.connect(self.back_requested.emit)
+        self.nav_row.home_requested.connect(self.home_requested.emit)
+        self.nav_context = QLabel("Run / Encroachment")
+        self.nav_context.setProperty("cssClass", "breadcrumb")
+        nav_layout.addWidget(self.nav_row, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        nav_layout.addWidget(self.nav_context, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        nav_layout.addStretch(1)
+        main_layout.addWidget(nav_container)
+
         # Scroll Area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -63,16 +81,7 @@ class EncroachmentPage(QWidget):
         self.content_layout.setSpacing(24)
         scroll.setWidget(content_widget)
         main_layout.addWidget(scroll)
-
-        # --- Header ---
-        header = QHBoxLayout()
-        back_btn = QPushButton("Back")
-        back_btn.setProperty("cssClass", "ghost")
-        back_btn.setCursor(Qt.PointingHandCursor)
-        back_btn.clicked.connect(self.back_requested.emit)
-        header.addWidget(back_btn)
-        header.addStretch(1)
-        self.content_layout.addLayout(header)
+        self._apply_responsive_spacing(self.width())
 
         title = QLabel("Encroachment Reports Only")
         title.setProperty("cssClass", "h1")
@@ -215,24 +224,31 @@ class EncroachmentPage(QWidget):
 
         # --- A ctions ---
         actions_row = QHBoxLayout()
-        self.run_btn = QPushButton("Run Encroachment")
-        self.run_btn.setProperty("cssClass", "primary")
-        self.run_btn.setCursor(Qt.PointingHandCursor)
-        self.run_btn.clicked.connect(self._run_encroachment)
-        self.run_btn.setMinimumHeight(44) 
-        actions_row.addWidget(self.run_btn)
-        
         self.view_log_btn = QPushButton("View log…")
         self.view_log_btn.setEnabled(False)
         self.view_log_btn.clicked.connect(self._view_log)
         actions_row.addWidget(self.view_log_btn)
+        self.view_outputs_btn = QPushButton("View output files…")
+        self.view_outputs_btn.setVisible(False)
+        self.view_outputs_btn.setEnabled(False)
+        self.view_outputs_btn.clicked.connect(self._view_outputs)
+        actions_row.addWidget(self.view_outputs_btn)
+
         actions_row.addStretch(1)
+
+        self.run_another_btn = QPushButton("Run another folder")
+        self.run_another_btn.setVisible(False)
+        self.run_another_btn.clicked.connect(self._run_another)
+        actions_row.addWidget(self.run_another_btn)
+
+        self.run_btn = QPushButton("Run Encroachment")
+        self.run_btn.setProperty("cssClass", "run")
+        self.run_btn.setCursor(Qt.PointingHandCursor)
+        self.run_btn.clicked.connect(self._run_encroachment)
+        self.run_btn.setMinimumHeight(44)
+        actions_row.addWidget(self.run_btn)
         self.content_layout.addLayout(actions_row)
 
-        self.progress = QProgressBar()
-        self.progress.setRange(0, 100)
-        self.progress.setVisible(False)
-        self.content_layout.addWidget(self.progress)
         
         self.status_label = QLabel("")
         self.status_label.setProperty("cssClass", "subtitle")
@@ -244,6 +260,25 @@ class EncroachmentPage(QWidget):
         self._refresh_templates()
         self.refresh_summary()
 
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._apply_responsive_spacing(event.size().width())
+
+    def _apply_responsive_spacing(self, width: int) -> None:
+        # CHG-007: align nav/content rhythm across common macOS laptop widths.
+        if width >= 1500:
+            side, nav_top, content_top, content_bottom, gap = 48, 16, 34, 32, 24
+        elif width >= 1200:
+            side, nav_top, content_top, content_bottom, gap = 36, 14, 28, 28, 22
+        elif width >= 1000:
+            side, nav_top, content_top, content_bottom, gap = 28, 12, 22, 24, 20
+        else:
+            side, nav_top, content_top, content_bottom, gap = 20, 10, 18, 20, 18
+        self._nav_layout.setContentsMargins(side, nav_top, side, 0)
+        self.content_layout.setContentsMargins(side, content_top, side, content_bottom)
+        self.content_layout.setSpacing(gap)
+        self.nav_context.setVisible(width >= 980)
+
     def refresh_summary(self) -> None:
         self.inputs_list.clear()
         for p in self.state.inputs:
@@ -254,6 +289,23 @@ class EncroachmentPage(QWidget):
         self.start_index_spin.setValue(max(1, int(self.state.encroachment_start_index)))
         self._sync_template_selection()
         self._update_rename_state()
+
+    def reset_for_new_run(self) -> None:
+        self._last_job_id = None
+        self._last_run_folder = None
+        self.status_label.setText("")
+        self.run_another_btn.setVisible(False)
+        self.view_outputs_btn.setVisible(False)
+        self.state.inputs = []
+        self.state.encroachment_output_base = None
+        self.state.encroachment_rename_enabled = False
+        self.state.encroachment_template_id = None
+        self.state.encroachment_client_abbr = ""
+        self.state.encroachment_start_index = 1
+        self._output_auto = True
+        self.refresh_summary()
+        self._update_view_log_buttons()
+        self._update_view_outputs_button()
 
     def _on_paths_dropped(self, paths: list[str]) -> None:
         self._add_inputs([Path(p) for p in paths])
@@ -472,26 +524,54 @@ class EncroachmentPage(QWidget):
                 dlg.exec()
             return
 
-        self.progress.setVisible(True)
+        if not self._confirm_run(
+            "Encroachment mode copies JPGs to the output folder and may rename them.\n\nContinue?",
+            "confirm_encroachment",
+            "Confirm encroachment run",
+        ):
+            return
+
+        progress_bar = self.window().progress if hasattr(self.window(), "progress") else None
+        if progress_bar:
+            progress_bar.setVisible(True)
         self.run_btn.setEnabled(False)
+        self.run_another_btn.setVisible(False)
+        self.view_outputs_btn.setVisible(False)
         self.status_label.setText("Running encroachment job...")
-        job = self.controller.start_job_from_mode_state(self.state, self.progress)
+        job = self.controller.start_job_from_mode_state(self.state, progress_bar)
         self._last_job_id = job.id if job else None
         self._last_run_folder = job.run_folder if job else None
-        self._update_view_log_button()
+        self._update_view_log_buttons()
+        self._update_view_outputs_button()
 
     def _log_path(self) -> Path | None:
         if not self._last_run_folder:
             return None
         return self._last_run_folder / "run_log.txt"
 
-    def _update_view_log_button(self) -> None:
+    def _summary_path(self) -> Path | None:
+        if not self._last_run_folder:
+            return None
+        return self._last_run_folder / "run_summary.json"
+
+    def _update_view_log_buttons(self) -> None:
         path = self._log_path()
         self.view_log_btn.setEnabled(bool(path and path.exists()))
+
+    def _update_view_outputs_button(self) -> None:
+        path = self._summary_path()
+        self.view_outputs_btn.setEnabled(bool(path and path.exists()))
 
     def _view_log(self) -> None:
         if not self._last_run_folder:
             QMessageBox.information(self, "Log not available", "Run log not available yet.")
+            return
+        dlg = RunReportDialog(self._last_run_folder, parent=self)
+        dlg.exec()
+
+    def _view_outputs(self) -> None:
+        if not self._last_run_folder:
+            QMessageBox.information(self, "Outputs not available", "Run outputs not available yet.")
             return
         dlg = RunReportDialog(self._last_run_folder, parent=self)
         dlg.exec()
@@ -504,9 +584,12 @@ class EncroachmentPage(QWidget):
             return
         if self._last_run_folder is None:
             self._last_run_folder = job.run_folder
-            self._update_view_log_button()
+            self._update_view_log_buttons()
+            self._update_view_outputs_button()
         if job.state.stage in ("DONE", "FAILED", "CANCELLED"):
             self.run_btn.setEnabled(True)
+            self.run_another_btn.setVisible(True)
+            self.view_outputs_btn.setVisible(True)
             if job.state.stage == "DONE":
                 self.status_label.setText("Completed successfully.")
             elif job.state.stage == "CANCELLED":
@@ -515,7 +598,8 @@ class EncroachmentPage(QWidget):
                 msg = job.state.message or "Job failed."
                 self.status_label.setText(f"Failed: {msg}")
                 self._show_failure_popup(msg)
-            self._update_view_log_button()
+            self._update_view_log_buttons()
+            self._update_view_outputs_button()
 
     def _show_failure_popup(self, message: str) -> None:
         if not message:
@@ -529,3 +613,32 @@ class EncroachmentPage(QWidget):
         msg.exec()
         if msg.clickedButton() == view_btn:
             self._view_log()
+
+    def _confirm_run(self, message: str, setting_attr: str, title: str) -> bool:
+        settings = self.controller.settings
+        if not getattr(settings, setting_attr, True):
+            return True
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Question)
+        msg.setWindowTitle(title)
+        msg.setText(message)
+        checkbox = QCheckBox("Don't show again")
+        msg.setCheckBox(checkbox)
+        yes_btn = msg.addButton("Yes", QMessageBox.AcceptRole)
+        msg.addButton("No", QMessageBox.RejectRole)
+        msg.exec()
+        if msg.clickedButton() == yes_btn:
+            if checkbox.isChecked():
+                setattr(settings, setting_attr, False)
+                settings.save()
+            return True
+        return False
+
+    def _run_another(self) -> None:
+        self.run_another_requested.emit()
+        main = self.window()
+        progress = getattr(main, "progress", None)
+        if progress is not None:
+            progress.setValue(0)
+            progress.setVisible(False)
+        self.home_requested.emit()

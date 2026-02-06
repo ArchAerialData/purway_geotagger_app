@@ -23,9 +23,13 @@ class PreviewDialog(QDialog):
 
         table = QTableWidget()
         headers = ["Status", "Join", "Photo", "CSV", "Lat", "Lon", "PPM", "DateTime", "Reason"]
+        table.setProperty("cssClass", "outputs_table")
         table.setColumnCount(len(headers))
         table.setHorizontalHeaderLabels(headers)
         table.setRowCount(len(result.rows))
+        table.setAlternatingRowColors(True)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.verticalHeader().setVisible(False)
 
         for i, r in enumerate(result.rows):
             table.setItem(i, 0, QTableWidgetItem(r.status))

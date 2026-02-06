@@ -11,9 +11,10 @@ This folder contains CI scripts used by the GitHub Actions workflow. The workflo
 - `MACOS_CERT_P12` (base64 of Developer ID Application `.p12`)
 - `MACOS_CERT_PASSWORD`
 - `APPLE_KEY_ID`
-- `APPLE_ISSUER_ID`
+- `APPLE_ISSUER_ID` (required for App Store Connect **Team** API keys; CI assumes a Team key)
 - `APPLE_API_KEY_P8` (base64 of App Store Connect API key `.p8`)
 
 ## Notes
 - If secrets are missing, CI still builds and packages an **unsigned** `.dmg`.
 - For compatibility, CI sets `MACOSX_DEPLOYMENT_TARGET=13.0` by default (supports Ventura+).
+- Apple requires Developer ID signing + notarization for smooth Gatekeeper behavior when distributing apps outside the Mac App Store; see `scripts/macos/APPLE_SIGNING_NOTARIZATION_SETUP.md`.

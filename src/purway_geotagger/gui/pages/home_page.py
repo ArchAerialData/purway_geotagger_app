@@ -5,9 +5,6 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushBu
 
 from purway_geotagger.core.modes import RunMode
 from purway_geotagger.exif.exiftool_writer import is_exiftool_available
-from purway_geotagger.core.utils import resource_path
-from PySide6.QtGui import QPixmap, QIcon
-from pathlib import Path
 
 
 class HomePage(QWidget):
@@ -38,8 +35,7 @@ class HomePage(QWidget):
         subtitle.setWordWrap(True)
 
         self._last_mode_label = QLabel("")
-        self._last_mode_label.setProperty("cssClass", "subtitle")
-        self._last_mode_label.setStyleSheet("color: #0A84FF; font-weight: 600;")
+        self._last_mode_label.setProperty("cssClass", "status_info")
         self._last_mode_label.setWordWrap(True)
 
         text_layout.addWidget(title)
@@ -55,8 +51,7 @@ class HomePage(QWidget):
         status_layout.setSpacing(10)
         
         st_title = QLabel("System Status")
-        st_title.setProperty("cssClass", "h2")
-        st_title.setStyleSheet("font-size: 14px; margin-bottom: 4px;")
+        st_title.setProperty("cssClass", "label_strong")
         
         # ExifTool Check
         et_row = QWidget()
@@ -67,19 +62,18 @@ class HomePage(QWidget):
         has_et = is_exiftool_available()
         et_icon = QLabel()
         if has_et:
-            # Checkmark
             et_icon.setText("✓")
-            et_icon.setStyleSheet("color: #32D74B; font-weight: bold; font-size: 16px;")
+            et_icon.setProperty("cssClass", "status_success")
         else:
-            # X mark
             et_icon.setText("✕")
-            et_icon.setStyleSheet("color: #FF453A; font-weight: bold; font-size: 16px;")
-            
+            et_icon.setProperty("cssClass", "status_error")
+
         et_lbl = QLabel("ExifTool Ready")
+        et_lbl.setProperty("cssClass", "status_success")
         if not has_et:
             et_lbl.setText("ExifTool Missing")
-            et_lbl.setStyleSheet("color: #FF453A;")
-            
+            et_lbl.setProperty("cssClass", "status_error")
+
         et_layout.addWidget(et_icon)
         et_layout.addWidget(et_lbl)
         et_layout.addStretch()
@@ -156,7 +150,7 @@ class HomePage(QWidget):
         desc = QLabel(_bullets_html(bullets))
         desc.setWordWrap(True)
         desc.setTextFormat(Qt.RichText)
-        desc.setStyleSheet("color: palette(text);") # Ensure follows theme text
+        desc.setProperty("cssClass", "subtitle")
 
         card_layout.addWidget(btn)
         card_layout.addWidget(desc)

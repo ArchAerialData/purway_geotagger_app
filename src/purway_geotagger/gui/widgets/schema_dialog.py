@@ -22,9 +22,13 @@ class SchemaDialog(QDialog):
 
         table = QTableWidget()
         headers = ["CSV", "Rows", "Photo", "Lat", "Lon", "Time", "PPM", "Columns"]
+        table.setProperty("cssClass", "outputs_table")
         table.setColumnCount(len(headers))
         table.setHorizontalHeaderLabels(headers)
         table.setRowCount(len(schemas))
+        table.setAlternatingRowColors(True)
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        table.verticalHeader().setVisible(False)
 
         for i, s in enumerate(schemas):
             table.setItem(i, 0, QTableWidgetItem(str(s.csv_path)))

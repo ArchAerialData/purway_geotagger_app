@@ -6,7 +6,7 @@ This guide lists the exact credentials needed for macOS code signing and notariz
 - Apple Developer Program membership with **Account Holder** access.
 - Team ID (10-character string).
 - Developer ID Application certificate **and** private key (`.p12`).
-- App Store Connect API key (`.p8`) + Key ID + Issuer ID.
+- App Store Connect API key (`.p8`) + Key ID + Issuer ID (**Team** key; recommended for CI).
 - A **Mac** for creating the CSR and exporting the `.p12` (Keychain Access is macOS-only).
 
 ## Step 1 — Find Team ID (any computer + browser)
@@ -39,20 +39,19 @@ This guide lists the exact credentials needed for macOS code signing and notariz
 
 ## Step 6 — Create App Store Connect API key (any computer + browser)
 1. In the **Keys** tab, click **+ / Generate API Key**.
-2. Choose a role (Admin recommended).
+2. Choose an **Access** role (this scopes what the key can do via the API).
 3. Download the `.p8` file (one-time download).
 4. Record the **Key ID** and **Issuer ID** shown in the UI.
 
 ## Step 7 — Provide secrets to GitHub Actions
 - `MACOS_CERT_P12` (base64 of `.p12`)
 - `MACOS_CERT_PASSWORD`
-- `APPLE_TEAM_ID`
 - `APPLE_KEY_ID`
 - `APPLE_ISSUER_ID`
 - `APPLE_API_KEY_P8` (base64 of `.p8`)
 
 ## Notes
-- Notarization uses `xcrun notarytool` with App Store Connect API keys (Team Keys or Individual Keys).
+- This repo's CI notarization flow uses `xcrun notarytool` with an App Store Connect API **Team** key and passes `--issuer`.
 - The app must be **Developer ID signed** before notarization will succeed.
 
 ## References (Apple docs)
@@ -60,5 +59,5 @@ This guide lists the exact credentials needed for macOS code signing and notariz
 - CSR creation: `https://developer.apple.com/help/account/create-certificates/create-a-certificate-signing-request`
 - Developer ID certificates: `https://developer.apple.com/help/account/certificates/create-developer-id-certificates`
 - App Store Connect API access: `https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/`
-- App Store Connect API key creation (Team Keys): `https://developer.apple.com/jp/help/app-store-connect/get-started/app-store-connect-api`
+- App Store Connect API key creation (Team Keys): `https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api/`
 - Developer ID signing + notarization overview: `https://developer.apple.com/developer-id/`

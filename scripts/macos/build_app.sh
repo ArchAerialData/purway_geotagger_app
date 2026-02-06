@@ -66,6 +66,7 @@ pyinstaller --noconfirm --clean \
   --osx-bundle-identifier "${BUNDLE_ID}" \
   --paths "src" \
   --add-data "config/default_templates.json:config" \
+  --add-data "config/exiftool_config.txt:config" \
   --add-data "assets:assets" \
   "${EXIFTOOL_ARGS[@]}" \
   "src/purway_geotagger/app.py"

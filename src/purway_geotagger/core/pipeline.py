@@ -143,6 +143,22 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
                 t.ppm = match.ppm
                 t.datetime_original = match.datetime_original
                 t.image_description = match.image_description
+                
+                # Extended fields
+                t.altitude = match.altitude
+                t.relative_altitude = match.relative_altitude
+                t.light_intensity = match.light_intensity
+                t.uav_pitch = match.uav_pitch
+                t.uav_roll = match.uav_roll
+                t.uav_yaw = match.uav_yaw
+                t.gimbal_pitch = match.gimbal_pitch
+                t.gimbal_roll = match.gimbal_roll
+                t.gimbal_yaw = match.gimbal_yaw
+                t.camera_focal_length = match.camera_focal_length
+                t.camera_zoom = match.camera_zoom
+                t.timestamp_raw = match.timestamp_raw
+                t.pac = match.pac
+
                 if opts.purway_payload:
                     if t.image_description:
                         t.image_description = f"{t.image_description}; purway_payload={opts.purway_payload}"
@@ -328,6 +344,16 @@ def _log_methane_results(
     for r in results:
         if r.cleaned_status == "failed":
             logger.log(f"Cleaned CSV failed for {r.source_csv}: {r.cleaned_error}")
+        if r.photo_col_missing and r.cleaned_status == "success":
+            logger.log(
+                f"{r.source_csv}: photo filename column missing; used PPM-only filtering."
+            )
+        if r.missing_photo_rows:
+            sample = ", ".join(r.missing_photo_names[:5])
+            extra = f" Sample: {sample}" if sample else ""
+            logger.log(
+                f"{r.source_csv}: skipped {r.missing_photo_rows} rows (no matching JPG).{extra}"
+            )
         if r.kmz_status == "failed":
             logger.log(f"KMZ failed for {r.source_csv}: {r.kmz_error}")
 
@@ -362,6 +388,21 @@ def _clone_tasks_for_copy(
             clone.status = base.status
             clone.reason = base.reason
             clone.exif_written = base.exif_written
+            
+            # Extended fields
+            clone.altitude = base.altitude
+            clone.relative_altitude = base.relative_altitude
+            clone.light_intensity = base.light_intensity
+            clone.uav_pitch = base.uav_pitch
+            clone.uav_roll = base.uav_roll
+            clone.uav_yaw = base.uav_yaw
+            clone.gimbal_pitch = base.gimbal_pitch
+            clone.gimbal_roll = base.gimbal_roll
+            clone.gimbal_yaw = base.gimbal_yaw
+            clone.camera_focal_length = base.camera_focal_length
+            clone.camera_zoom = base.camera_zoom
+            clone.timestamp_raw = base.timestamp_raw
+            clone.pac = base.pac
         clones.append(clone)
     return clones
 
@@ -379,6 +420,9 @@ def _build_run_summary(
             cleaned_status=r.cleaned_status,
             cleaned_rows=r.cleaned_rows,
             cleaned_error=r.cleaned_error,
+            missing_photo_rows=r.missing_photo_rows,
+            missing_photo_names=r.missing_photo_names,
+            photo_col_missing=r.photo_col_missing,
             kmz=str(r.kmz) if r.kmz else None,
             kmz_status=r.kmz_status,
             kmz_rows=r.kmz_rows,
@@ -458,6 +502,20 @@ def _write_manifest(
                 csv_path=t.csv_path,
                 join_method=t.join_method,
                 exif_written="YES" if t.exif_written else "NO",
+                # Extended fields
+                altitude="" if t.altitude is None else str(t.altitude),
+                relative_altitude="" if t.relative_altitude is None else str(t.relative_altitude),
+                light_intensity="" if t.light_intensity is None else str(t.light_intensity),
+                pac="" if t.pac is None else str(t.pac),
+                uav_pitch="" if t.uav_pitch is None else str(t.uav_pitch),
+                uav_roll="" if t.uav_roll is None else str(t.uav_roll),
+                uav_yaw="" if t.uav_yaw is None else str(t.uav_yaw),
+                gimbal_pitch="" if t.gimbal_pitch is None else str(t.gimbal_pitch),
+                gimbal_roll="" if t.gimbal_roll is None else str(t.gimbal_roll),
+                gimbal_yaw="" if t.gimbal_yaw is None else str(t.gimbal_yaw),
+                camera_focal_length="" if t.camera_focal_length is None else str(t.camera_focal_length),
+                camera_zoom="" if t.camera_zoom is None else str(t.camera_zoom),
+                capture_time=t.timestamp_raw or "",
             ))
     else:
         for p in scanned_photos:
