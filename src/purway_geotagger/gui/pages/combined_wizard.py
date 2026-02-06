@@ -55,17 +55,22 @@ class CombinedWizard(QWidget):
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout = QVBoxLayout(self)
+        self._outer_layout = layout
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
 
         nav_container = QWidget()
         nav_layout = QHBoxLayout(nav_container)
+        self._nav_layout = nav_layout
         nav_layout.setContentsMargins(0, 0, 0, 0)
         nav_layout.setSpacing(8)
         self.nav_row = StickyNavRow()
         self.nav_row.back_requested.connect(self._go_prev)
         self.nav_row.home_requested.connect(self.home_requested.emit)
-        nav_layout.addWidget(self.nav_row)
+        self.nav_context = QLabel("Run / Combined")
+        self.nav_context.setProperty("cssClass", "breadcrumb")
+        nav_layout.addWidget(self.nav_row, 0, Qt.AlignLeft | Qt.AlignVCenter)
+        nav_layout.addWidget(self.nav_context, 0, Qt.AlignLeft | Qt.AlignVCenter)
         nav_layout.addStretch(1)
         self.step_label = QLabel("")
         self.step_label.setProperty("cssClass", "subtitle")
@@ -119,6 +124,26 @@ class CombinedWizard(QWidget):
         self._refresh_templates()
         self.refresh_summary()
         self._update_step_ui()
+        self._apply_responsive_spacing(self.width())
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._apply_responsive_spacing(event.size().width())
+
+    def _apply_responsive_spacing(self, width: int) -> None:
+        # CHG-007: keep nav/title spacing balanced between 13" and 16" layouts.
+        if width >= 1500:
+            side, top, bottom, spacing = 28, 22, 22, 16
+        elif width >= 1200:
+            side, top, bottom, spacing = 22, 18, 20, 14
+        elif width >= 1000:
+            side, top, bottom, spacing = 18, 14, 16, 12
+        else:
+            side, top, bottom, spacing = 14, 12, 14, 10
+        self._outer_layout.setContentsMargins(side, top, side, bottom)
+        self._outer_layout.setSpacing(spacing)
+        self._nav_layout.setSpacing(max(6, spacing - 4))
+        self.nav_context.setVisible(width >= 980)
 
 
     def refresh_summary(self) -> None:
@@ -405,8 +430,6 @@ class CombinedWizard(QWidget):
         note = QLabel("Review the settings above, then click Run Combined to start.")
         note.setProperty("cssClass", "subtitle")
         note.setWordWrap(True)
-        layout.addWidget(note)
-
         layout.addWidget(note)
 
         # Removed addStretch

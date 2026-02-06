@@ -2,140 +2,202 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QScrollArea, QFrame, QPushButton, QHBoxLayout
+    QWidget, QVBoxLayout, QBoxLayout, QLabel, QScrollArea, QFrame
 )
+
 
 class HelpPage(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        
-        # Main layout
+
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Scroll Area to handle long content
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet("background: transparent;")
-        
+
         content = QWidget()
-        content.setObjectName("helpContent")
-        # Ensure the content widget matches the window background
-        # We can rely on inheritance or set it explicitly if needed, but transparent is usually best for scroll container
-        content.setStyleSheet("#helpContent { background: transparent; }")
-        
         layout = QVBoxLayout(content)
         layout.setContentsMargins(40, 40, 40, 40)
-        layout.setSpacing(24)
-        
-        # --- Intro Section ---
-        intro_box = QWidget()
-        intro_layout = QVBoxLayout(intro_box)
-        intro_layout.setContentsMargins(0, 0, 0, 0)
-        intro_layout.setSpacing(8)
-        
+        layout.setSpacing(20)
+
         h1 = QLabel("Purway Geotagger Guide")
         h1.setProperty("cssClass", "h1")
-        
-        sub = QLabel("Automated post-processing for aerial inspection data.")
+        sub = QLabel("Use this page as a quick reference for modes, outputs, and troubleshooting.")
         sub.setProperty("cssClass", "subtitle")
         sub.setWordWrap(True)
-        
-        intro_layout.addWidget(h1)
-        intro_layout.addWidget(sub)
-        layout.addWidget(intro_box)
-        
-        # --- Core Features (Cards) ---
-        features_lbl = QLabel("Workflows")
-        features_lbl.setProperty("cssClass", "h2")
-        layout.addWidget(features_lbl)
-        
-        # Methane Card
-        layout.addWidget(self._create_help_card(
-            "Methane Reports",
-            "Processes raw inspection data to highlight gas detections.",
-            [
-                "Filters CSV data to find points above your PPM threshold.",
-                "Injects simplified metadata (Lat, Lon, PPM) directly into JPG EXIF.",
-                "Exports a KMZ file for visualizing the flight path and detections.",
-                "<b>Best for:</b> Rapidly generating deliverables for OGI inspections."
-            ]
-        ))
 
-        # Encroachment Card
-        layout.addWidget(self._create_help_card(
-            "Encroachment Reports",
-            "Organizes and standardizes photo deliverables.",
-            [
-                "Copies photos from complex folder structures into a single output directory.",
-                "Renames files sequentially using customizable patterns (e.g., <i>Project_001.jpg</i>).",
-                "Timestamps can be preserved or updated.",
-                "<b>Best for:</b> Right-of-Way (ROW) and visual reporting."
-            ]
-        ))
-        
-        # --- Tips Section ---
-        tips_lbl = QLabel("Tips & Tricks")
-        tips_lbl.setProperty("cssClass", "h2")
-        tips_lbl.setStyleSheet("margin-top: 16px;")
-        layout.addWidget(tips_lbl)
-        
-        tips_frame = QFrame()
-        tips_frame.setProperty("cssClass", "card")
-        tips_layout = QVBoxLayout(tips_frame)
-        tips_layout.setSpacing(12)
-        
-        tips = [
-            ("Templates", "Save your renaming patterns in the <b>Templates</b> tab to ensure consistency across projects."),
-            ("Job History", "Something went wrong? Go to the <b>Jobs</b> tab to view logs, retry failed items, or export manifests."),
-            ("ExifTool", "This app relies on ExifTool. If you see a warning, check the <b>Settings</b> to ensure it's installed correctly.")
-        ]
-        
-        for title, text in tips:
-            row = QWidget()
-            rl = QVBoxLayout(row)
-            rl.setContentsMargins(0, 0, 0, 0)
-            rl.setSpacing(2)
-            
-            t = QLabel(title)
-            t.setStyleSheet("font-weight: 600; font-size: 14px; color: palette(text);")
-            
-            d = QLabel(text)
-            d.setWordWrap(True)
-            d.setTextFormat(Qt.RichText)
-            d.setStyleSheet("color: palette(window-text); opacity: 0.8;")
-            
-            rl.addWidget(t)
-            rl.addWidget(d)
-            tips_layout.addWidget(row)
-            
-        layout.addWidget(tips_frame)
+        layout.addWidget(h1)
+        layout.addWidget(sub)
+
+        layout.addWidget(
+            self._create_help_card(
+                "Quick Start (2-3 minutes)",
+                "Follow these steps for most runs.",
+                [
+                    "<b>1)</b> Open the <b>Run</b> tab and choose a mode.",
+                    "<b>2)</b> Drop your <b>Raw Data folder(s)</b> or add folders/files manually.",
+                    "<b>3)</b> Configure only required options (for Encroachment/Combined, set output folder).",
+                    "<b>4)</b> Click Run, then use <b>View log</b> / <b>Run Report</b> if needed.",
+                ],
+            )
+        )
+
+        modes_title = QLabel("Choose The Right Mode")
+        modes_title.setProperty("cssClass", "h2")
+        layout.addWidget(modes_title)
+
+        self._mode_cards_layout = QBoxLayout(QBoxLayout.LeftToRight)
+        self._mode_cards_layout.setSpacing(14)
+        self._mode_cards_layout.addWidget(
+            self._create_help_card(
+                "Methane Reports",
+                "Best when you need methane deliverables only.",
+                [
+                    "Writes EXIF in-place for matched JPGs.",
+                    "Creates cleaned CSV files beside source methane CSV files.",
+                    "Optional KMZ output from cleaned data.",
+                ],
+            )
+        )
+        self._mode_cards_layout.addWidget(
+            self._create_help_card(
+                "Encroachment Reports",
+                "Best when you need one unified photo deliverable folder.",
+                [
+                    "Copies JPGs into a single output folder.",
+                    "Optional renaming using templates and start index.",
+                    "Run logs include missing/unprocessed photo reasons.",
+                ],
+            )
+        )
+        self._mode_cards_layout.addWidget(
+            self._create_help_card(
+                "Combined",
+                "Best when you need methane + encroachment outputs in one pass.",
+                [
+                    "Produces methane outputs and encroachment copies together.",
+                    "Encroachment renaming affects copied files only.",
+                    "Useful for minimizing repeat setup steps.",
+                ],
+            )
+        )
+        layout.addLayout(self._mode_cards_layout)
+
+        layout.addWidget(
+            self._create_reference_card(
+                "Feature Reference",
+                [
+                    (
+                        "Run Tab",
+                        "Primary workflow: choose mode, add inputs, set required options, then run.",
+                    ),
+                    (
+                        "Templates Tab",
+                        "Create and preview renaming templates used for encroachment copies.",
+                    ),
+                    (
+                        "Jobs Tab",
+                        "Review status, open outputs, re-run failed photos, and view run reports.",
+                    ),
+                    (
+                        "Settings",
+                        "Set ExifTool path and defaults such as join delta and cleanup behavior.",
+                    ),
+                ],
+            )
+        )
+
+        layout.addWidget(
+            self._create_reference_card(
+                "Troubleshooting",
+                [
+                    (
+                        "ExifTool missing warning",
+                        "Open Settings and set the ExifTool path, then run again.",
+                    ),
+                    (
+                        "No outputs created",
+                        "Check mode requirements (especially output folder in Encroachment/Combined).",
+                    ),
+                    (
+                        "Some photos failed",
+                        "Open Run Report and review the Failures table for exact reasons.",
+                    ),
+                    (
+                        "Unexpected files in Raw Data",
+                        "The app skips macOS artifact files and continues scanning valid inputs.",
+                    ),
+                ],
+            )
+        )
+
         layout.addStretch()
-        
+
         scroll.setWidget(content)
         main_layout.addWidget(scroll)
-        
+        self._apply_responsive_layout(self.width())
+
     def _create_help_card(self, title: str, subtitle: str, bullets: list[str]) -> QFrame:
         card = QFrame()
         card.setProperty("cssClass", "card")
         l = QVBoxLayout(card)
         l.setSpacing(12)
-        
+
         t = QLabel(title)
-        t.setProperty("cssClass", "h2")
-        t.setStyleSheet("font-size: 16px; margin: 0;")
-        
+        t.setProperty("cssClass", "label_strong")
+
         s = QLabel(subtitle)
         s.setProperty("cssClass", "subtitle")
         s.setWordWrap(True)
-        
+
         html_list = "".join(f"<li style='margin-bottom: 6px;'>{b}</li>" for b in bullets)
         b_lbl = QLabel(f"<ul style='margin: 0; padding-left: 16px;'>{html_list}</ul>")
         b_lbl.setWordWrap(True)
         b_lbl.setTextFormat(Qt.RichText)
-        
+        b_lbl.setProperty("cssClass", "subtitle")
+
         l.addWidget(t)
         l.addWidget(s)
         l.addWidget(b_lbl)
         return card
+
+    def _create_reference_card(self, title: str, rows: list[tuple[str, str]]) -> QFrame:
+        card = QFrame()
+        card.setProperty("cssClass", "card")
+        layout = QVBoxLayout(card)
+        layout.setSpacing(10)
+
+        heading = QLabel(title)
+        heading.setProperty("cssClass", "label_strong")
+        layout.addWidget(heading)
+
+        for item_title, text in rows:
+            row = QWidget()
+            row_layout = QVBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(2)
+
+            t = QLabel(item_title)
+            t.setProperty("cssClass", "label_strong")
+
+            d = QLabel(text)
+            d.setWordWrap(True)
+            d.setProperty("cssClass", "muted")
+
+            row_layout.addWidget(t)
+            row_layout.addWidget(d)
+            layout.addWidget(row)
+
+        return card
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._apply_responsive_layout(event.size().width())
+
+    def _apply_responsive_layout(self, width: int) -> None:
+        if width < 1300:
+            self._mode_cards_layout.setDirection(QBoxLayout.TopToBottom)
+        else:
+            self._mode_cards_layout.setDirection(QBoxLayout.LeftToRight)

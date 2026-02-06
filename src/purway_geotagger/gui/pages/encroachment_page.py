@@ -58,12 +58,17 @@ class EncroachmentPage(QWidget):
 
         nav_container = QWidget()
         nav_layout = QHBoxLayout(nav_container)
+        self._nav_layout = nav_layout
         nav_layout.setContentsMargins(40, 16, 40, 0)
         nav_layout.setSpacing(8)
         self.nav_row = StickyNavRow()
         self.nav_row.back_requested.connect(self.back_requested.emit)
         self.nav_row.home_requested.connect(self.home_requested.emit)
-        nav_layout.addWidget(self.nav_row)
+        self.nav_context = QLabel("Run / Encroachment")
+        self.nav_context.setProperty("cssClass", "breadcrumb")
+        nav_layout.addWidget(self.nav_row, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        nav_layout.addWidget(self.nav_context, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        nav_layout.addStretch(1)
         main_layout.addWidget(nav_container)
 
         # Scroll Area
@@ -76,6 +81,7 @@ class EncroachmentPage(QWidget):
         self.content_layout.setSpacing(24)
         scroll.setWidget(content_widget)
         main_layout.addWidget(scroll)
+        self._apply_responsive_spacing(self.width())
 
         title = QLabel("Encroachment Reports Only")
         title.setProperty("cssClass", "h1")
@@ -253,6 +259,25 @@ class EncroachmentPage(QWidget):
 
         self._refresh_templates()
         self.refresh_summary()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._apply_responsive_spacing(event.size().width())
+
+    def _apply_responsive_spacing(self, width: int) -> None:
+        # CHG-007: align nav/content rhythm across common macOS laptop widths.
+        if width >= 1500:
+            side, nav_top, content_top, content_bottom, gap = 48, 16, 34, 32, 24
+        elif width >= 1200:
+            side, nav_top, content_top, content_bottom, gap = 36, 14, 28, 28, 22
+        elif width >= 1000:
+            side, nav_top, content_top, content_bottom, gap = 28, 12, 22, 24, 20
+        else:
+            side, nav_top, content_top, content_bottom, gap = 20, 10, 18, 20, 18
+        self._nav_layout.setContentsMargins(side, nav_top, side, 0)
+        self.content_layout.setContentsMargins(side, content_top, side, content_bottom)
+        self.content_layout.setSpacing(gap)
+        self.nav_context.setVisible(width >= 980)
 
     def refresh_summary(self) -> None:
         self.inputs_list.clear()

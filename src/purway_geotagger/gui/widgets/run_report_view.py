@@ -251,6 +251,11 @@ class RunReportDialog(QDialog):
                 "CSV",
                 "Join",
             ])
+            table.setProperty("cssClass", "outputs_table")
+            table.setEditTriggers(QTableWidget.NoEditTriggers)
+            table.setSelectionBehavior(QTableWidget.SelectRows)
+            table.setAlternatingRowColors(True)
+            table.verticalHeader().setVisible(False)
             for row_idx, row in enumerate(failures):
                 table.setItem(row_idx, 0, QTableWidgetItem(row.get("source_path", "")))
                 table.setItem(row_idx, 1, QTableWidgetItem(row.get("output_path", "")))

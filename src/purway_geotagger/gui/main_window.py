@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 import shutil
 import os
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Slot, QSortFilterProxyModel
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QCheckBox, QSpinBox, QLineEdit, QProgressBar, QTableView,
-    QMessageBox, QComboBox, QTabWidget, QGroupBox, QListWidget, QToolButton,
-    QStyle, QApplication, QStackedWidget, QButtonGroup, QSizePolicy
+    QMessageBox, QComboBox, QListWidget, QToolButton,
+    QStyle, QApplication, QStackedWidget, QButtonGroup, QFrame,
+    QSplitter, QFormLayout, QHeaderView, QMenu
 )
 
 
@@ -20,6 +22,7 @@ from purway_geotagger.core.utils import resource_path
 from purway_geotagger.core.modes import RunMode
 from purway_geotagger.gui.widgets.drop_zone import DropZone
 from purway_geotagger.gui.models.job_table_model import JobTableModel
+from purway_geotagger.gui.models.jobs_filter_proxy_model import JobsFilterProxyModel
 from purway_geotagger.gui.controllers import JobController
 from purway_geotagger.gui.mode_state import ModeState
 from purway_geotagger.gui.pages.home_page import HomePage
@@ -73,7 +76,6 @@ class MainWindow(QMainWindow):
         # ----- Header with Inline Nav -----
         header_widget = QWidget()
         header_widget.setObjectName("mainHeader")
-        header_widget.setStyleSheet("#mainHeader { background-color: palette(window); border-bottom: 1px solid palette(mid); }")
         header_layout = QHBoxLayout(header_widget)
         header_layout.setContentsMargins(24, 12, 24, 12)
         header_layout.setSpacing(24)
@@ -122,8 +124,6 @@ class MainWindow(QMainWindow):
         # 4. Version / Status
         self.version_label = QLabel("v1.0.0")
         self.version_label.setProperty("cssClass", "subtitle")
-        # Add right margin to separate from buttons
-        self.version_label.setStyleSheet("margin-right: 8px;")
         header_layout.addWidget(self.version_label, alignment=Qt.AlignmentFlag.AlignVCenter)
 
         # 5. Settings Button
@@ -205,39 +205,177 @@ class MainWindow(QMainWindow):
         jobs_tab = QWidget()
         jobs_layout = QVBoxLayout(jobs_tab)
         jobs_layout.setContentsMargins(20, 20, 20, 20)
+        jobs_layout.setSpacing(12)
         self.main_stack.addWidget(jobs_tab)
 
-        self.table = QTableView()
+        jobs_intro = QFrame()
+        jobs_intro.setProperty("cssClass", "card")
+        jobs_intro_layout = QVBoxLayout(jobs_intro)
+        jobs_intro_layout.setContentsMargins(16, 16, 16, 16)
+        jobs_intro_layout.setSpacing(10)
+        jobs_title = QLabel("Recent Jobs")
+        jobs_title.setProperty("cssClass", "h2")
+        jobs_subtitle = QLabel("Simple view by default. Use filters and toggles for deeper diagnostics.")
+        jobs_subtitle.setProperty("cssClass", "subtitle")
+        jobs_subtitle.setWordWrap(True)
+        jobs_intro_layout.addWidget(jobs_title)
+        jobs_intro_layout.addWidget(jobs_subtitle)
 
-        self.model = JobTableModel(self.controller)
-        self.table.setModel(self.model)
+        controls_row = QHBoxLayout()
+        controls_row.setSpacing(8)
+        self.jobs_status_group = QButtonGroup(self)
+        self.jobs_status_group.setExclusive(True)
+        self._jobs_filter_keys: dict[QToolButton, str] = {}
+
+        def _make_filter_chip(text: str, key: str, checked: bool = False) -> QToolButton:
+            btn = QToolButton()
+            btn.setText(text)
+            btn.setCheckable(True)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setProperty("cssClass", "chip")
+            btn.setAutoRaise(False)
+            btn.setChecked(checked)
+            self.jobs_status_group.addButton(btn)
+            self._jobs_filter_keys[btn] = key
+            return btn
+
+        controls_row.addWidget(_make_filter_chip("All", "all", checked=True))
+        controls_row.addWidget(_make_filter_chip("Running", "running"))
+        controls_row.addWidget(_make_filter_chip("Failed", "failed"))
+        controls_row.addWidget(_make_filter_chip("Completed", "completed"))
+
+        self.jobs_search_edit = QLineEdit()
+        self.jobs_search_edit.setPlaceholderText("Search job name, mode, path, or message")
+        controls_row.addWidget(self.jobs_search_edit, 1)
+
+        self.jobs_show_all_chk = QCheckBox("Show all history")
+        controls_row.addWidget(self.jobs_show_all_chk)
+        self.jobs_advanced_chk = QCheckBox("Show advanced columns")
+        controls_row.addWidget(self.jobs_advanced_chk)
+        self.jobs_details_toggle = QCheckBox("Show details panel")
+        controls_row.addWidget(self.jobs_details_toggle)
+        jobs_intro_layout.addLayout(controls_row)
+        jobs_layout.addWidget(jobs_intro)
+
+        jobs_splitter = QSplitter(Qt.Horizontal)
+        jobs_splitter.setChildrenCollapsible(False)
+
+        jobs_left = QWidget()
+        jobs_left_layout = QVBoxLayout(jobs_left)
+        jobs_left_layout.setContentsMargins(0, 0, 0, 0)
+        jobs_left_layout.setSpacing(8)
+
+        self.table = QTableView()
+        self.table.setAlternatingRowColors(True)
         self.table.setSelectionBehavior(QTableView.SelectRows)
         self.table.setSelectionMode(QTableView.SingleSelection)
-        jobs_layout.addWidget(self.table, 1)
+        self.table.setSortingEnabled(True)
+        self.table.setEditTriggers(QTableView.NoEditTriggers)
+        self.table.horizontalHeader().setSectionsMovable(False)
+        self.table.horizontalHeader().setStretchLastSection(False)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+
+        self.model = JobTableModel(self.controller)
+        self.jobs_proxy = JobsFilterProxyModel(self)
+        self.jobs_proxy.setSourceModel(self.model)
+        self.jobs_proxy.set_recent_limit(20)
+        self.table.setModel(self.jobs_proxy)
+        self.table.sortByColumn(0, Qt.DescendingOrder)
         self.table.selectionModel().selectionChanged.connect(self._update_action_buttons)
+        jobs_left_layout.addWidget(self.table, 1)
+
+        self.jobs_empty_label = QLabel("No jobs yet. Start a run from the Run tab.")
+        self.jobs_empty_label.setProperty("cssClass", "muted")
+        self.jobs_empty_label.setVisible(False)
+        jobs_left_layout.addWidget(self.jobs_empty_label)
 
         act_row = QHBoxLayout()
-        self.cancel_btn = QPushButton("Cancel selected job")
-        self.cancel_btn.clicked.connect(self._cancel_selected)
-        self.cancel_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogCancelButton))
-        self.open_out_btn = QPushButton("Open output folder")
-        self.open_out_btn.clicked.connect(self._open_selected_output)
-        self.open_out_btn.setIcon(self.style().standardIcon(QStyle.SP_DirOpenIcon))
-        self.rerun_failed_btn = QPushButton("Re-run failed only")
-        self.rerun_failed_btn.clicked.connect(self._rerun_failed)
-        self.rerun_failed_btn.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
-        self.export_manifest_btn = QPushButton("Export manifest.csv")
-        self.export_manifest_btn.clicked.connect(self._export_selected_manifest)
-        self.export_manifest_btn.setIcon(self.style().standardIcon(QStyle.SP_DialogSaveButton))
-        self.view_report_btn = QPushButton("View run report")
+        act_row.setSpacing(8)
+        self.view_report_btn = QPushButton("View Report")
         self.view_report_btn.clicked.connect(self._view_selected_report)
-        self.view_report_btn.setIcon(self.style().standardIcon(QStyle.SP_FileDialogInfoView))
-        act_row.addWidget(self.cancel_btn)
-        act_row.addWidget(self.open_out_btn)
-        act_row.addWidget(self.rerun_failed_btn)
-        act_row.addWidget(self.export_manifest_btn)
+        self.view_report_btn.setProperty("cssClass", "primary")
+        self.open_out_btn = QPushButton("Open Output")
+        self.open_out_btn.clicked.connect(self._open_selected_output)
+        self.open_out_btn.setProperty("cssClass", "open_file")
+        self.jobs_more_btn = QToolButton()
+        self.jobs_more_btn.setText("More")
+        self.jobs_more_btn.setPopupMode(QToolButton.InstantPopup)
+        self.jobs_more_btn.setCursor(Qt.PointingHandCursor)
+        self.jobs_more_btn.setProperty("cssClass", "chip")
+        self.jobs_more_menu = QMenu(self.jobs_more_btn)
+        self.cancel_action = self.jobs_more_menu.addAction("Cancel selected job")
+        self.cancel_action.triggered.connect(self._cancel_selected)
+        self.rerun_failed_action = self.jobs_more_menu.addAction("Re-run failed only")
+        self.rerun_failed_action.triggered.connect(self._rerun_failed)
+        self.export_manifest_action = self.jobs_more_menu.addAction("Export manifest.csv")
+        self.export_manifest_action.triggered.connect(self._export_selected_manifest)
+        self.jobs_more_btn.setMenu(self.jobs_more_menu)
+
         act_row.addWidget(self.view_report_btn)
-        jobs_layout.addLayout(act_row)
+        act_row.addWidget(self.open_out_btn)
+        act_row.addWidget(self.jobs_more_btn)
+        act_row.addStretch(1)
+        jobs_left_layout.addLayout(act_row)
+        jobs_splitter.addWidget(jobs_left)
+
+        self.jobs_detail_panel = QFrame()
+        self.jobs_detail_panel.setProperty("cssClass", "card")
+        jobs_detail_layout = QVBoxLayout(self.jobs_detail_panel)
+        jobs_detail_layout.setContentsMargins(16, 16, 16, 16)
+        jobs_detail_layout.setSpacing(12)
+        detail_title = QLabel("Job Details")
+        detail_title.setProperty("cssClass", "label_strong")
+        jobs_detail_layout.addWidget(detail_title)
+        self.jobs_detail_status_badge = QLabel("No selection")
+        self.jobs_detail_status_badge.setProperty("cssClass", "status_badge")
+        self.jobs_detail_status_badge.setProperty("status", "idle")
+        jobs_detail_layout.addWidget(self.jobs_detail_status_badge, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.jobs_detail_hint = QLabel("Select a job to view detailed metrics.")
+        self.jobs_detail_hint.setWordWrap(True)
+        self.jobs_detail_hint.setProperty("cssClass", "muted")
+        jobs_detail_layout.addWidget(self.jobs_detail_hint)
+        form = QFormLayout()
+        form.setHorizontalSpacing(10)
+        form.setVerticalSpacing(8)
+        self.jobs_detail_values: dict[str, QLabel] = {}
+        for key, label in (
+            ("name", "Job"),
+            ("started", "Started"),
+            ("mode", "Mode"),
+            ("progress", "Progress"),
+            ("inputs", "Inputs"),
+            ("scanned", "Scanned"),
+            ("matched", "Matched"),
+            ("success", "Success"),
+            ("failed", "Failed"),
+            ("output", "Output Folder"),
+            ("message", "Message"),
+        ):
+            value = QLabel("—")
+            value.setWordWrap(True)
+            value.setProperty("cssClass", "subtitle")
+            self.jobs_detail_values[key] = value
+            form.addRow(label + ":", value)
+        jobs_detail_layout.addLayout(form)
+        jobs_detail_layout.addStretch(1)
+        self.jobs_detail_panel.setVisible(False)
+        jobs_splitter.addWidget(self.jobs_detail_panel)
+        jobs_splitter.setStretchFactor(0, 4)
+        jobs_splitter.setStretchFactor(1, 2)
+
+        jobs_layout.addWidget(jobs_splitter, 1)
+
+        self.jobs_status_group.buttonClicked.connect(self._on_jobs_status_filter_changed)
+        self.jobs_search_edit.textChanged.connect(self._on_jobs_search_changed)
+        self.jobs_show_all_chk.toggled.connect(self._on_jobs_show_all_toggled)
+        self.jobs_advanced_chk.toggled.connect(self._on_jobs_advanced_toggled)
+        self.jobs_details_toggle.toggled.connect(self._set_jobs_details_visible)
+        self._on_jobs_advanced_toggled(False)
 
         # ----- Tab 3: Templates -----
         templates_tab = QWidget()
@@ -270,6 +408,8 @@ class MainWindow(QMainWindow):
 
 
         self._refresh_templates()
+        self._update_jobs_empty_state()
+        self._update_action_buttons()
         self._update_inputs_state()
 
     def _on_mode_selected(self, mode: RunMode) -> None:
@@ -374,7 +514,11 @@ class MainWindow(QMainWindow):
         sel = self.table.selectionModel().selectedRows()
         if not sel:
             return None
-        row = sel[0].row()
+        idx = sel[0]
+        model = self.table.model()
+        if isinstance(model, QSortFilterProxyModel):
+            idx = model.mapToSource(idx)
+        row = idx.row()
         if row < 0 or row >= len(self.controller.jobs):
             return None
         return self.controller.jobs[row]
@@ -392,7 +536,10 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_jobs_changed(self) -> None:
         self.model.layoutChanged.emit()
+        if hasattr(self, "jobs_proxy"):
+            self.jobs_proxy.invalidate()
         self._update_action_buttons()
+        self._update_jobs_empty_state()
 
     def _open_settings(self) -> None:
         dlg = SettingsDialog(self.settings, parent=self)
@@ -451,22 +598,131 @@ class MainWindow(QMainWindow):
     def _update_action_buttons(self) -> None:
         job = self._selected_job()
         if not job:
-            self.cancel_btn.setEnabled(False)
-            self.open_out_btn.setEnabled(False)
-            self.export_manifest_btn.setEnabled(False)
-            self.rerun_failed_btn.setEnabled(False)
             self.view_report_btn.setEnabled(False)
+            self.open_out_btn.setEnabled(False)
+            self.cancel_action.setEnabled(False)
+            self.export_manifest_action.setEnabled(False)
+            self.rerun_failed_action.setEnabled(False)
+            self._update_jobs_detail_panel(None)
             return
         stage = job.state.stage
         can_cancel = stage not in ("DONE", "FAILED", "CANCELLED")
-        self.cancel_btn.setEnabled(can_cancel)
+        self.cancel_action.setEnabled(can_cancel)
 
         has_run_folder = job.run_folder is not None
         manifest = self.controller.export_manifest_path(job)
-        self.open_out_btn.setEnabled(has_run_folder)
-        self.export_manifest_btn.setEnabled(manifest is not None)
-        self.rerun_failed_btn.setEnabled(manifest is not None)
         self.view_report_btn.setEnabled(has_run_folder)
+        self.open_out_btn.setEnabled(has_run_folder)
+        self.export_manifest_action.setEnabled(manifest is not None)
+        self.rerun_failed_action.setEnabled(manifest is not None)
+        self._update_jobs_detail_panel(job)
+
+    def _on_jobs_status_filter_changed(self, _btn: QToolButton) -> None:
+        btn = self.jobs_status_group.checkedButton()
+        key = self._jobs_filter_keys.get(btn, "all") if btn else "all"
+        self.jobs_proxy.set_status_filter(key)
+        self._update_jobs_empty_state()
+        self._update_action_buttons()
+
+    def _on_jobs_search_changed(self, text: str) -> None:
+        self.jobs_proxy.set_search_text(text)
+        self._update_jobs_empty_state()
+        self._update_action_buttons()
+
+    def _on_jobs_show_all_toggled(self, enabled: bool) -> None:
+        self.jobs_proxy.set_show_all_history(enabled)
+        self._update_jobs_empty_state()
+        self._update_action_buttons()
+
+    def _on_jobs_advanced_toggled(self, enabled: bool) -> None:
+        basic_columns = {0, 1, 2, 3, 4, 5}
+        for col in range(self.model.columnCount()):
+            self.table.setColumnHidden(col, not (enabled or col in basic_columns))
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+        self.table.resizeColumnsToContents()
+
+    def _set_jobs_details_visible(self, enabled: bool) -> None:
+        self.jobs_detail_panel.setVisible(enabled)
+        if enabled:
+            self._update_jobs_detail_panel(self._selected_job())
+
+    def _update_jobs_empty_state(self) -> None:
+        if not self.controller.jobs:
+            self.jobs_empty_label.setText("No jobs yet. Start a run from the Run tab.")
+            self.jobs_empty_label.setVisible(True)
+            return
+        if self.jobs_proxy.rowCount() == 0:
+            self.jobs_empty_label.setText("No jobs match the current filters.")
+            self.jobs_empty_label.setVisible(True)
+            return
+        self.jobs_empty_label.setVisible(False)
+
+    def _update_jobs_detail_panel(self, job) -> None:
+        if not self.jobs_detail_panel.isVisible():
+            return
+        if job is None:
+            self.jobs_detail_status_badge.setText("No selection")
+            self.jobs_detail_status_badge.setProperty("status", "idle")
+            self.jobs_detail_hint.setVisible(True)
+            for value in self.jobs_detail_values.values():
+                value.setText("—")
+            self._refresh_jobs_badge_style()
+            return
+
+        st = job.state
+        stage = (st.stage or "").upper()
+        stage_text, stage_key = {
+            "DONE": ("Completed", "done"),
+            "FAILED": ("Failed", "failed"),
+            "CANCELLED": ("Cancelled", "cancelled"),
+            "QUEUED": ("Queued", "queued"),
+            "PENDING": ("Pending", "queued"),
+        }.get(stage, (st.stage.title() if st.stage else "Running", "running"))
+        self.jobs_detail_status_badge.setText(stage_text)
+        self.jobs_detail_status_badge.setProperty("status", stage_key)
+        self.jobs_detail_hint.setVisible(False)
+
+        self.jobs_detail_values["name"].setText(job.name)
+        self.jobs_detail_values["started"].setText(self._job_started_label(job))
+        self.jobs_detail_values["mode"].setText(self._job_mode_label(job))
+        self.jobs_detail_values["progress"].setText(f"{max(0, int(st.progress))}%")
+        self.jobs_detail_values["inputs"].setText(str(len(job.inputs)))
+        self.jobs_detail_values["scanned"].setText(f"{st.scanned_photos} photos / {st.scanned_csvs} CSVs")
+        self.jobs_detail_values["matched"].setText(str(st.matched))
+        self.jobs_detail_values["success"].setText(str(st.success))
+        self.jobs_detail_values["failed"].setText(str(st.failed))
+        self.jobs_detail_values["output"].setText(str(job.run_folder or ""))
+        self.jobs_detail_values["message"].setText(st.message or "—")
+        self._refresh_jobs_badge_style()
+
+    def _refresh_jobs_badge_style(self) -> None:
+        self.jobs_detail_status_badge.style().unpolish(self.jobs_detail_status_badge)
+        self.jobs_detail_status_badge.style().polish(self.jobs_detail_status_badge)
+        self.jobs_detail_status_badge.update()
+
+    def _job_mode_label(self, job) -> str:
+        mode = getattr(job.options, "run_mode", None)
+        if mode is None:
+            return "Custom"
+        return {
+            "methane": "Methane",
+            "encroachment": "Encroachment",
+            "combined": "Combined",
+        }.get(mode.value, mode.value.title())
+
+    def _job_started_label(self, job) -> str:
+        if not job.run_folder:
+            return "—"
+        name = job.run_folder.name
+        prefix = "PurwayGeotagger_"
+        if not name.startswith(prefix):
+            return "—"
+        stamp = name[len(prefix):]
+        try:
+            dt = datetime.strptime(stamp, "%Y%m%d_%H%M%S")
+        except ValueError:
+            return "—"
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
 
     def _view_selected_report(self) -> None:
         job = self._selected_job()
