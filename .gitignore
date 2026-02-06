@@ -51,3 +51,8 @@ _exiftool_import.csv
 run_log.txt
 run_config.json
 manifest.csv
+
+# Apple signing / notarization secrets (never commit)
+apple_dev/new_keys/
+*.p8
+*.p12
