@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 import json
 from typing import Any
@@ -20,10 +20,13 @@ class MethaneOutputSummary:
     cleaned_status: str
     cleaned_rows: int
     cleaned_error: str
-    kmz: str | None
-    kmz_status: str
-    kmz_rows: int
-    kmz_error: str
+    missing_photo_rows: int = 0
+    missing_photo_names: list[str] = field(default_factory=list)
+    photo_col_missing: bool = False
+    kmz: str | None = None
+    kmz_status: str = "skipped"
+    kmz_rows: int = 0
+    kmz_error: str = ""
 
 
 @dataclass

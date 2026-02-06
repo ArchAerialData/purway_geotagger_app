@@ -75,13 +75,6 @@ Integrate the standalone **Auto Image Overlay** tool into Purway Geotagger as a 
 - Any edge cases for `file_name` mapping
 - Definitions for `status`, `err_code`, `flight_status`, `dis_code`
 
-## Next Actions Upon Vendor Reply
-1. Add the provided camera intrinsics + distortion into a **camera profile** JSON under `src/purway_geotagger/overlay/profiles/`.
-2. Update the Overlay tab defaults to the new CH‑4 Model III profile.
-3. If zoom is confirmed digital, keep the **effective focal multiplier** behavior; if optical, apply zoom as true focal change.
-4. Update CSV parsing if Purway confirms different units / sign conventions.
-5. Re-run a small overlay test set and document results in the Phase Notes.
-
 ## Option Differences (Quality & Accuracy)
 ### 1) Quad KMZ (no GDAL required)
 - **How it works**: Builds a single ground quad using the four image corners computed from camera model. Writes a single KMZ per JPG with the image embedded.

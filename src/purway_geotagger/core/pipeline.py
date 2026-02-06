@@ -344,6 +344,16 @@ def _log_methane_results(
     for r in results:
         if r.cleaned_status == "failed":
             logger.log(f"Cleaned CSV failed for {r.source_csv}: {r.cleaned_error}")
+        if r.photo_col_missing and r.cleaned_status == "success":
+            logger.log(
+                f"{r.source_csv}: photo filename column missing; used PPM-only filtering."
+            )
+        if r.missing_photo_rows:
+            sample = ", ".join(r.missing_photo_names[:5])
+            extra = f" Sample: {sample}" if sample else ""
+            logger.log(
+                f"{r.source_csv}: skipped {r.missing_photo_rows} rows (no matching JPG).{extra}"
+            )
         if r.kmz_status == "failed":
             logger.log(f"KMZ failed for {r.source_csv}: {r.kmz_error}")
 
@@ -410,6 +420,9 @@ def _build_run_summary(
             cleaned_status=r.cleaned_status,
             cleaned_rows=r.cleaned_rows,
             cleaned_error=r.cleaned_error,
+            missing_photo_rows=r.missing_photo_rows,
+            missing_photo_names=r.missing_photo_names,
+            photo_col_missing=r.photo_col_missing,
             kmz=str(r.kmz) if r.kmz else None,
             kmz_status=r.kmz_status,
             kmz_rows=r.kmz_rows,

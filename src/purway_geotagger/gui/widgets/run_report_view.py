@@ -4,7 +4,8 @@ from pathlib import Path
 import csv
 import json
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QGroupBox, QTableWidget, QTableWidgetItem,
     QTextEdit, QPushButton, QHBoxLayout
@@ -64,11 +65,42 @@ def format_run_summary(summary: dict | None) -> str:
             cleaned_status = out.get("cleaned_status", "unknown")
             cleaned_rows = out.get("cleaned_rows", 0)
             kmz_status = out.get("kmz_status", "unknown")
+            extras = []
+            if out.get("photo_col_missing"):
+                extras.append("photo column missing → PPM-only")
+            missing_rows = out.get("missing_photo_rows", 0)
+            if missing_rows:
+                extras.append(f"missing JPG rows: {missing_rows}")
+            extra_txt = f" — {', '.join(extras)}" if extras else ""
             lines.append(
-                f"• {name}: Cleaned {cleaned_status} ({cleaned_rows} rows), KMZ {kmz_status}"
+                f"• {name}: Cleaned {cleaned_status} ({cleaned_rows} rows), KMZ {kmz_status}{extra_txt}"
             )
 
     return "<br/>".join(lines)
+
+
+def collect_output_files(summary: dict | None) -> list[dict[str, str]]:
+    if not summary:
+        return []
+    outputs: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def _add(kind: str, path: str | None) -> None:
+        if not path:
+            return
+        if path in seen:
+            return
+        seen.add(path)
+        outputs.append({"type": kind, "path": path})
+
+    for out in summary.get("methane_outputs", []):
+        _add("Cleaned CSV", out.get("cleaned_csv"))
+        _add("KMZ", out.get("kmz"))
+
+    settings = summary.get("settings", {})
+    _add("Output folder", settings.get("output_photos_root"))
+    _add("Encroachment output folder", settings.get("encroachment_output_base"))
+    return outputs
 
 
 class RunReportDialog(QDialog):
@@ -90,6 +122,33 @@ class RunReportDialog(QDialog):
         summary_label.setTextFormat(Qt.RichText)
         summary_layout.addWidget(summary_label)
         layout.addWidget(summary_group)
+
+        outputs_group = QGroupBox("Outputs")
+        outputs_layout = QVBoxLayout(outputs_group)
+        outputs = collect_output_files(summary)
+        if not outputs:
+            outputs_layout.addWidget(QLabel("No outputs recorded."))
+        else:
+            table = QTableWidget(len(outputs), 3)
+            table.setHorizontalHeaderLabels(["Type", "Path", "Action"])
+            table.setEditTriggers(QTableWidget.NoEditTriggers)
+            for row_idx, row in enumerate(outputs):
+                path = row.get("path", "")
+                table.setItem(row_idx, 0, QTableWidgetItem(row.get("type", "")))
+                path_item = QTableWidgetItem(path)
+                path_item.setToolTip(path)
+                table.setItem(row_idx, 1, path_item)
+                btn = QPushButton("Open")
+                target = Path(path)
+                if not target.exists():
+                    btn.setEnabled(False)
+                    btn.setToolTip("File or folder not found.")
+                btn.clicked.connect(lambda _checked=False, p=target: self._open_path(p))
+                table.setCellWidget(row_idx, 2, btn)
+            table.resizeColumnsToContents()
+            table.horizontalHeader().setStretchLastSection(True)
+            outputs_layout.addWidget(table)
+        layout.addWidget(outputs_group)
 
         failure_group = QGroupBox("Failures")
         failure_layout = QVBoxLayout(failure_group)
@@ -147,3 +206,8 @@ class RunReportDialog(QDialog):
 
     def _toggle_log(self, checked: bool) -> None:
         self.log_view.setVisible(checked)
+
+    def _open_path(self, path: Path) -> None:
+        if not path.exists():
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))

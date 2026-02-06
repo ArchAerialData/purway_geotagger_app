@@ -18,6 +18,8 @@ def get_theme_colors(theme: str) -> dict[str, str]:
             "primary_pressed": "#0071E3",
             "error": "#FF453A",
             "success": "#32D74B",
+            "success_hover": "#4AE168",
+            "success_pressed": "#28C840",
             "border": "#38383A",
             "dropzone_bg": "rgba(44, 44, 46, 0.6)",
             "dropzone_border": "#48484A",
@@ -39,6 +41,8 @@ def get_theme_colors(theme: str) -> dict[str, str]:
             "primary_pressed": "#0051A8",
             "error": "#FF3B30",
             "success": "#34C759",
+            "success_hover": "#2DB84F",
+            "success_pressed": "#28A745",
             "border": "#E5E5EA",
             "dropzone_bg": "rgba(255, 255, 255, 0.6)",
             "dropzone_border": "#C7C7CC",
@@ -223,6 +227,33 @@ def get_stylesheet(theme: str) -> str:
         color: {c['text_secondary']};
     }}
 
+    /* Run/Go Button (Green) */
+    QPushButton[cssClass="run"] {{
+        background-color: {c['success']};
+        color: {c['text_inverted']};
+        border: 1px solid {c['success']};
+        font-weight: 600;
+        font-size: 14px;
+        padding: 8px 20px;
+        border-radius: 8px;
+    }}
+
+    QPushButton[cssClass="run"]:hover {{
+        background-color: {c['success_hover']};
+        border-color: {c['success_hover']};
+    }}
+
+    QPushButton[cssClass="run"]:pressed {{
+        background-color: {c['success_pressed']};
+        border-color: {c['success_pressed']};
+    }}
+
+    QPushButton[cssClass="run"]:disabled {{
+        background-color: {c['border']};
+        border-color: {c['border']};
+        color: {c['text_secondary']};
+    }}
+
     /* Ghost/Text Button */
     QPushButton[cssClass="ghost"] {{
         background-color: transparent;
@@ -255,6 +286,20 @@ def get_stylesheet(theme: str) -> str:
         color: {c['primary']};
     }}
 
+    /* Sticky Nav Buttons */
+    QToolButton[cssClass="sticky_nav"] {{
+        background-color: transparent;
+        border: 1px solid {c['border']};
+        border-radius: 6px;
+        padding: 4px 10px;
+        color: {c['text_primary']};
+    }}
+
+    QToolButton[cssClass="sticky_nav"]:hover {{
+        background-color: {c['nav_hover']};
+        border-color: {c['text_secondary']};
+    }}
+
     /* --- Inputs --- */
     QLineEdit, QSpinBox, QComboBox {{
         background-color: {c['input_bg']};
@@ -268,6 +313,24 @@ def get_stylesheet(theme: str) -> str:
     
     QLineEdit:focus, QSpinBox:focus, QComboBox:focus {{
         border: 1px solid {c['primary']};
+    }}
+
+    /* --- Checkboxes --- */
+    QCheckBox::indicator:unchecked {{
+        width: 16px;
+        height: 16px;
+        border-radius: 3px;
+        border: 1px solid {c['input_border']};
+        background-color: {c['surface_bg']};
+    }}
+
+    QCheckBox::indicator:unchecked:hover {{
+        border: 1px solid {c['primary']};
+    }}
+
+    QCheckBox::indicator:unchecked:disabled {{
+        border: 1px solid {c['border']};
+        background-color: {c['window_bg']};
     }}
     
     /* --- Lists --- */

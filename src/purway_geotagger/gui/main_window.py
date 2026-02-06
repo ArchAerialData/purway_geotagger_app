@@ -170,8 +170,13 @@ class MainWindow(QMainWindow):
         self.combined_page = CombinedWizard(self._mode_states[RunMode.COMBINED], self.controller)
 
         self.methane_page.back_requested.connect(self._show_home)
+        self.methane_page.home_requested.connect(self._show_home)
+        self.methane_page.run_another_requested.connect(self._reset_all_modes_and_home)
         self.encroachment_page.back_requested.connect(self._show_home)
-        self.combined_page.back_requested.connect(self._show_home)
+        self.encroachment_page.home_requested.connect(self._show_home)
+        self.encroachment_page.run_another_requested.connect(self._reset_all_modes_and_home)
+        self.combined_page.home_requested.connect(self._show_home)
+        self.combined_page.run_another_requested.connect(self._reset_all_modes_and_home)
 
         self.run_stack.addWidget(self.home_page)
         self.run_stack.addWidget(self.methane_page)
@@ -281,6 +286,14 @@ class MainWindow(QMainWindow):
     def _show_home(self) -> None:
         self.run_stack.setCurrentWidget(self.home_page)
         self.home_page.set_last_mode(self._last_mode)
+
+    def _reset_all_modes_and_home(self) -> None:
+        self.methane_page.reset_for_new_run()
+        self.encroachment_page.reset_for_new_run()
+        self.combined_page.reset_for_new_run()
+        self.progress.setVisible(False)
+        self.progress.setValue(0)
+        self._show_home()
 
     def _set_last_mode(self, mode: RunMode) -> None:
         self._last_mode = mode
