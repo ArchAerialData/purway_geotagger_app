@@ -93,11 +93,16 @@ class CombinedWizard(QWidget):
         self.prev_btn = QPushButton("Back")
         self.prev_btn.setCursor(Qt.PointingHandCursor)
         self.prev_btn.clicked.connect(self._go_prev)
+        self.view_outputs_btn = QPushButton("View output files…")
+        self.view_outputs_btn.setVisible(False)
+        self.view_outputs_btn.setEnabled(False)
+        self.view_outputs_btn.clicked.connect(self._view_outputs)
         self.next_btn = QPushButton("Next")
         self.next_btn.setProperty("cssClass", "primary")
         self.next_btn.setCursor(Qt.PointingHandCursor)
         self.next_btn.clicked.connect(self._go_next)
         nav.addWidget(self.prev_btn)
+        nav.addWidget(self.view_outputs_btn)
         nav.addStretch(1)
         self.run_another_btn = QPushButton("Run another folder")
         self.run_another_btn.setVisible(False)
@@ -566,13 +571,12 @@ class CombinedWizard(QWidget):
             return
 
         self.run_another_btn.setVisible(False)
-        confirm = QMessageBox.question(
-            self,
-            "Confirm combined run",
+        self.view_outputs_btn.setVisible(False)
+        if not self._confirm_run(
             "Combined mode writes EXIF metadata in-place for methane inputs and copies encroachment photos.\n\nContinue?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        if confirm != QMessageBox.Yes:
+            "confirm_combined",
+            "Confirm combined run",
+        ):
             return
 
         progress_bar = self.window().progress if hasattr(self.window(), "progress") else None
@@ -593,6 +597,7 @@ class CombinedWizard(QWidget):
             return
         if self._last_run_folder is None:
             self._last_run_folder = job.run_folder
+            self._update_view_outputs_button()
         if job.state.stage != self._last_job_stage:
             self._last_job_stage = job.state.stage
         if job.state.stage in ("DONE", "FAILED", "CANCELLED"):
@@ -600,13 +605,20 @@ class CombinedWizard(QWidget):
             self.prev_btn.setEnabled(True)
             if job.state.stage == "DONE":
                 self.status_label.setText("Completed successfully.")
+                self.view_outputs_btn.setVisible(True)
+                self._update_view_outputs_button()
                 self.run_another_btn.setVisible(True)
             elif job.state.stage == "CANCELLED":
                 self.status_label.setText("Cancelled.")
+                self.view_outputs_btn.setVisible(True)
+                self._update_view_outputs_button()
+                self.run_another_btn.setVisible(True)
             else:
                 msg = job.state.message or "Job failed."
                 self.status_label.setText(f"Failed: {msg}")
                 self._show_failure_popup(msg)
+                self.view_outputs_btn.setVisible(True)
+                self._update_view_outputs_button()
                 self.run_another_btn.setVisible(True)
 
     def reset_for_new_run(self) -> None:
@@ -615,6 +627,7 @@ class CombinedWizard(QWidget):
         self._last_job_stage = None
         self.status_label.setText("")
         self.run_another_btn.setVisible(False)
+        self.view_outputs_btn.setVisible(False)
         self._output_auto = True
         self.state.inputs = []
         self.state.methane_threshold = 1000
@@ -628,6 +641,7 @@ class CombinedWizard(QWidget):
         self.stack.setCurrentIndex(0)
         self.refresh_summary()
         self._update_step_ui()
+        self._update_view_outputs_button()
 
     def _run_another(self) -> None:
         self.run_another_requested.emit()
@@ -637,6 +651,22 @@ class CombinedWizard(QWidget):
             progress.setValue(0)
             progress.setVisible(False)
         self.home_requested.emit()
+
+    def _summary_path(self) -> Path | None:
+        if not self._last_run_folder:
+            return None
+        return self._last_run_folder / "run_summary.json"
+
+    def _update_view_outputs_button(self) -> None:
+        summary_path = self._summary_path()
+        self.view_outputs_btn.setEnabled(bool(summary_path and summary_path.exists()))
+
+    def _view_outputs(self) -> None:
+        if not self._last_run_folder:
+            QMessageBox.information(self, "Outputs not available", "Run outputs not available yet.")
+            return
+        dlg = RunReportDialog(self._last_run_folder, parent=self)
+        dlg.exec()
 
     def _show_failure_popup(self, message: str) -> None:
         if not message:
@@ -651,6 +681,26 @@ class CombinedWizard(QWidget):
         if msg.clickedButton() == view_btn and self._last_run_folder:
             dlg = RunReportDialog(self._last_run_folder, parent=self)
             dlg.exec()
+
+    def _confirm_run(self, message: str, setting_attr: str, title: str) -> bool:
+        settings = self.controller.settings
+        if not getattr(settings, setting_attr, True):
+            return True
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Question)
+        msg.setWindowTitle(title)
+        msg.setText(message)
+        checkbox = QCheckBox("Don't show again")
+        msg.setCheckBox(checkbox)
+        yes_btn = msg.addButton("Yes", QMessageBox.AcceptRole)
+        msg.addButton("No", QMessageBox.RejectRole)
+        msg.exec()
+        if msg.clickedButton() == yes_btn:
+            if checkbox.isChecked():
+                setattr(settings, setting_attr, False)
+                settings.save()
+            return True
+        return False
 
     def _on_paths_dropped(self, paths: list[str]) -> None:
         self._add_inputs([Path(p) for p in paths])

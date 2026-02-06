@@ -351,6 +351,8 @@ Header remains exactly as-is; sticky Back/Home controls live in the space direct
 - Extend RunReportDialog to include an Outputs list/table with open actions.
 - Add completion-only “View Output Files” buttons on run pages and wire them to last run folder.
 - Add completion-only “Open output folder” buttons where meaningful.
+- **Before marking Phase 4 complete:** polish the View Output Files pop‑up UI (larger window, rounded blue “Open File” buttons, and a more modern Apple‑style layout so the table doesn’t feel rigid).
+- **Before marking Phase 4 complete:** add a persistent “Don’t show again” checkbox to run confirmation dialogs (per-device setting, default = show). Each mode must store its own flag (Methane, Encroachment, Combined) so disabling one does not disable the others.
 
 ### Files
 - Modify: `src/purway_geotagger/gui/widgets/run_report_view.py`

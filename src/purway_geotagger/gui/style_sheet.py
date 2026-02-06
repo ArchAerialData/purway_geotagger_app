@@ -254,6 +254,106 @@ def get_stylesheet(theme: str) -> str:
         color: {c['text_secondary']};
     }}
 
+    /* Open File Button */
+    QPushButton[cssClass="open_file"] {{
+        background-color: {c['primary']};
+        color: {c['text_inverted']};
+        border: 1px solid {c['primary']};
+        font-weight: 600;
+        font-size: 13px;
+        padding: 0px 16px;
+        border-radius: 16px;
+        text-align: center;
+    }}
+
+    QPushButton[cssClass="open_file"]:hover {{
+        background-color: {c['primary_hover']};
+        border-color: {c['primary_hover']};
+    }}
+
+    QPushButton[cssClass="open_file"]:pressed {{
+        background-color: {c['primary_pressed']};
+        border-color: {c['primary_pressed']};
+    }}
+
+    QPushButton[cssClass="open_file"]:disabled {{
+        background-color: {c['border']};
+        border-color: {c['border']};
+        color: {c['text_secondary']};
+    }}
+
+    QToolButton[cssClass="open_file"] {{
+        background-color: {c['primary']};
+        color: {c['text_inverted']};
+        border: 1px solid {c['primary']};
+        font-weight: 600;
+        font-size: 13px;
+        padding: 0px 16px;
+        border-radius: 16px;
+        text-align: center;
+    }}
+
+    QToolButton[cssClass="open_file"]:hover {{
+        background-color: {c['primary_hover']};
+        border-color: {c['primary_hover']};
+    }}
+
+    QToolButton[cssClass="open_file"]:pressed {{
+        background-color: {c['primary_pressed']};
+        border-color: {c['primary_pressed']};
+    }}
+
+    QToolButton[cssClass="open_file"]:disabled {{
+        background-color: {c['border']};
+        border-color: {c['border']};
+        color: {c['text_secondary']};
+    }}
+
+    QWidget[cssClass="open_file_pill"] {{
+        background-color: {c['primary']};
+        border: 1px solid {c['primary']};
+        border-radius: 16px;
+    }}
+
+    QWidget[cssClass="open_file_pill"]:hover {{
+        background-color: {c['primary_hover']};
+        border-color: {c['primary_hover']};
+    }}
+
+    QWidget[cssClass="open_file_pill"]:disabled {{
+        background-color: {c['border']};
+        border-color: {c['border']};
+    }}
+
+    QLabel[cssClass="open_file_pill_label"] {{
+        color: {c['text_inverted']};
+        font-weight: 600;
+        font-size: 13px;
+    }}
+
+    QLabel[cssClass="open_file_pill_label"]:disabled {{
+        color: {c['text_secondary']};
+    }}
+
+    /* Outputs Table */
+    QTableWidget[cssClass="outputs_table"] {{
+        border: 1px solid {c['border']};
+        border-radius: 12px;
+        background-color: {c['window_bg']};
+        padding: 2px;
+    }}
+
+    QTableWidget[cssClass="outputs_table"]::item {{
+        padding: 6px 8px;
+    }}
+
+    QTableWidget[cssClass="outputs_table"] QHeaderView::section {{
+        background-color: {c['surface_bg']};
+        color: {c['text_secondary']};
+        border: none;
+        padding: 6px 8px;
+    }}
+
     /* Ghost/Text Button */
     QPushButton[cssClass="ghost"] {{
         background-color: transparent;

@@ -33,6 +33,9 @@ class AppSettings:
     exiftool_path: str = ""
     ui_theme: str = "light"
     last_mode: str = ""
+    confirm_methane: bool = True
+    confirm_encroachment: bool = True
+    confirm_combined: bool = True
 
     @classmethod
     def load(cls) -> "AppSettings":

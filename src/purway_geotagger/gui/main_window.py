@@ -53,6 +53,8 @@ class MainWindow(QMainWindow):
             RunMode.ENCROACHMENT: ModeState(mode=RunMode.ENCROACHMENT),
             RunMode.COMBINED: ModeState(mode=RunMode.COMBINED),
         }
+        for state in self._mode_states.values():
+            state.methane_generate_kmz = True
         self._last_mode = self._parse_last_mode(self.settings.last_mode)
         self._mode_pages: dict[RunMode, QWidget] = {}
 
