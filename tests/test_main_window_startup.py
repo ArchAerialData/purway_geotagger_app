@@ -67,3 +67,103 @@ win.close()
     )
     assert completed.returncode == 0, completed.stderr or completed.stdout
     assert "template_label_format_ok True" in completed.stdout
+
+
+def test_home_page_uses_clickable_mode_cards() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(repo_root / "src")
+    env["QT_QPA_PLATFORM"] = "offscreen"
+
+    script = """
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication
+from purway_geotagger.core.settings import AppSettings
+from purway_geotagger.gui.main_window import MainWindow
+
+app = QApplication([])
+win = MainWindow(AppSettings())
+cards = list(win.home_page._card_order)
+all_clickable = all(card.cursor().shape() == Qt.PointingHandCursor for card in cards)
+all_focusable = all(card.focusPolicy() == Qt.StrongFocus for card in cards)
+print("home_mode_cards", len(cards), all_clickable, all_focusable)
+win.close()
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert "home_mode_cards 4 True True" in completed.stdout
+
+
+def test_home_page_wind_card_opens_wind_tab() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(repo_root / "src")
+    env["QT_QPA_PLATFORM"] = "offscreen"
+
+    script = """
+from PySide6.QtWidgets import QApplication
+from purway_geotagger.core.settings import AppSettings
+from purway_geotagger.gui.main_window import MainWindow
+
+app = QApplication([])
+win = MainWindow(AppSettings())
+start_index = win.main_stack.currentIndex()
+win.home_page.wind_data_selected.emit()
+app.processEvents()
+after_index = win.main_stack.currentIndex()
+print("home_wind_card_tab_switch", start_index, after_index)
+win.close()
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert "home_wind_card_tab_switch 0 3" in completed.stdout
+
+
+def test_home_page_mode_cards_reflow_at_narrow_width() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(repo_root / "src")
+    env["QT_QPA_PLATFORM"] = "offscreen"
+
+    script = """
+from PySide6.QtWidgets import QApplication
+from purway_geotagger.gui.pages.home_page import HomePage
+
+app = QApplication([])
+page = HomePage()
+page.show()
+page.resize(1280, 760)
+page._relayout_mode_cards()
+app.processEvents()
+wide_cols = page._current_card_columns
+page.resize(860, 760)
+page._relayout_mode_cards()
+app.processEvents()
+narrow_cols = page._current_card_columns
+print("home_mode_reflow", wide_cols, narrow_cols)
+page.close()
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert "home_mode_reflow 2 2" in completed.stdout

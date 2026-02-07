@@ -168,6 +168,7 @@ class MainWindow(QMainWindow):
 
         self.home_page.set_last_mode(self._last_mode)
         self.home_page.mode_selected.connect(self._on_mode_selected)
+        self.home_page.wind_data_selected.connect(self._open_wind_data_tab)
 
         self.methane_page = MethanePage(self._mode_states[RunMode.METHANE], self.controller)
         self.encroachment_page = EncroachmentPage(self._mode_states[RunMode.ENCROACHMENT], self.controller)
@@ -430,6 +431,10 @@ class MainWindow(QMainWindow):
     def _show_home(self) -> None:
         self.run_stack.setCurrentWidget(self.home_page)
         self.home_page.set_last_mode(self._last_mode)
+
+    def _open_wind_data_tab(self) -> None:
+        self.main_stack.setCurrentWidget(self.wind_data_page)
+        self.btn_wind.setChecked(True)
 
     def _reset_all_modes_and_home(self) -> None:
         self.methane_page.reset_for_new_run()

@@ -355,6 +355,72 @@ def get_stylesheet(theme: str) -> str:
         border: 1px solid {c['card_border']};
         border-radius: 12px;
     }}
+
+    QFrame[cssClass="mode_card"] {{
+        background-color: {c['surface_bg']};
+        border: 1px solid {c['card_border']};
+        border-radius: 14px;
+    }}
+
+    QFrame[cssClass="mode_card"][hovered="true"] {{
+        border: 1px solid {c['focus_ring']};
+        background-color: {c['table_alt_bg']};
+    }}
+
+    QFrame[cssClass="mode_card"][lastUsed="true"] {{
+        border: 1px solid {c['primary']};
+    }}
+
+    QFrame[cssClass="mode_card"]:focus {{
+        border: 1px solid {c['focus_ring']};
+    }}
+
+    QLabel[cssClass="mode_card_icon"] {{
+        min-width: 28px;
+        max-width: 28px;
+        min-height: 28px;
+        max-height: 28px;
+        border-radius: 8px;
+        background-color: {c['nav_checked_bg']};
+        color: {c['primary']};
+        font-size: 12px;
+        font-weight: 700;
+    }}
+
+    QLabel[cssClass="mode_card_title"] {{
+        font-size: 15px;
+        font-weight: 650;
+        color: {c['text_primary']};
+    }}
+
+    QLabel[cssClass="mode_card_chevron"] {{
+        color: {c['text_muted']};
+        font-size: 17px;
+        font-weight: 700;
+        min-width: 12px;
+    }}
+
+    QFrame[cssClass="mode_card"][hovered="true"] QLabel[cssClass="mode_card_chevron"] {{
+        color: {c['primary']};
+    }}
+
+    QFrame[cssClass="mode_card_divider"] {{
+        border: none;
+        min-height: 1px;
+        max-height: 1px;
+        background-color: {c['card_border']};
+    }}
+
+    QLabel[cssClass="mode_card_bullets"] {{
+        color: {c['text_secondary']};
+        font-size: 13px;
+    }}
+
+    QLabel[cssClass="mode_card_hint"] {{
+        color: {c['text_muted']};
+        font-size: 12px;
+        font-weight: 600;
+    }}
     
     QGroupBox {{
         background-color: {c['surface_bg']};

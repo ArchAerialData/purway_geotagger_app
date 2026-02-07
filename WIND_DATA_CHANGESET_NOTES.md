@@ -428,6 +428,158 @@ This file groups Wind Data work into isolated change sets so each phase can be k
 
 ---
 
+## Change Set GUI-H1 - Home Page Mode Card Redesign (Full-Card Click)
+
+### Modified
+- `src/purway_geotagger/gui/pages/home_page.py`
+- `src/purway_geotagger/gui/style_sheet.py`
+- `tests/test_main_window_startup.py`
+
+### Key updates
+- Replaced stacked wide mode cards with a three-column card grid for cleaner scanning.
+- Removed per-card CTA buttons and made each card itself the interactive control.
+- Added card structure with:
+  - left-aligned header (icon + title + chevron),
+  - divider line,
+  - compact bullet summary,
+  - subtle footer hint (`Click anywhere to open`).
+- Added polished interactivity:
+  - full-card click navigation,
+  - keyboard activation (`Enter`, `Space`),
+  - pointer cursor,
+  - hover/focus visual feedback,
+  - lightweight hover shadow animation.
+- Added "last used" visual emphasis on the previously used mode card.
+- Added regression coverage to verify three clickable/focusable mode cards are present.
+
+### Rollback block (GUI-H1 only)
+- Revert:
+  - `src/purway_geotagger/gui/pages/home_page.py`
+  - `src/purway_geotagger/gui/style_sheet.py`
+  - `tests/test_main_window_startup.py`
+
+---
+
+## Change Set GUI-H2 - Home Card Responsive Reflow + Density Tuning
+
+### Modified
+- `src/purway_geotagger/gui/pages/home_page.py`
+- `src/purway_geotagger/gui/style_sheet.py`
+- `tests/test_main_window_startup.py`
+
+### Key updates
+- Added responsive card reflow logic:
+  - wide window -> 3 columns,
+  - narrow window -> 2 columns,
+  - very narrow -> 1 column.
+- Prevented mode-title clipping by enabling title wrapping and tuning title/chevron sizing.
+- Improved visual density by letting the card grid occupy available vertical space instead of leaving excessive blank area beneath fixed-size rows.
+- Added regression test coverage to verify 3-column to 2-column reflow at narrow width.
+
+### Rollback block (GUI-H2 only)
+- Revert:
+  - `src/purway_geotagger/gui/pages/home_page.py`
+  - `src/purway_geotagger/gui/style_sheet.py`
+  - `tests/test_main_window_startup.py`
+
+---
+
+## Change Set GUI-H3 - Home Grid Parity (Wind Data Card + Tab Routing)
+
+### Modified
+- `src/purway_geotagger/gui/pages/home_page.py`
+- `src/purway_geotagger/gui/main_window.py`
+- `tests/test_main_window_startup.py`
+
+### Key updates
+- Added a fourth home card for `Wind Data DOCX` using the same full-card clickable style as the other run cards.
+- Added direct card routing from Home page to the Wind Data tab.
+- Tuned home-card reflow logic to keep a balanced two-column layout when four cards are present.
+- Added regression coverage for:
+  - four clickable/focusable home cards,
+  - wind card signal switching main tab index to Wind Data.
+
+### Rollback block (GUI-H3 only)
+- Revert:
+  - `src/purway_geotagger/gui/pages/home_page.py`
+  - `src/purway_geotagger/gui/main_window.py`
+  - `tests/test_main_window_startup.py`
+
+---
+
+## Change Set GUI-H4 - Home Card Header Animated Gradient (Theme-Aware)
+
+### Modified
+- `src/purway_geotagger/gui/pages/home_page.py`
+
+### Key updates
+- Added a subtle animated gradient strip in each home mode-card header for a more polished look.
+- Implemented the header gradient as a custom painted widget to keep control over smoothness and contrast.
+- Kept animation intentionally low-intensity and slow to avoid flashy behavior.
+- Made gradient colors theme-aware by reading the live `darkMode` app property at paint time, so light/dark mode switches update immediately.
+
+### Rollback block (GUI-H4 only)
+- Revert:
+  - `src/purway_geotagger/gui/pages/home_page.py`
+
+---
+
+## Change Set GUI-H5 - Full-Width Header Gradient Band Refinement
+
+### Modified
+- `src/purway_geotagger/gui/pages/home_page.py`
+
+### Key updates
+- Reworked card structure so header gradient is a true full-width top band (edge-to-edge inside each card), instead of an inset strip.
+- Moved header content (icon/title/chevron) into that full-width band so the chevron is included in the gradient area.
+- Updated header paint shape to top-corner rounded band styling (professional card-header look) with a cleaner transition into card body content.
+- Kept animation subtle/slow and retained instant light/dark adaptation.
+
+### Rollback block (GUI-H5 only)
+- Revert:
+  - `src/purway_geotagger/gui/pages/home_page.py`
+
+---
+
+## Change Set GUI-H6 - Header Gradient Palette Tuning (Deep Blue + Gray Mix)
+
+### Modified
+- `src/purway_geotagger/gui/pages/home_page.py`
+
+### Key updates
+- Tuned home-card header gradient colors to a deeper, less pastel palette.
+- Applied a three-tone blend in both themes:
+  - deep blue,
+  - light gray,
+  - dark gray.
+- Kept existing animation speed/intensity behavior, while improving perceived depth and professionalism.
+
+### Rollback block (GUI-H6 only)
+- Revert:
+  - `src/purway_geotagger/gui/pages/home_page.py`
+
+---
+
+## Change Set GUI-H7 - Gradient Intensity + Motion Subtlety Tuning
+
+### Modified
+- `src/purway_geotagger/gui/pages/home_page.py`
+
+### Key updates
+- Increased blue depth in both themes:
+  - Light mode: noticeably deeper blue emphasis.
+  - Dark mode: slightly deeper blue emphasis.
+- Preserved the light gray + dark gray blend to keep professional contrast.
+- Reduced animation speed for subtler motion:
+  - timer interval increased,
+  - phase increment reduced.
+
+### Rollback block (GUI-H7 only)
+- Revert:
+  - `src/purway_geotagger/gui/pages/home_page.py`
+
+---
+
 ## Validation Snapshot
 
 - `python3 -m pytest tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_main_window_startup.py tests/test_wind_template_contract.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` -> 30 passed
@@ -443,3 +595,9 @@ This file groups Wind Data work into isolated change sets so each phase can be k
 - `python3 -m compileall src` -> pass
 - `python3 -m pytest tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py tests/test_wind_page_preview_behavior.py tests/test_main_window_startup.py` -> 17 passed
 - `PYTHONPATH=src python3 -m pytest tests/test_main_window_startup.py tests/test_wind_autofill_dialog.py tests/test_wind_page_preview_behavior.py` -> 13 passed
+- `PYTHONPATH=src python3 -m pytest tests/test_main_window_startup.py tests/test_wind_autofill_dialog.py tests/test_wind_page_preview_behavior.py` -> 14 passed
+- `PYTHONPATH=src python3 -m pytest tests/test_main_window_startup.py tests/test_wind_autofill_dialog.py tests/test_wind_page_preview_behavior.py` -> 15 passed
+- `PYTHONPATH=src python3 -m pytest tests/test_main_window_startup.py tests/test_wind_autofill_dialog.py tests/test_wind_page_preview_behavior.py` -> 16 passed
+- `PYTHONPATH=src python3 -m pytest tests/test_main_window_startup.py tests/test_wind_autofill_dialog.py tests/test_wind_page_preview_behavior.py` -> 16 passed
+- `PYTHONPATH=src python3 -m pytest tests/test_main_window_startup.py tests/test_wind_autofill_dialog.py tests/test_wind_page_preview_behavior.py` -> 16 passed
+- `PYTHONPATH=src python3 -m pytest tests/test_main_window_startup.py tests/test_wind_autofill_dialog.py tests/test_wind_page_preview_behavior.py` -> 16 passed
