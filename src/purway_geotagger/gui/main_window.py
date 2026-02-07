@@ -573,7 +573,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "templates_list"):
             self.templates_list.clear()
             for t in self.controller.template_manager.list_templates():
-                self.templates_list.addItem(f"{t.name} ({t.client}) - Start {t.start_index:04d}")
+                self.templates_list.addItem(f"{t.name} ({t.client}) - {t.client}_{t.start_index:04d}")
         self._template_user_selected = False
         self._auto_select_template()
 

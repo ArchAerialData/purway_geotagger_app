@@ -6,10 +6,12 @@ import pytest
 
 from purway_geotagger.core.wind_weather_autofill import (
     NWS_BASE_URL,
+    OPEN_METEO_ARCHIVE_URL,
     OPEN_METEO_GEOCODING_URL,
     JsonHttpClient,
     LocationSuggestion,
     NwsObservationClient,
+    OpenMeteoArchiveClient,
     OpenMeteoGeocoder,
     WindAutofillLocationError,
     WindAutofillProviderError,
@@ -199,7 +201,10 @@ def test_build_autofill_uses_nearest_observation_for_half_hour_inputs() -> None:
             },
         }
     )
-    service = WindWeatherAutofillService(weather_client=NwsObservationClient(http_client=fake_http))
+    service = WindWeatherAutofillService(
+        weather_client=NwsObservationClient(http_client=fake_http),
+        archive_client=OpenMeteoArchiveClient(http_client=fake_http),
+    )
     result = service.build_autofill(
         WindAutofillRequest(
             location=_location(),
@@ -248,7 +253,10 @@ def test_build_autofill_returns_partial_row_and_warning_when_field_missing() -> 
             },
         }
     )
-    service = WindWeatherAutofillService(weather_client=NwsObservationClient(http_client=fake_http))
+    service = WindWeatherAutofillService(
+        weather_client=NwsObservationClient(http_client=fake_http),
+        archive_client=OpenMeteoArchiveClient(http_client=fake_http),
+    )
     result = service.build_autofill(
         WindAutofillRequest(
             location=_location(),
@@ -276,9 +284,13 @@ def test_build_autofill_raises_when_provider_returns_no_observations() -> None:
                 "features": [{"properties": {"stationIdentifier": "KHOU"}}]
             },
             f"{NWS_BASE_URL}/stations/KHOU/observations": {"features": []},
+            OPEN_METEO_ARCHIVE_URL: {"hourly": {"time": []}},
         }
     )
-    service = WindWeatherAutofillService(weather_client=NwsObservationClient(http_client=fake_http))
+    service = WindWeatherAutofillService(
+        weather_client=NwsObservationClient(http_client=fake_http),
+        archive_client=OpenMeteoArchiveClient(http_client=fake_http),
+    )
     with pytest.raises(WindAutofillProviderError, match="No weather observations"):
         service.build_autofill(
             WindAutofillRequest(
@@ -288,3 +300,56 @@ def test_build_autofill_raises_when_provider_returns_no_observations() -> None:
                 end_time_24h="17:00",
             )
         )
+
+
+def test_build_autofill_falls_back_to_open_meteo_archive_when_nws_missing() -> None:
+    fake_http = FakeJsonHttpClient(
+        {
+            f"{NWS_BASE_URL}/points/29.7604,-95.3698": {
+                "properties": {"observationStations": f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations"}
+            },
+            f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations": {
+                "features": [{"properties": {"stationIdentifier": "KHOU"}}]
+            },
+            f"{NWS_BASE_URL}/stations/KHOU/observations": {"features": []},
+            OPEN_METEO_ARCHIVE_URL: {
+                "hourly": {
+                    "time": [
+                        "2026-01-27T10:00",
+                        "2026-01-27T17:00",
+                    ],
+                    "temperature_2m": [10.0, 15.0],
+                    "wind_speed_10m": [19.3121, 24.1401],
+                    "wind_gusts_10m": [32.1868, 40.2336],
+                    "wind_direction_10m": [180.0, 315.0],
+                }
+            },
+        }
+    )
+    service = WindWeatherAutofillService(
+        weather_client=NwsObservationClient(http_client=fake_http),
+        archive_client=OpenMeteoArchiveClient(http_client=fake_http),
+    )
+    result = service.build_autofill(
+        WindAutofillRequest(
+            location=_location(),
+            report_date=date(2026, 1, 27),
+            start_time_24h="10:00",
+            end_time_24h="17:00",
+        )
+    )
+
+    assert result.start.direction == "S"
+    assert result.start.speed_mph == 12
+    assert result.start.gust_mph == 20
+    assert result.start.temp_f == 50
+    assert result.start.station_id == "OPEN_METEO_ARCHIVE"
+
+    assert result.end.direction == "NW"
+    assert result.end.speed_mph == 15
+    assert result.end.gust_mph == 25
+    assert result.end.temp_f == 59
+    assert result.end.station_id == "OPEN_METEO_ARCHIVE"
+    assert result.verification_url is not None
+    assert OPEN_METEO_ARCHIVE_URL in result.verification_url
+    assert any("Open-Meteo historical hourly data" in warning for warning in result.warnings)

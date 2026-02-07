@@ -573,11 +573,17 @@ class WindDataPage(QWidget):
         selected_qdate = QDate(report_date.year, report_date.month, report_date.day)
         if self.date_edit.date() != selected_qdate:
             self.date_edit.setDate(selected_qdate)
+        selected_start_time_24h = self._autofill_dialog.selected_start_time_24h()
+        selected_end_time_24h = self._autofill_dialog.selected_end_time_24h()
+        self.entry_grid.set_times_from_24h(
+            start_time_24h=selected_start_time_24h,
+            end_time_24h=selected_end_time_24h,
+        )
         request = WindAutofillRequest(
             location=location,
             report_date=report_date,
-            start_time_24h=self._autofill_dialog.selected_start_time_24h(),
-            end_time_24h=self._autofill_dialog.selected_end_time_24h(),
+            start_time_24h=selected_start_time_24h,
+            end_time_24h=selected_end_time_24h,
         )
 
         worker = WindAutofillWorker(request=request)

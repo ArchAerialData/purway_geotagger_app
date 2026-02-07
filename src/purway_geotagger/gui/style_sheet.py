@@ -712,6 +712,74 @@ def get_stylesheet(theme: str) -> str:
         border: none;
     }}
 
+    QLineEdit[cssClass="date_picker_display"] {{
+        font-weight: 600;
+    }}
+
+    QToolButton[cssClass="date_picker_btn"] {{
+        background-color: {c['button_secondary_bg']};
+        border: 1px solid {c['button_secondary_border']};
+        border-radius: 8px;
+        color: {c['text_primary']};
+        padding: 5px 10px;
+        min-height: 30px;
+        font-size: 12px;
+        font-weight: 600;
+    }}
+
+    QToolButton[cssClass="date_picker_btn"]:hover {{
+        background-color: {c['button_secondary_hover']};
+        border-color: {c['focus_ring']};
+    }}
+
+    QToolButton[cssClass="date_picker_btn"]:pressed {{
+        background-color: {c['button_secondary_pressed']};
+        border-color: {c['focus_ring']};
+    }}
+
+    QMenu[cssClass="calendar_menu"] {{
+        background-color: {c['surface_bg']};
+        border: 1px solid {c['card_border']};
+        border-radius: 12px;
+        padding: 8px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget {{
+        background-color: {c['surface_bg']};
+        color: {c['text_primary']};
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QWidget#qt_calendar_navigationbar {{
+        background-color: {c['table_header_bg']};
+        border: 1px solid {c['border']};
+        border-radius: 8px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton {{
+        background-color: transparent;
+        border: none;
+        color: {c['text_primary']};
+        font-weight: 600;
+        padding: 4px 6px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton:hover {{
+        background-color: {c['nav_hover']};
+        border-radius: 6px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QAbstractItemView:enabled {{
+        color: {c['text_primary']};
+        selection-background-color: {c['primary']};
+        selection-color: {c['text_inverted']};
+        background-color: {c['surface_bg']};
+        outline: 0;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QAbstractItemView:disabled {{
+        color: {c['disabled_text']};
+    }}
+
     QWidget[cssClass="wind_stepper"] {{
         border: 1px solid {c['stepper_border']};
         border-radius: 8px;

@@ -260,6 +260,37 @@ This file groups Wind Data work into isolated change sets so each phase can be k
 
 ---
 
+## Change Set WS2.5 - Historical Autofill Reliability + Date Picker Popover
+
+### Modified
+- `src/purway_geotagger/core/wind_weather_autofill.py`
+- `src/purway_geotagger/gui/widgets/wind_autofill_dialog.py`
+- `src/purway_geotagger/gui/pages/wind_data_page.py`
+- `src/purway_geotagger/gui/style_sheet.py`
+- `tests/test_wind_weather_autofill.py`
+
+### Key updates
+- Added automatic historical-data fallback when NWS station observations are unavailable for selected date/time windows.
+  - Primary provider remains NWS observations.
+  - Fallback provider is Open-Meteo historical archive (hourly).
+- Added clearer failure messaging when both providers cannot return observations.
+- Added provider warning text when fallback is used so pilots can see data provenance.
+- Added styled date-picker control in Autofill popup:
+  - date display + `Pick Date` button
+  - themed calendar popover matching app light/dark palette
+  - retains current-year-through-today bounds
+- Added/updated tests for archive fallback behavior and no-observation failure behavior.
+
+### Rollback block (WS2.5 only)
+- Revert:
+  - `src/purway_geotagger/core/wind_weather_autofill.py`
+  - `src/purway_geotagger/gui/widgets/wind_autofill_dialog.py`
+  - `src/purway_geotagger/gui/pages/wind_data_page.py`
+  - `src/purway_geotagger/gui/style_sheet.py`
+  - `tests/test_wind_weather_autofill.py`
+
+---
+
 ## Change Set WS2.4 - Autofill Report-Date Bounds + Main Date Sync
 
 ### Modified
@@ -346,6 +377,38 @@ This file groups Wind Data work into isolated change sets so each phase can be k
 
 ---
 
+## Change Set WS2.6 - Template Label Clarity + Autofill Calendar/Time Sync
+
+### Modified
+- `src/purway_geotagger/gui/main_window.py`
+- `src/purway_geotagger/gui/widgets/wind_autofill_dialog.py`
+- `src/purway_geotagger/gui/pages/wind_data_page.py`
+- `src/purway_geotagger/gui/widgets/wind_entry_grid.py`
+- `tests/test_main_window_startup.py`
+- `tests/test_wind_autofill_dialog.py`
+- `tests/test_wind_page_preview_behavior.py`
+
+### Key updates
+- Templates tab list now shows filename-style index preview instead of backend wording:
+  - from `Start 0001`
+  - to `{CLIENT_ABBR}_{INDEX}` (for example `WWM_0001`).
+- Autofill popup calendar styling polish:
+  - removed platform-default weekend red text by forcing weekday/weekend text to theme color,
+  - increased calendar/menu dimensions to avoid cramped/cut-off layout in the date popover.
+- Autofill popup Start/End target times are now pushed into main Wind Inputs when autofill is launched, so main page time controls stay in sync with popup selections.
+
+### Rollback block (WS2.6 only)
+- Revert:
+  - `src/purway_geotagger/gui/main_window.py`
+  - `src/purway_geotagger/gui/widgets/wind_autofill_dialog.py`
+  - `src/purway_geotagger/gui/pages/wind_data_page.py`
+  - `src/purway_geotagger/gui/widgets/wind_entry_grid.py`
+  - `tests/test_main_window_startup.py`
+  - `tests/test_wind_autofill_dialog.py`
+  - `tests/test_wind_page_preview_behavior.py`
+
+---
+
 ## Validation Snapshot
 
 - `python3 -m pytest tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_main_window_startup.py tests/test_wind_template_contract.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` -> 30 passed
@@ -359,3 +422,5 @@ This file groups Wind Data work into isolated change sets so each phase can be k
 - `python3 -m pytest tests/test_wind_autofill_dialog.py tests/test_wind_page_preview_behavior.py tests/test_settings_dialog.py` -> 11 passed
 - `python3 -m pytest tests/test_main_window_startup.py tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py tests/test_settings_dialog.py` -> 46 passed
 - `python3 -m compileall src` -> pass
+- `python3 -m pytest tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py tests/test_wind_page_preview_behavior.py tests/test_main_window_startup.py` -> 17 passed
+- `PYTHONPATH=src python3 -m pytest tests/test_main_window_startup.py tests/test_wind_autofill_dialog.py tests/test_wind_page_preview_behavior.py` -> 13 passed

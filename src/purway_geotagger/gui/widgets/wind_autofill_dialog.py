@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from PySide6.QtCore import QDate, QPoint, Qt, QTimer, QTime, Signal
+from PySide6.QtGui import QPalette, QTextCharFormat
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QCalendarWidget,
@@ -118,10 +119,14 @@ class WindAutofillDialog(QDialog):
         self._report_calendar.setVerticalHeaderFormat(QCalendarWidget.NoVerticalHeader)
         self._report_calendar.setGridVisible(False)
         self._report_calendar.setNavigationBarVisible(True)
+        self._report_calendar.setFixedSize(336, 252)
         self._report_calendar.setMinimumDate(self._min_report_qdate)
         self._report_calendar.setMaximumDate(self._max_report_qdate)
+        self._report_calendar.setHorizontalHeaderFormat(QCalendarWidget.ShortDayNames)
+        self._apply_calendar_weekday_colors()
         self._report_calendar.clicked.connect(self._on_report_calendar_date_selected)
         self._report_calendar.activated.connect(self._on_report_calendar_date_selected)
+        self._report_date_menu.setFixedSize(352, 268)
 
         calendar_action = QWidgetAction(self._report_date_menu)
         calendar_action.setDefaultWidget(self._report_calendar)
@@ -441,6 +446,22 @@ class WindAutofillDialog(QDialog):
         self.report_date_edit.setDate(clamped)
         self.report_date_display.setText(clamped.toString("yyyy_MM_dd"))
         self._report_calendar.setSelectedDate(clamped)
+
+    def _apply_calendar_weekday_colors(self) -> None:
+        # Force weekday/weekend text to theme text color instead of platform default weekend red.
+        text_color = self.palette().color(QPalette.WindowText)
+        weekday_format = QTextCharFormat()
+        weekday_format.setForeground(text_color)
+        for day in (
+            Qt.Monday,
+            Qt.Tuesday,
+            Qt.Wednesday,
+            Qt.Thursday,
+            Qt.Friday,
+            Qt.Saturday,
+            Qt.Sunday,
+        ):
+            self._report_calendar.setWeekdayTextFormat(day, weekday_format)
 
     def _show_report_date_picker(self) -> None:
         self._report_calendar.setSelectedDate(self.report_date_edit.date())

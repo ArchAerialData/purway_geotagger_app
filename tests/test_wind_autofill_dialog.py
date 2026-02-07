@@ -240,3 +240,36 @@ dlg_max.close()
     )
     assert completed.returncode == 0, completed.stderr or completed.stdout
     assert "date_bounds True True True" in completed.stdout
+
+
+def test_wind_autofill_calendar_weekend_color_and_size_match_theme() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(repo_root / "src")
+    env["QT_QPA_PLATFORM"] = "offscreen"
+
+    script = """
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPalette
+from PySide6.QtWidgets import QApplication
+from purway_geotagger.gui.widgets.wind_autofill_dialog import WindAutofillDialog
+
+app = QApplication([])
+dialog = WindAutofillDialog(start_time_24h="10:00", end_time_24h="13:00")
+weekend_color = dialog._report_calendar.weekdayTextFormat(Qt.Saturday).foreground().color().name()
+theme_color = dialog.palette().color(QPalette.WindowText).name()
+calendar_size_ok = dialog._report_calendar.width() >= 320 and dialog._report_calendar.height() >= 240
+menu_size_ok = dialog._report_date_menu.width() >= 340 and dialog._report_date_menu.height() >= 260
+print("calendar_style", weekend_color == theme_color, calendar_size_ok, menu_size_ok)
+dialog.close()
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert "calendar_style True True True" in completed.stdout

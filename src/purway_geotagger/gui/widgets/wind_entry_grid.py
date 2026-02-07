@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from PySide6.QtCore import QTime, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
@@ -265,6 +266,21 @@ class WindEntryGrid(QWidget):
     def end_time_display_text(self) -> str:
         return f"{self.end_time_edit.time().toString('h:mm')} {self.end_meridiem_combo.currentText()}"
 
+    def set_times_from_24h(self, *, start_time_24h: str, end_time_24h: str) -> None:
+        self._set_single_time_from_24h(
+            time_edit=self.start_time_edit,
+            meridiem_combo=self.start_meridiem_combo,
+            value=start_time_24h,
+            fallback="10:00",
+        )
+        self._set_single_time_from_24h(
+            time_edit=self.end_time_edit,
+            meridiem_combo=self.end_meridiem_combo,
+            value=end_time_24h,
+            fallback="13:00",
+        )
+        self.changed.emit()
+
     def apply_autofill_rows(self, *, start: WindAutofillRow, end: WindAutofillRow) -> AutofillApplySummary:
         start_applied = self._apply_single_row(
             row=start,
@@ -309,6 +325,34 @@ class WindEntryGrid(QWidget):
             temp_spin.setValue(row.temp_f)
             applied_fields.append("temp")
         return applied_fields
+
+    def _set_single_time_from_24h(
+        self,
+        *,
+        time_edit: QTimeEdit,
+        meridiem_combo: QComboBox,
+        value: str,
+        fallback: str,
+    ) -> None:
+        hour_24, minute = self._parse_24h_time(value, fallback=fallback)
+        meridiem = "PM" if hour_24 >= 12 else "AM"
+        hour_12 = hour_24 % 12 or 12
+        self._apply_time_and_meridiem(
+            time_edit,
+            meridiem_combo,
+            normalized_hour=hour_12,
+            minute=minute,
+            meridiem=meridiem,
+        )
+
+    def _parse_24h_time(self, value: str, *, fallback: str) -> tuple[int, int]:
+        text = (value or "").strip()
+        try:
+            parsed = datetime.strptime(text, "%H:%M")
+            return parsed.hour, parsed.minute
+        except ValueError:
+            parsed_fallback = datetime.strptime(fallback, "%H:%M")
+            return parsed_fallback.hour, parsed_fallback.minute
 
     def _add_row(
         self,

@@ -140,3 +140,71 @@ page.close()
     )
     assert completed.returncode == 0, completed.stderr or completed.stdout
     assert "dialog_date_clamped True" in completed.stdout
+
+
+def test_autofill_popup_times_are_pushed_back_to_main_wind_inputs() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(repo_root / "src")
+    env["QT_QPA_PLATFORM"] = "offscreen"
+
+    script = """
+from PySide6.QtCore import QTime
+from PySide6.QtWidgets import QApplication
+from purway_geotagger.core.settings import AppSettings
+import purway_geotagger.gui.pages.wind_data_page as wind_page_module
+from purway_geotagger.gui.pages.wind_data_page import WindDataPage
+from purway_geotagger.core.wind_weather_autofill import LocationSuggestion
+
+class _Signal:
+    def connect(self, _fn):
+        return None
+
+class DummyWorker:
+    def __init__(self, request):
+        self.request = request
+        self.result_ready = _Signal()
+        self.failed = _Signal()
+        self.finished = _Signal()
+    def isRunning(self):
+        return False
+    def start(self):
+        return None
+
+wind_page_module.WindAutofillWorker = DummyWorker
+
+app = QApplication([])
+page = WindDataPage(AppSettings())
+page._open_autofill_dialog()
+dialog = page._autofill_dialog
+assert dialog is not None
+dialog.set_suggestions([
+    LocationSuggestion(
+        query_text="77008",
+        display_name="Houston, Texas, US, 77008",
+        latitude=29.8,
+        longitude=-95.4,
+        timezone_name="America/Chicago",
+        city="Houston",
+        state="Texas",
+        postal_code="77008",
+    )
+])
+dialog.start_time_edit.setTime(QTime.fromString("10:30", "h:mm"))
+dialog.start_meridiem_combo.setCurrentText("PM")
+dialog.end_time_edit.setTime(QTime.fromString("11:15", "h:mm"))
+dialog.end_meridiem_combo.setCurrentText("PM")
+page._start_autofill_fill()
+print("times_synced", page.entry_grid.start_time_24h_text(), page.entry_grid.end_time_24h_text())
+page.close()
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert "times_synced 22:30 23:15" in completed.stdout
