@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import math
 from datetime import date
 from pathlib import Path
 
-from PySide6.QtCore import QDate, Qt, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QDate, QTimer, Qt, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QLinearGradient, QPainter, QPainterPath, QRadialGradient
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -41,6 +42,108 @@ from purway_geotagger.gui.widgets.wind_entry_grid import WindEntryGrid
 from purway_geotagger.gui.widgets.wind_autofill_dialog import WindAutofillDialog
 from purway_geotagger.gui.workers import WindAutofillWorker, WindLocationSearchWorker
 from purway_geotagger.util.platform import open_in_finder
+
+
+class _AnimatedSectionHeader(QFrame):
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setProperty("cssClass", "mode_card_header")
+        self.setMinimumHeight(52)
+        self._phase = 0.0
+        self._anim_timer = QTimer(self)
+        self._anim_timer.setInterval(40)
+        self._anim_timer.timeout.connect(self._tick)
+        self._anim_timer.start()
+
+    def _tick(self) -> None:
+        self._phase += 0.004
+        if self._phase >= 1.0:
+            self._phase -= 1.0
+        self.update()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not self._anim_timer.isActive():
+            self._anim_timer.start()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self._anim_timer.stop()
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        rect = self.rect().adjusted(0, 0, -1, -1)
+        if rect.isEmpty():
+            return
+
+        app = self.window()
+        dark_mode = bool(app.property("darkMode")) if app else False
+
+        base = QColor(15, 15, 15, 232 if dark_mode else 214)
+        glow = QColor(255, 255, 255, 13)
+        g1 = QColor(29, 27, 167, 188 if dark_mode else 174)
+        g2 = QColor(35, 95, 215, 176 if dark_mode else 164)
+        cool_gray_1 = QColor(255, 255, 255, 10 if dark_mode else 24)
+        cool_gray_2 = QColor(42, 42, 42, 128 if dark_mode else 96)
+        border = QColor(94, 111, 136, 126 if dark_mode else 138)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        radius = 12.0
+        left = float(rect.left())
+        top = float(rect.top())
+        right = float(rect.right())
+        bottom = float(rect.bottom())
+
+        path = QPainterPath()
+        path.moveTo(left, bottom)
+        path.lineTo(left, top + radius)
+        path.quadTo(left, top, left + radius, top)
+        path.lineTo(right - radius, top)
+        path.quadTo(right, top, right, top + radius)
+        path.lineTo(right, bottom)
+        path.closeSubpath()
+        painter.fillPath(path, base)
+
+        ping_pong = 0.5 - 0.5 * math.cos(2.0 * math.pi * self._phase)
+
+        x1_pct = 87.96875 + (15.0 - 87.96875) * ping_pong
+        y1_pct = 91.1328125 + (15.0 - 91.1328125) * ping_pong
+        x2_pct = 13.3984375 + (61.2109375 - 13.3984375) * ping_pong
+        y2_pct = 82.734375 + (13.75 - 82.734375) * ping_pong
+
+        w = max(1.0, float(rect.width()))
+        h = max(1.0, float(rect.height()))
+        c1x = float(rect.left()) + (x1_pct / 100.0) * w
+        c1y = float(rect.top()) + (y1_pct / 100.0) * h
+        c2x = float(rect.left()) + (x2_pct / 100.0) * w
+        c2y = float(rect.top()) + (y2_pct / 100.0) * h
+
+        glow_grad = QRadialGradient(float(rect.left()) + 0.04 * w, float(rect.top()) + 0.03 * h, max(w, h) * 1.1)
+        glow_grad.setColorAt(0.0, glow)
+        glow_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
+        painter.setCompositionMode(QPainter.CompositionMode_Screen)
+        painter.fillPath(path, glow_grad)
+        painter.setCompositionMode(QPainter.CompositionMode_SourceOver)
+
+        radial_1 = QRadialGradient(c1x, c1y, max(w, h) * 1.2)
+        radial_1.setColorAt(0.0, g1)
+        radial_1.setColorAt(1.0, QColor(g1.red(), g1.green(), g1.blue(), 0))
+        painter.fillPath(path, radial_1)
+
+        radial_2 = QRadialGradient(c2x, c2y, max(w, h) * 1.2)
+        radial_2.setColorAt(0.0, g2)
+        radial_2.setColorAt(1.0, QColor(g2.red(), g2.green(), g2.blue(), 0))
+        painter.fillPath(path, radial_2)
+
+        gray_mix = QLinearGradient(float(rect.left()), float(rect.top()), float(rect.right()), float(rect.bottom()))
+        gray_mix.setColorAt(0.0, cool_gray_1)
+        gray_mix.setColorAt(0.55, QColor(cool_gray_1.red(), cool_gray_1.green(), cool_gray_1.blue(), int(cool_gray_1.alpha() * 0.6)))
+        gray_mix.setColorAt(1.0, cool_gray_2)
+        painter.fillPath(path, gray_mix)
+
+        painter.setPen(border)
+        painter.drawPath(path)
 
 
 class WindDataPage(QWidget):
@@ -113,72 +216,67 @@ class WindDataPage(QWidget):
     def _build_report_info_card(self) -> QFrame:
         card = QFrame()
         card.setProperty("cssClass", "card")
-        layout = QGridLayout(card)
+        root = QVBoxLayout(card)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._build_section_header("1) Report Info"))
+
+        body = QWidget(card)
+        layout = QGridLayout(body)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setHorizontalSpacing(12)
         layout.setVerticalSpacing(12)
-
-        title = QLabel("1) Report Info")
-        title.setProperty("cssClass", "h2")
-        layout.addWidget(title, 0, 0, 1, 4)
+        root.addWidget(body)
 
         client_lbl = QLabel("Client Name")
         client_lbl.setProperty("cssClass", "subtitle")
-        layout.addWidget(client_lbl, 1, 0)
+        layout.addWidget(client_lbl, 0, 0)
         self.client_edit = QLineEdit()
         self.client_edit.setPlaceholderText("TargaResources")
-        layout.addWidget(self.client_edit, 1, 1)
+        layout.addWidget(self.client_edit, 0, 1)
 
         system_lbl = QLabel("System Name")
         system_lbl.setProperty("cssClass", "subtitle")
-        layout.addWidget(system_lbl, 1, 2)
+        layout.addWidget(system_lbl, 0, 2)
         self.system_edit = QLineEdit()
         self.system_edit.setPlaceholderText("KDB 20-IN")
-        layout.addWidget(self.system_edit, 1, 3)
+        layout.addWidget(self.system_edit, 0, 3)
 
         date_lbl = QLabel("Date")
         date_lbl.setProperty("cssClass", "subtitle")
-        layout.addWidget(date_lbl, 2, 0)
+        layout.addWidget(date_lbl, 1, 0)
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
         self.date_edit.setDisplayFormat("yyyy_MM_dd")
         self.date_edit.setDate(QDate.currentDate())
-        layout.addWidget(self.date_edit, 2, 1)
+        layout.addWidget(self.date_edit, 1, 1)
 
         tz_lbl = QLabel("Time Zone")
         tz_lbl.setProperty("cssClass", "subtitle")
-        layout.addWidget(tz_lbl, 2, 2)
+        layout.addWidget(tz_lbl, 1, 2)
         self.timezone_edit = QLineEdit("CST")
         self.timezone_edit.setPlaceholderText("CST")
-        layout.addWidget(self.timezone_edit, 2, 3)
+        layout.addWidget(self.timezone_edit, 1, 3)
         return card
 
     def _build_inputs_card(self) -> QFrame:
         card = QFrame()
         card.setProperty("cssClass", "card")
-        layout = QVBoxLayout(card)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
-
-        header_container = QWidget()
-        header_container.setMinimumHeight(36)
-
-        header_row = QHBoxLayout(header_container)
-        header_row.setContentsMargins(0, 0, 0, 0)
-        header_row.setSpacing(8)
-
-        title = QLabel("2) Wind Inputs")
-        title.setProperty("cssClass", "h2")
-        header_row.addWidget(title)
-        header_row.addStretch(1)
+        root = QVBoxLayout(card)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
         self.autofill_btn = QPushButton("Autofill Wind/Temp Data…")
-        self.autofill_btn.setProperty("cssClass", "primary")
+        self.autofill_btn.setProperty("cssClass", "run")
         self.autofill_btn.setCursor(Qt.PointingHandCursor)
         self.autofill_btn.clicked.connect(self._open_autofill_dialog)
-        header_row.addWidget(self.autofill_btn)
+        root.addWidget(self._build_section_header("2) Wind Inputs", right_widget=self.autofill_btn))
 
-        layout.addWidget(header_container)
+        body = QWidget(card)
+        layout = QVBoxLayout(body)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(12)
+        root.addWidget(body)
 
         note = QLabel(
             "Wind Direction is direct text. Speed/Gust/Temp are integer-only inputs."
@@ -194,35 +292,38 @@ class WindDataPage(QWidget):
     def _build_preview_card(self) -> QFrame:
         card = QFrame()
         card.setProperty("cssClass", "card")
-        layout = QGridLayout(card)
+        root = QVBoxLayout(card)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._build_section_header("3) Output Preview"))
+
+        body = QWidget(card)
+        layout = QGridLayout(body)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setHorizontalSpacing(12)
         layout.setVerticalSpacing(12)
-
-        title = QLabel("3) Output Preview")
-        title.setProperty("cssClass", "h2")
-        layout.addWidget(title, 0, 0, 1, 3)
+        root.addWidget(body)
 
         time_heading = QLabel("Time")
         time_heading.setProperty("cssClass", "wind_preview_heading")
-        layout.addWidget(time_heading, 1, 1)
+        layout.addWidget(time_heading, 0, 1)
         summary_heading = QLabel("Wind Summary")
         summary_heading.setProperty("cssClass", "wind_preview_heading")
-        layout.addWidget(summary_heading, 1, 2)
+        layout.addWidget(summary_heading, 0, 2)
 
         (
             start_row,
             self.start_time_preview,
             self.start_string_preview,
         ) = self._build_preview_row("Start")
-        layout.addWidget(start_row, 2, 0, 1, 3)
+        layout.addWidget(start_row, 1, 0, 1, 3)
 
         (
             end_row,
             self.end_time_preview,
             self.end_string_preview,
         ) = self._build_preview_row("End")
-        layout.addWidget(end_row, 3, 0, 1, 3)
+        layout.addWidget(end_row, 2, 0, 1, 3)
         return card
 
     def _build_preview_row(self, label_text: str) -> tuple[QFrame, QLabel, QLabel]:
@@ -252,44 +353,61 @@ class WindDataPage(QWidget):
     def _build_template_save_card(self) -> QFrame:
         card = QFrame()
         card.setProperty("cssClass", "card")
-        layout = QGridLayout(card)
+        root = QVBoxLayout(card)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._build_section_header("4) Template + Save"))
+
+        body = QWidget(card)
+        layout = QGridLayout(body)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setHorizontalSpacing(12)
         layout.setVerticalSpacing(10)
-
-        title = QLabel("4) Template + Save")
-        title.setProperty("cssClass", "h2")
-        layout.addWidget(title, 0, 0, 1, 3)
+        root.addWidget(body)
 
         template_lbl = QLabel("Template")
         template_lbl.setProperty("cssClass", "subtitle")
-        layout.addWidget(template_lbl, 1, 0)
+        layout.addWidget(template_lbl, 0, 0)
         self.template_edit = QLineEdit()
         self.template_edit.setReadOnly(True)
-        layout.addWidget(self.template_edit, 1, 1)
+        layout.addWidget(self.template_edit, 0, 1)
         self.template_btn = QPushButton("Select Template…")
         self.template_btn.setProperty("cssClass", "primary")
         self.template_btn.clicked.connect(self._select_template)
-        layout.addWidget(self.template_btn, 1, 2)
+        layout.addWidget(self.template_btn, 0, 2)
 
         output_lbl = QLabel("Output Folder")
         output_lbl.setProperty("cssClass", "subtitle")
-        layout.addWidget(output_lbl, 2, 0)
+        layout.addWidget(output_lbl, 1, 0)
         self.output_dir_edit = QLineEdit()
         self.output_dir_edit.textChanged.connect(self._refresh_preview)
-        layout.addWidget(self.output_dir_edit, 2, 1)
+        layout.addWidget(self.output_dir_edit, 1, 1)
         self.output_btn = QPushButton("Select Output Folder…")
         self.output_btn.setProperty("cssClass", "primary")
         self.output_btn.clicked.connect(self._select_output_folder)
-        layout.addWidget(self.output_btn, 2, 2)
+        layout.addWidget(self.output_btn, 1, 2)
 
         filename_lbl = QLabel("Output Filename")
         filename_lbl.setProperty("cssClass", "subtitle")
-        layout.addWidget(filename_lbl, 3, 0)
+        layout.addWidget(filename_lbl, 2, 0)
         self.filename_edit = QLineEdit()
         self.filename_edit.setReadOnly(True)
-        layout.addWidget(self.filename_edit, 3, 1, 1, 2)
+        layout.addWidget(self.filename_edit, 2, 1, 1, 2)
         return card
+
+    def _build_section_header(self, title_text: str, right_widget: QWidget | None = None) -> _AnimatedSectionHeader:
+        header = _AnimatedSectionHeader(self)
+        row = QHBoxLayout(header)
+        row.setContentsMargins(18, 10, 18, 10)
+        row.setSpacing(8)
+
+        title = QLabel(title_text)
+        title.setProperty("cssClass", "mode_card_title")
+        row.addWidget(title)
+        row.addStretch(1)
+        if right_widget is not None:
+            row.addWidget(right_widget)
+        return header
 
     def _build_actions_row(self) -> QHBoxLayout:
         layout = QHBoxLayout()

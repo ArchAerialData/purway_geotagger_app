@@ -57,24 +57,15 @@ class _AnimatedModeCardHeader(QFrame):
         app = QApplication.instance()
         dark_mode = bool(app.property("darkMode")) if app else False
 
-        # Literal palette port from replit-local card-header-theme.css:
-        # base: #0f0f0f, glow: #ffffff0d, radial blues: #1d1ba7 + #235fd7.
-        if dark_mode:
-            base = QColor(15, 15, 15, 236)
-            glow = QColor(255, 255, 255, 13)
-            g1 = QColor(29, 27, 167, 188)
-            g2 = QColor(35, 95, 215, 176)
-            cool_gray_1 = QColor(255, 255, 255, 10)
-            cool_gray_2 = QColor(42, 42, 42, 128)
-            border = QColor(94, 111, 136, 126)
-        else:
-            base = QColor(15, 15, 15, 78)
-            glow = QColor(255, 255, 255, 22)
-            g1 = QColor(29, 27, 167, 108)
-            g2 = QColor(35, 95, 215, 108)
-            cool_gray_1 = QColor(255, 255, 255, 44)
-            cool_gray_2 = QColor(42, 42, 42, 52)
-            border = QColor(108, 131, 160, 122)
+        # Literal palette port from replit-local card-header-theme.css.
+        # Keep the same hue family in both modes; only tweak alpha/border for contrast.
+        base = QColor(15, 15, 15, 232 if dark_mode else 214)           # #0f0f0f
+        glow = QColor(255, 255, 255, 13)                               # #ffffff0d
+        g1 = QColor(29, 27, 167, 188 if dark_mode else 174)            # #1d1ba7
+        g2 = QColor(35, 95, 215, 176 if dark_mode else 164)            # #235fd7
+        cool_gray_1 = QColor(255, 255, 255, 10 if dark_mode else 24)
+        cool_gray_2 = QColor(42, 42, 42, 128 if dark_mode else 96)     # #2a2a2a
+        border = QColor(94, 111, 136, 126 if dark_mode else 138)
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
@@ -481,7 +472,7 @@ class HomePage(QWidget):
 def _bullets_html(items: list[str]) -> str:
     if not items:
         return ""
-    rows = "".join(f"<li style='margin-bottom: 4px;'>{item}</li>" for item in items)
+    rows = "".join(f"<li style='margin-bottom: 6px; line-height: 1.3;'>{item}</li>" for item in items)
     return f"<ul style='margin: 0; padding-left: 18px;'>{rows}</ul>"
 
 

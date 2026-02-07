@@ -387,10 +387,20 @@ def get_stylesheet(theme: str) -> str:
         font-weight: 700;
     }}
 
+    QFrame[cssClass="mode_card_header"] QLabel[cssClass="mode_card_icon"] {{
+        background-color: rgba(255, 255, 255, 0.16);
+        color: #EAF1FF;
+    }}
+
     QLabel[cssClass="mode_card_title"] {{
         font-size: 15px;
         font-weight: 650;
         color: {c['text_primary']};
+    }}
+
+    QFrame[cssClass="mode_card_header"] QLabel[cssClass="mode_card_title"] {{
+        color: #F4F7FF;
+        font-weight: 700;
     }}
 
     QLabel[cssClass="mode_card_chevron"] {{
@@ -398,6 +408,10 @@ def get_stylesheet(theme: str) -> str:
         font-size: 17px;
         font-weight: 700;
         min-width: 12px;
+    }}
+
+    QFrame[cssClass="mode_card_header"] QLabel[cssClass="mode_card_chevron"] {{
+        color: rgba(235, 241, 255, 0.92);
     }}
 
     QFrame[cssClass="mode_card"][hovered="true"] QLabel[cssClass="mode_card_chevron"] {{
@@ -413,7 +427,7 @@ def get_stylesheet(theme: str) -> str:
 
     QLabel[cssClass="mode_card_bullets"] {{
         color: {c['text_secondary']};
-        font-size: 13px;
+        font-size: 14px;
     }}
 
     QLabel[cssClass="mode_card_hint"] {{
