@@ -29,6 +29,7 @@ from purway_geotagger.gui.pages.home_page import HomePage
 from purway_geotagger.gui.pages.methane_page import MethanePage
 from purway_geotagger.gui.pages.encroachment_page import EncroachmentPage
 from purway_geotagger.gui.pages.combined_wizard import CombinedWizard
+from purway_geotagger.gui.pages.wind_data_page import WindDataPage
 from purway_geotagger.gui.pages.help_page import HelpPage
 from purway_geotagger.gui.widgets.template_editor import TemplateEditorDialog
 from purway_geotagger.gui.widgets.theme_toggle import ThemeToggle
@@ -113,7 +114,8 @@ class MainWindow(QMainWindow):
         self.btn_run = _create_nav_btn("Run", 0)
         self.btn_jobs = _create_nav_btn("Jobs", 1)
         self.btn_templates = _create_nav_btn("Templates", 2)
-        self.btn_help = _create_nav_btn("Help", 3)
+        self.btn_wind = _create_nav_btn("Wind Data", 3)
+        self.btn_help = _create_nav_btn("Help", 4)
         self.btn_run.setChecked(True)
 
         # Add the container with Center alignment
@@ -271,20 +273,16 @@ class MainWindow(QMainWindow):
         self.table.setSelectionMode(QTableView.SingleSelection)
         self.table.setSortingEnabled(True)
         self.table.setEditTriggers(QTableView.NoEditTriggers)
-        self.table.horizontalHeader().setSectionsMovable(False)
-        self.table.horizontalHeader().setStretchLastSection(False)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+        header = self.table.horizontalHeader()
+        header.setSectionsMovable(False)
+        header.setStretchLastSection(False)
 
         self.model = JobTableModel(self.controller)
         self.jobs_proxy = JobsFilterProxyModel(self)
         self.jobs_proxy.setSourceModel(self.model)
         self.jobs_proxy.set_recent_limit(20)
         self.table.setModel(self.jobs_proxy)
+        self._configure_jobs_table_columns()
         self.table.sortByColumn(0, Qt.DescendingOrder)
         self.table.selectionModel().selectionChanged.connect(self._update_action_buttons)
         jobs_left_layout.addWidget(self.table, 1)
@@ -396,7 +394,11 @@ class MainWindow(QMainWindow):
         tmpl_btn_row.addWidget(self.template_refresh_btn)
         templates_layout.addLayout(tmpl_btn_row)
 
-        # ----- Tab 4: Help -----
+        # ----- Tab 4: Wind Data -----
+        self.wind_data_page = WindDataPage(self.settings)
+        self.main_stack.addWidget(self.wind_data_page)
+
+        # ----- Tab 5: Help -----
         self.help_page = HelpPage()
         
         # Link action buttons inside Help Page if we add them, 
@@ -638,8 +640,7 @@ class MainWindow(QMainWindow):
         basic_columns = {0, 1, 2, 3, 4, 5}
         for col in range(self.model.columnCount()):
             self.table.setColumnHidden(col, not (enabled or col in basic_columns))
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
-        self.table.resizeColumnsToContents()
+        self._configure_jobs_table_columns()
 
     def _set_jobs_details_visible(self, enabled: bool) -> None:
         self.jobs_detail_panel.setVisible(enabled)
@@ -875,3 +876,23 @@ class MainWindow(QMainWindow):
             self.preview_btn.setEnabled(has_inputs and advanced_enabled)
         if hasattr(self, "schema_btn"):
             self.schema_btn.setEnabled(has_inputs and advanced_enabled)
+
+    def _configure_jobs_table_columns(self) -> None:
+        """Apply safe jobs-table header sizing only when columns are available.
+
+        Qt 6.7 on newer macOS builds can segfault if section resize modes are set
+        before a model with matching sections is bound.
+        """
+        if not hasattr(self, "table") or not hasattr(self, "jobs_proxy"):
+            return
+        header = self.table.horizontalHeader()
+        if header is None:
+            return
+        column_count = self.jobs_proxy.columnCount()
+        if column_count <= 0:
+            return
+        for col in range(min(5, column_count)):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+        if column_count > 5:
+            header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        self.table.resizeColumnsToContents()

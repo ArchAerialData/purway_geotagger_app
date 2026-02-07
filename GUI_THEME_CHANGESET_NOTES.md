@@ -127,3 +127,17 @@ This file documents the GUI updates as isolated change sets so each set can be r
   - Added collapsible Job Details panel with status badge and full run metrics.
 - Revert only this set:
   - `git restore src/purway_geotagger/gui/main_window.py src/purway_geotagger/gui/models/job_table_model.py src/purway_geotagger/gui/models/jobs_filter_proxy_model.py src/purway_geotagger/gui/style_sheet.py`
+
+## CHG-010: macOS Qt startup crash guard for Jobs table header sizing
+
+- Purpose: prevent launch-time segmentation faults on macOS/Qt 6.7 caused by calling `QHeaderView.setSectionResizeMode(...)` before model sections exist.
+- Files:
+  - `src/purway_geotagger/gui/main_window.py`
+  - `tests/test_main_window_startup.py`
+- Key updates:
+  - Moved jobs-table section resize configuration to run only after `setModel(...)`.
+  - Added `_configure_jobs_table_columns()` with section-count guards.
+  - Updated resize mode enum usage to `QHeaderView.ResizeMode.*`.
+  - Added subprocess startup regression test using `QT_QPA_PLATFORM=offscreen`.
+- Revert only this set:
+  - `git restore src/purway_geotagger/gui/main_window.py tests/test_main_window_startup.py`

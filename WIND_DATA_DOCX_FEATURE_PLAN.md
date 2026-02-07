@@ -11,7 +11,18 @@ Decision update (approved in-thread):
   - `{{ E_TIME }}`
   - `{{ S_STRING }}`
   - `{{ E_STRING }}`
+- Use timezone placeholder in final table header:
+  - `{{ TZ }}`
 - Do not require a template table containing raw component placeholders (`S_WIND`, `S_SPEED`, etc.) for v1 output.
+- Date placeholder output format is locked to `YYYY_MM_DD`.
+- Output filename format is locked to:
+  - `WindData_{{ CLIENT_NAME }}_{{ DATE }}.docx`
+- Output folder selection is required in the Wind Data UI.
+- Wind Direction input is direct string entry (examples: `SW`, `SSW`, `NW`, `NNE`).
+- Wind Speed, Gusts, and Temp are integer-only GUI inputs (no unit text allowed in input).
+- Date/time are selected in GUI controls for a single report day (no overnight rollover handling).
+- Debug export is enabled for rollout troubleshooting.
+- Timezone input is editable and defaults to `CST`.
 
 ## 1) Objective
 
@@ -31,6 +42,7 @@ Folder:
 Files:
 - `MacOS_WindData_ClientName_YYYY_MM_DD.pages`
 - `MacOS_WindData_ClientName_YYYY_MM_DD.docx`
+- `PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx`
 
 Current DOCX inspection (reference template) shows 3 tables:
 
@@ -58,7 +70,26 @@ Approved production contract for v1:
   - `{{ E_TIME }}`
   - `{{ S_STRING }}`
   - `{{ E_STRING }}`
+  - `{{ TZ }}`
 - Table 2 is optional reference-only material and not required in production output.
+
+Production template verification snapshot (2026-02-06):
+- File checked: `wind_data_generator/Example of Template Structure/PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx`
+- Found placeholders (exactly 8):
+  - `{{ CLIENT_NAME }}`
+  - `{{ SYSTEM_NAME }}`
+  - `{{ DATE }}`
+  - `{{ S_TIME }}`
+  - `{{ E_TIME }}`
+  - `{{ S_STRING }}`
+  - `{{ E_STRING }}`
+  - `{{ TZ }}`
+- Table shape (current):
+  - Table 1: metadata key/value rows
+  - Table 2: final output rows (`Start`, `End`) with header:
+    - `Time ({{ TZ }})`
+    - `Wind Direction / Wind Speed / Gusts / Temp`
+- Result: matches this plan's required contract; no template changes required right now.
 
 ## 3) Exact Output Contract
 
@@ -96,6 +127,30 @@ Inputs are explicitly split into two records:
 Mapping must never cross rows:
 - Start raw fields compute Start placeholders (`S_TIME`, `S_STRING`).
 - End raw fields compute End placeholders (`E_TIME`, `E_STRING`).
+
+### 3.4 Date and filename contract
+
+Date placeholder format:
+- `{{ DATE }}` must be normalized to `YYYY_MM_DD`.
+
+Output filename format:
+- `WindData_{{ CLIENT_NAME }}_{{ DATE }}.docx`
+
+Example:
+- `WindData_TargaResources_2026_02_06.docx`
+
+Filename source values:
+- Reuse the exact values sent to template placeholders for `CLIENT_NAME` and `DATE`.
+
+Day-boundary policy:
+- Each report DOCX is for one selected day only.
+- If pilots fly on a different day, generate a separate DOCX for that day.
+
+Timezone header policy:
+- Timezone is rendered via `{{ TZ }}` in the table header text `Time ({{ TZ }})`.
+- Parentheses remain template-owned and must remain in final output.
+- Example final header:
+  - `Time (CST)`
 
 ## 4) Product Scope and Non-Goals
 
@@ -226,6 +281,7 @@ Create a dedicated production template file (separate from example/mockup) with 
 - `{{ E_TIME }}`
 - `{{ S_STRING }}`
 - `{{ E_STRING }}`
+- `{{ TZ }}`
 
 Template guidance:
 1. Keep only final report content needed by pilots.
@@ -242,6 +298,7 @@ Top-level cards:
   - Client Name
   - System Name
   - Date
+  - Time Zone (`TZ`, default `CST`, editable)
 
 - Card B: `Wind Inputs`
   - Two explicit rows: `Start` and `End`
@@ -260,15 +317,16 @@ Top-level cards:
 
 - Card D: `Template and Save`
   - Template file picker (defaults to bundled production template)
-  - Output folder picker
+  - Output folder picker (required)
   - Output filename preview
   - `Generate DOCX` primary button
 
 ### 8.2 Simple-first behavior
 
 Defaults for pilots:
-- Pre-fill date to today.
+- Pre-fill date picker to today (displayed as `YYYY_MM_DD`).
 - Pre-fill template path to bundled canonical DOCX.
+- Pre-fill output folder from last-used value (or user home/Documents fallback).
 - Keep only required fields visible by default.
 
 Advanced section (collapsed by default):
@@ -277,9 +335,11 @@ Advanced section (collapsed by default):
 
 ### 8.3 Suggested input widgets
 
-- Time: masked text input with validation feedback.
-- Wind Direction: combo box with common compass values + editable fallback.
-- Wind Speed/Gusts/Temp: numeric spin boxes.
+- Date: `QDateEdit` (calendar popup) normalized to `YYYY_MM_DD`.
+- Time: `QTimeEdit` for Start/End time fields.
+- Time Zone: `QLineEdit` prefilled with `CST` and editable.
+- Wind Direction: direct text input (`QLineEdit`) with uppercase normalization.
+- Wind Speed/Gusts/Temp: integer-only controls (`QSpinBox` or strict integer validators).
 
 ## 9) Data Model Proposal
 
@@ -294,11 +354,12 @@ WindPoint:
 WindReportRequest:
   client_name: str
   system_name: str
-  report_date: str
+  report_date: str  # normalized: YYYY_MM_DD
+  timezone: str     # default: CST, editable (for {{ TZ }})
   start: WindPoint
   end: WindPoint
   template_path: Path
-  output_dir: Path
+  output_dir: Path  # required
   output_filename: str | None
 
 WindReportRender:
@@ -314,30 +375,38 @@ WindReportRender:
 ### Required fields
 - Client Name: non-empty
 - System Name: non-empty
-- Date: non-empty and parseable by chosen date format
+- Date: non-empty and normalizable to `YYYY_MM_DD`
+- Time Zone: non-empty (default `CST`), direct text editable
 - Start and End raw fields required
 - Template file must exist and be `.docx`
-- Output folder must exist or be creatable
+- Output folder selection is required and must exist or be creatable
 
 ### Time parsing
-- Accept pilot-friendly inputs, normalize to final format:
-  - `10:00am`, `10:00 am`, `10:00 AM`
-  - `1:00pm`, `1:00 PM`
-  - optional `13:00` -> `1:00pm`
+- Source of truth is GUI date/time picker controls (`QDateEdit` + `QTimeEdit`).
+- Convert selected time to final format:
+  - `h:mmam` / `h:mmpm`
+- Convert selected date to:
+  - `YYYY_MM_DD`
 
 ### Wind direction
 - Normalize to uppercase.
 - Accept compass-like values (`N`, `SW`, `NNE`, `WNW`).
 - Reject empty values.
+- Direct string input is allowed for pilots (not restricted to preset-only dropdown values).
 
 ### Numeric ranges (initial recommendation)
 - Wind speed mph: 0..150
 - Gust mph: 0..200
 - Temp F: -80..160
+- Integer-only enforcement for all three numeric fields:
+  - reject non-integer text
+  - reject values with units or suffixes/prefixes (for example `17mph`, `mph17`, `51F`)
+  - GUI blocks generation until all numeric fields are valid integers
 
 ### Cross-field checks
-- End time must not be earlier than Start time if same-day assumption is enforced.
-- If overnight runs are needed, include an explicit `Allow overnight` toggle.
+- Same-day only policy:
+  - Start and End belong to the selected report date.
+  - No overnight rollover logic in v1.
 
 ### Template contract checks
 - Required placeholder set exists.
@@ -349,7 +418,8 @@ WindReportRender:
 Metadata mapping:
 - `{{ CLIENT_NAME }}` -> client name input
 - `{{ SYSTEM_NAME }}` -> system name input
-- `{{ DATE }}` -> normalized report date text
+- `{{ DATE }}` -> normalized report date text in `YYYY_MM_DD`
+- `{{ TZ }}` -> timezone input text (default `CST`)
 
 Final output mapping:
 - `{{ S_TIME }}` -> normalized Start time display
@@ -363,6 +433,25 @@ Raw fields are internal-only inputs for computation:
 
 The production output template does not require an intermediate raw placeholder table.
 
+Filename mapping:
+- Output filename is derived from mapped placeholders:
+  - `WindData_{{ CLIENT_NAME }}_{{ DATE }}.docx`
+- Example:
+  - `WindData_TargaResources_2026_02_06.docx`
+
+Header rendering note:
+- Replace only the `{{ TZ }}` token and preserve template punctuation.
+- `Time ({{ TZ }})` must become `Time (CST)` (or another pilot-provided timezone).
+
+Debug mapping artifact:
+- Generate a debug sidecar file for troubleshooting:
+  - `<output_basename>.debug.json`
+- Sidecar should include:
+  - raw input values (`S_WIND`, `S_SPEED`, `S_GUST`, `S_TEMP`, `E_*`)
+  - normalized display values (`S_TIME`, `E_TIME`)
+  - computed strings (`S_STRING`, `E_STRING`)
+  - resolved placeholder payload
+
 ## 12) Error Handling and Pilot Messaging
 
 Pilot-facing errors should be specific and actionable:
@@ -371,6 +460,8 @@ Pilot-facing errors should be specific and actionable:
 - `Template mismatch: expected placeholders not found in production template.`
 - `Invalid Start Time. Expected format like 10:00am or 1:00pm.`
 - `Wind Speed must be an integer between 0 and 150.`
+- `Wind Speed, Gusts, and Temp must be integers only (no unit text).`
+- `Time Zone is required (example: CST).`
 - `Could not write output file. Check folder permissions and try again.`
 
 Success message:
@@ -410,7 +501,12 @@ Success message:
 
 - `tests/test_wind_docx_writer.py`
   - renders from fixture production template
-  - verifies `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING` replacements
+  - verifies `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`, `TZ` replacements
+  - verifies header remains `Time (CST)` style with parentheses preserved
+
+- `tests/test_wind_debug_export.py`
+  - verifies debug sidecar JSON is written
+  - verifies payload includes raw values + computed values
 
 ### GUI-focused tests (lightweight)
 - controller/page logic tests for:
@@ -432,7 +528,7 @@ This is a future implementation roadmap. No phase has started yet.
 - Gate: approved template contract + signed-off sample output.
 
 ### Phase W1 - Core generator
-- Implement core formatter, validation, placeholder checks, DOCX writer.
+- Implement core formatter, validation, placeholder checks, DOCX writer, and debug sidecar export.
 - Add unit tests for mapping/formatting/validation.
 - Gate: all W1 tests pass; generated sample matches expected output exactly.
 
@@ -467,14 +563,48 @@ Risk: Date/time ambiguity.
 
 ## 17) Open Questions to Resolve Before Coding
 
-1. Final date display format in report:
-   - `MM/DD/YYYY` vs `YYYY-MM-DD` vs pilot-entered free text?
-2. Should End time be allowed to roll into next day?
-3. Should Wind Direction be free text or constrained to compass presets?
-4. Preferred generated filename convention (example: `WindData_<Client>_<YYYY_MM_DD>.docx`)?
-5. Do you want an optional debug export (outside DOCX) that includes raw component values used to build `S_STRING` and `E_STRING`?
+No blocking open questions remain for implementation start.
 
 ## 18) Immediate Next Step Recommendation
 
 Create one production DOCX template dedicated to generation (not example documentation) with the approved placeholder set, then lock tests to that contract before implementation starts.
 
+## 19) Revisit Tonight (Talking Points Only, No Implementation Yet)
+
+These are intentionally deferred discussion items to review before expanding scope:
+
+1. Output Preview header alignment polish
+- Status: closed for now (accepted in pilot review on 2026-02-07).
+- Reopen only if future UI changes regress alignment.
+
+2. Simplify `Template + Save` UI section
+- Current thought: remove visible template location/path from the primary pilot UI.
+- Revisit goal: keep this section focused on:
+  - output folder selection
+  - output filename preview
+- Constraint to decide later: whether template selection remains available behind an advanced control or is fully hidden for pilots.
+
+3. Weather API-assisted autofill feasibility (future)
+- Exploration target: evaluate whether we can support pilot input of:
+  - ZIP code (or ZIP + city/state)
+  - Start time
+  - End time
+- Desired behavior:
+  - retrieve authoritative weather values for only Start/End timestamps (not every interval in between),
+  - map to required fields (direction, speed, gust, temp),
+  - eventually allow one-click autofill into Wind Inputs.
+- Deferred technical questions for later research:
+  - trusted, authoritative provider options,
+  - free-tier limits and terms,
+  - support for 30-minute/hourly granularity at location/time specificity,
+  - macOS app constraints for optional location-based UX (for example, "Use my location") versus explicit ZIP/city input.
+
+4. DOCX embedded metadata for downstream report automation (future)
+- Exploration target: evaluate adding backend placeholder/value payload into generated DOCX metadata so external automation can extract the same source values used for replacement.
+- Desired behavior:
+  - preserve normal visible template output for pilots,
+  - also embed machine-readable key/value data (original backend placeholders and final resolved values).
+- Deferred technical questions for later research:
+  - best container in DOCX package (custom properties vs custom XML part),
+  - compatibility of extraction across Word/Pages/save cycles,
+  - size/format conventions and versioning for robust downstream parsing.

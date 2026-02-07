@@ -462,3 +462,114 @@ Modeled after `IMPLEMENTATION_PHASES.md`: do not start the next phase until the 
 **Gate**
 - [ ] A new pilot can follow docs to run both deliverables end-to-end.
 - [ ] Phase Notes recorded (date + tests/verification + deviations).
+
+---
+
+## 8) Wind Data DOCX feature track (W-series)
+
+Execution source of truth:
+- `WIND_DATA_IMPLEMENTATION_PHASES.md`
+
+### Phase W0 - Contract Lock + Test Fixture Baseline
+
+**Work items**
+- [x] Confirm production template path and placeholder contract (`CLIENT_NAME`, `SYSTEM_NAME`, `DATE`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`, `TZ`).
+- [x] Add template contract validator module at `src/purway_geotagger/core/wind_template_contract.py`.
+- [x] Add contract tests at `tests/test_wind_template_contract.py` for required/missing/extra placeholders and `Time ({{ TZ }})` header presence.
+- [x] Lock fixture strategy for W0 by validating the production template directly and mutating temp `.docx` copies for negative-path tests.
+
+**Gate**
+- [x] Contract validator fails clearly on missing required placeholders.
+- [x] Contract validator passes on current production template.
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (W0)**
+- Date: 2026-02-06
+- Verification:
+  - `python3 -m pytest tests/test_wind_template_contract.py` (4 passed)
+  - `python3 -m compileall src` (pass)
+- Deviations:
+  - W0 uses production-template-backed tests instead of adding a separate immutable fixture folder; mutation tests operate on temporary copies only.
+
+### Phase W1 - Core Data Model + Formatting + Validation
+
+**Work items**
+- [x] Add core model/formatting/validation module at `src/purway_geotagger/core/wind_docx.py`.
+- [x] Implement normalized date formatter (`YYYY_MM_DD`) and contract time formatter (`h:mmam` / `h:mmpm`).
+- [x] Implement final weather summary formatter (`<DIR> <SPEED> mph / Gusts <GUST> mph / <TEMP>\u00B0F`).
+- [x] Enforce integer-only speed/gust/temp validation (reject unit-suffixed values like `17mph`).
+- [x] Enforce same-day Start/End policy (`end >= start`) and required editable timezone field.
+- [x] Implement deterministic filename helper using mapped placeholder values (`WindData_{{ CLIENT_NAME }}_{{ DATE }}.docx`).
+- [x] Add debug payload model capturing raw inputs, normalized values, computed strings, and resolved placeholder map.
+- [x] Add tests:
+  - `tests/test_wind_formatting.py`
+  - `tests/test_wind_validation.py`
+
+**Gate**
+- [x] Formatting output matches contract examples.
+- [x] Validation failures are explicit and pilot-readable.
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (W1)**
+- Date: 2026-02-06
+- Verification:
+  - `python3 -m pytest tests/test_wind_formatting.py tests/test_wind_validation.py` (9 passed)
+  - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py` (13 passed)
+  - `python3 -m compileall src` (pass)
+- Deviations:
+  - Direction validation currently allows letter-only tokens up to 8 characters (examples: `SW`, `SSW`, `NNE`, `CALM`) and rejects non-letter values.
+
+### Phase W2 - DOCX Render/Write Engine
+
+**Work items**
+- [x] Add DOCX render/write service at `src/purway_geotagger/core/wind_docx_writer.py`.
+- [x] Enforce strict template-contract validation before render.
+- [x] Replace metadata + final placeholders (`CLIENT_NAME`, `SYSTEM_NAME`, `DATE`, `TZ`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`).
+- [x] Preserve header punctuation when replacing timezone (`Time ({{ TZ }})` -> `Time (CST)` style).
+- [x] Add collision-safe output naming (`_01`, `_02`, ... when filename already exists).
+- [x] Assert no unresolved required placeholders remain in rendered document XML.
+- [x] Add sidecar export `<output_basename>.debug.json` with raw/normalized/computed/map data.
+- [x] Add tests:
+  - `tests/test_wind_docx_writer.py`
+  - `tests/test_wind_debug_export.py`
+- [x] Add dependency pin in `requirements.txt`:
+  - `python-docx==1.1.2`
+
+**Gate**
+- [x] Generated DOCX contains expected replaced values.
+- [x] Template mismatch fails before output write.
+- [x] Debug sidecar is generated with required payload sections.
+- [x] Header output remains `Time (TZ)` with parentheses intact.
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (W2)**
+- Date: 2026-02-06
+- Verification:
+  - `python3 -m pytest tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` (4 passed)
+  - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` (17 passed)
+  - `python3 -m compileall src` (pass)
+- Deviations:
+  - Render/write path currently uses direct DOCX zip/XML replacement to preserve template styling and avoid table layout changes. `python-docx` was pinned for potential future document utilities.
+
+### Phase W3 - Wind Data GUI Tab (Simple-First UX)
+
+**Work items**
+- [x] Add top-level Wind Data nav tab and page wiring in `src/purway_geotagger/gui/main_window.py`.
+- [x] Add Wind Data page implementation at `src/purway_geotagger/gui/pages/wind_data_page.py`.
+- [x] Add Start/End grid widget at `src/purway_geotagger/gui/widgets/wind_entry_grid.py`.
+- [x] Add non-Qt page helper logic at `src/purway_geotagger/gui/pages/wind_data_logic.py`.
+- [x] Add page helper tests at `tests/test_wind_page_logic.py`.
+- [x] Add Wind Data styling hooks in `src/purway_geotagger/gui/style_sheet.py`.
+- [ ] Complete manual macOS smoke checklist for tab visibility, generation flow, and light/dark visual QA.
+
+**Gate**
+- [ ] Pilot-validated end-to-end GUI generation confirmed (manual smoke pending).
+- [ ] Visual consistency and light/dark QA confirmed (manual smoke pending).
+
+**Phase Notes (W3 - In Progress)**
+- Date updated: 2026-02-06
+- Verification:
+  - `python3 -m pytest tests/test_wind_page_logic.py tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` (22 passed)
+  - `python3 -m compileall src` (pass)
+- Deviations:
+  - W3 code/test work is complete, but phase gate remains open until manual macOS UI smoke checks are performed.

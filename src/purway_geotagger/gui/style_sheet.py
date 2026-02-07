@@ -52,6 +52,11 @@ def get_theme_colors(theme: str) -> dict[str, str]:
             "button_secondary_hover": "#2B2B30",
             "button_secondary_pressed": "#303036",
             "button_secondary_border": "#4A4A50",
+            "stepper_bg": "#343842",
+            "stepper_border": "#636A78",
+            "stepper_divider": "#6D7482",
+            "stepper_hover_bg": "#3D4450",
+            "stepper_pressed_bg": "#2F3641",
             "button_primary_fg": "#1C1C1E",
             "button_run_fg": "#1C1C1E",
             "disabled_bg": "#2A2A2F",
@@ -103,6 +108,11 @@ def get_theme_colors(theme: str) -> dict[str, str]:
             "button_secondary_hover": "#F3F4F6",
             "button_secondary_pressed": "#E9EBF0",
             "button_secondary_border": "#BEBEC5",
+            "stepper_bg": "#EEF1F5",
+            "stepper_border": "#AEB4BF",
+            "stepper_divider": "#BCC2CC",
+            "stepper_hover_bg": "#E3E8F0",
+            "stepper_pressed_bg": "#D8DFEA",
             "button_primary_fg": "#FFFFFF",
             "button_run_fg": "#1D1D1F",
             "disabled_bg": "#F0F1F4",
@@ -225,6 +235,48 @@ def get_stylesheet(theme: str) -> str:
         font-size: 12px;
         font-weight: 600;
         color: {c['text_muted']};
+    }}
+
+    QLabel[cssClass="wind_row_badge"] {{
+        background-color: {c['nav_checked_bg']};
+        border: 1px solid {c['card_border']};
+        border-radius: 12px;
+        color: {c['text_primary']};
+        font-size: 12px;
+        font-weight: 700;
+        padding: 3px 10px;
+    }}
+
+    QLabel[cssClass="wind_preview_title"] {{
+        color: {c['text_secondary']};
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+    }}
+
+    QLabel[cssClass="wind_preview_heading"] {{
+        color: {c['text_secondary']};
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+    }}
+
+    QFrame[cssClass="wind_preview_row"] {{
+        background-color: {c['table_alt_bg']};
+        border: 1px solid {c['card_border']};
+        border-radius: 10px;
+    }}
+
+    QLabel[cssClass="wind_preview_time"] {{
+        color: {c['text_primary']};
+        font-size: 14px;
+        font-weight: 700;
+    }}
+
+    QLabel[cssClass="wind_preview_string"] {{
+        color: {c['text_primary']};
+        font-size: 14px;
+        font-weight: 600;
     }}
 
     QLabel[cssClass="error"] {{
@@ -629,7 +681,7 @@ def get_stylesheet(theme: str) -> str:
     }}
 
     /* --- Inputs --- */
-    QLineEdit, QSpinBox, QComboBox {{
+    QLineEdit, QSpinBox, QComboBox, QDateEdit, QTimeEdit, QDateTimeEdit {{
         background-color: {c['input_bg']};
         border: 1px solid {c['input_border']};
         border-radius: 6px;
@@ -639,7 +691,7 @@ def get_stylesheet(theme: str) -> str:
         selection-color: {c['text_inverted']};
     }}
     
-    QLineEdit:focus, QSpinBox:focus, QComboBox:focus {{
+    QLineEdit:focus, QSpinBox:focus, QComboBox:focus, QDateEdit:focus, QTimeEdit:focus, QDateTimeEdit:focus {{
         border: 1px solid {c['focus_ring']};
     }}
 
@@ -650,6 +702,49 @@ def get_stylesheet(theme: str) -> str:
 
     QComboBox::drop-down {{
         border: none;
+    }}
+
+    QDateEdit::drop-down, QDateTimeEdit::drop-down {{
+        border: none;
+    }}
+
+    QWidget[cssClass="wind_stepper"] {{
+        border: 1px solid {c['stepper_border']};
+        border-radius: 8px;
+        background-color: {c['stepper_bg']};
+    }}
+
+    QToolButton[cssClass="wind_stepper_btn"] {{
+        border: none;
+        padding: 0px;
+        margin: 0px;
+        min-width: 16px;
+        min-height: 14px;
+        max-width: 16px;
+        max-height: 14px;
+        font-size: 10px;
+        font-weight: 700;
+        color: {c['primary']};
+        background-color: {c['stepper_bg']};
+    }}
+
+    QToolButton[cssClass="wind_stepper_btn"][stepPos="up"] {{
+        border-top-left-radius: 7px;
+        border-top-right-radius: 7px;
+        border-bottom: 1px solid {c['stepper_divider']};
+    }}
+
+    QToolButton[cssClass="wind_stepper_btn"][stepPos="down"] {{
+        border-bottom-left-radius: 7px;
+        border-bottom-right-radius: 7px;
+    }}
+
+    QToolButton[cssClass="wind_stepper_btn"]:hover {{
+        background-color: {c['stepper_hover_bg']};
+    }}
+
+    QToolButton[cssClass="wind_stepper_btn"]:pressed {{
+        background-color: {c['stepper_pressed_bg']};
     }}
 
     /* --- Checkboxes --- */

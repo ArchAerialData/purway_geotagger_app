@@ -16,5 +16,13 @@ This folder contains CI scripts used by the GitHub Actions workflow. The workflo
 
 ## Notes
 - If secrets are missing, CI still builds and packages an **unsigned** `.dmg`.
+- Workflow secret handling uses a dedicated readiness step in `.github/workflows/macos-build.yml`:
+  - `enabled=true` only when all required signing secrets are present.
+  - Signing/notarization step runs only when `enabled=true`.
+  - Unsigned packaging runs when `enabled!=true`.
 - For compatibility, CI sets `MACOSX_DEPLOYMENT_TARGET=13.0` by default (supports Ventura+).
 - Apple requires Developer ID signing + notarization for smooth Gatekeeper behavior when distributing apps outside the Mac App Store; see `scripts/macos/APPLE_SIGNING_NOTARIZATION_SETUP.md`.
+- After notarization, CI staples both `.app` and `.dmg`, then runs:
+  - `spctl --assess --type execute -vv <app>`
+  - `spctl --assess --type open -vv <dmg>`
+  to verify Gatekeeper acceptance before artifact upload.
