@@ -48,7 +48,7 @@ class TemplateEditorDialog(QDialog):
         self.client_abbr_edit = QLineEdit()
         self.start_index_edit = QLineEdit("0001")
         self.suffix_edit = QLineEdit()
-        self.suffix_edit.setPlaceholderText("Optional, e.g. _{date} or _AREA")
+        self.suffix_edit.setPlaceholderText("Optional suffix, e.g. _AREA")
 
         form.addRow("Client Name", self.client_name_edit)
         form.addRow("Client Abbreviation", self.client_abbr_edit)
@@ -56,19 +56,15 @@ class TemplateEditorDialog(QDialog):
         form.addRow("Additional fields/suffix (optional)", self.suffix_edit)
         right.addLayout(form)
 
-        tokens_help = QLabel("Tokens for suffix: {date} {time} {ppm} {lat} {lon} {orig}")
-        tokens_help.setWordWrap(True)
-        right.addWidget(tokens_help)
-
         preview_box = QGroupBox("Preview")
         preview_layout = QVBoxLayout(preview_box)
         self.pattern_preview = QLabel()
         self.pattern_preview.setWordWrap(True)
         self.example_preview = QLabel()
         self.example_preview.setWordWrap(True)
-        preview_layout.addWidget(QLabel("Pattern"))
+        preview_layout.addWidget(QLabel("Output format"))
         preview_layout.addWidget(self.pattern_preview)
-        preview_layout.addWidget(QLabel("Example"))
+        preview_layout.addWidget(QLabel("Example output"))
         preview_layout.addWidget(self.example_preview)
         right.addWidget(preview_box)
         right.addStretch(1)
@@ -178,7 +174,7 @@ class TemplateEditorDialog(QDialog):
                 orig="IMG_0001",
             )
         except Exception as e:
-            QMessageBox.warning(self, "Pattern error", str(e))
+            QMessageBox.warning(self, "Template error", str(e))
             return
 
         self.manager.upsert(tmpl)
@@ -208,10 +204,12 @@ class TemplateEditorDialog(QDialog):
         suffix = self.suffix_edit.text().strip()
         start_index, width = _parse_start_index(self.start_index_edit.text())
         pattern = _build_pattern(width, suffix)
-        self.pattern_preview.setText(pattern)
 
         name = self.client_name_edit.text().strip() or "Client"
         abbr = self.client_abbr_edit.text().strip() or "CLIENT"
+        index_text = str(start_index).zfill(width) if width > 1 else str(start_index)
+        format_preview = f"{abbr}_{index_text}{suffix}".strip()
+        self.pattern_preview.setText(format_preview)
         tmpl = RenameTemplate(
             id="preview",
             name=name,
@@ -231,7 +229,7 @@ class TemplateEditorDialog(QDialog):
             )
             self.example_preview.setText(f"{example}.jpg")
         except Exception as e:
-            self.example_preview.setText(f"Pattern error: {e}")
+            self.example_preview.setText(f"Preview unavailable: {e}")
 
 
 def _build_pattern(width: int, suffix: str) -> str:

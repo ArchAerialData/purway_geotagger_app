@@ -398,6 +398,9 @@ Ensure packaged `.app` includes required resources/dependencies and pilots can u
 - [ ] Additional output presets (metric units, alternate string format).
 - [ ] Import assist from CSV/manual paste grid.
 - [ ] Weather API autofill spike for Start/End wind values (see `WIND_WEATHER_AUTOFILL_SPIKE_PLAN.md`).
+  - WS0 planning gate completed on 2026-02-07 (provider + contract lock).
+  - WS1 core service spike completed on 2026-02-07 (`src/purway_geotagger/core/wind_weather_autofill.py` + `tests/test_wind_weather_autofill.py`).
+  - WS2 GUI thin slice implemented on 2026-02-07 (`wind_autofill_dialog` + worker-thread wiring + partial-fill status handling); manual smoke gate still pending.
 - [ ] DOCX embedded metadata spike for downstream automation:
   - inject backend placeholder/value map (for example `S_WIND`, `S_SPEED`, `S_GUST`, `S_TEMP`, `E_*` and resolved display values) into DOCX-accessible metadata/custom fields.
   - evaluate extraction-friendly formats for the report automation program (for example custom document properties vs custom XML part).
@@ -415,6 +418,13 @@ Ensure packaged `.app` includes required resources/dependencies and pilots can u
 - Date completed:
 - Verification run:
 - Deviations:
+- Tracking note (2026-02-07):
+  - Weather autofill WS0 was completed and documented in `WIND_WEATHER_AUTOFILL_SPIKE_PLAN.md`.
+  - Weather autofill WS1 was completed as isolated core-service work before GUI integration.
+  - Weather autofill WS2 was implemented with off-UI-thread search/fill workers and explicit location suggestion/selection flow.
+  - WS2.1 lifecycle hardening landed to prevent autofill worker teardown races that could trigger `QThread` crash on rapid/stale completion paths.
+  - WS2.3 control-consistency hardening aligned popup time steppers with main Wind UI and added 24h typed-hour normalization (`13`-`23` -> `1`-`11` + `PM`) across both pages.
+  - WS2.4 date-bounds hardening added popup report-date selection constrained to current-year-through-today and synced popup date into main Wind metadata before autofill request execution.
 
 ---
 

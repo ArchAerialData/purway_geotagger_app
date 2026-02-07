@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from PySide6.QtCore import QTime, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
@@ -23,6 +24,13 @@ from purway_geotagger.core.wind_docx import (
     MIN_TEMP_F,
     WindRowRaw,
 )
+from purway_geotagger.core.wind_weather_autofill import WindAutofillRow
+
+
+@dataclass(frozen=True)
+class AutofillApplySummary:
+    start_applied_fields: tuple[str, ...]
+    end_applied_fields: tuple[str, ...]
 
 
 class WindEntryGrid(QWidget):
@@ -30,6 +38,8 @@ class WindEntryGrid(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self._time_normalization_active = False
+        self._typed_time_text: dict[QTimeEdit, str] = {}
 
         layout = QGridLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -93,6 +103,9 @@ class WindEntryGrid(QWidget):
             temp_field=self.end_temp_field,
         )
 
+        self._wire_time_normalization(self.start_time_edit, self.start_meridiem_combo)
+        self._wire_time_normalization(self.end_time_edit, self.end_meridiem_combo)
+
         for widget in (
             self.start_time_edit,
             self.start_meridiem_combo,
@@ -140,6 +153,97 @@ class WindEntryGrid(QWidget):
         if isinstance(widget, QComboBox):
             widget.currentTextChanged.connect(lambda _value: self.changed.emit())
 
+    def _wire_time_normalization(self, time_edit: QTimeEdit, meridiem_combo: QComboBox) -> None:
+        line = time_edit.lineEdit()
+        if line is not None:
+            line.textEdited.connect(
+                lambda text, edit=time_edit: self._remember_typed_time_text(edit, text)
+            )
+        time_edit.timeChanged.connect(
+            lambda _value: self._normalize_time_overflow(time_edit, meridiem_combo)
+        )
+        time_edit.editingFinished.connect(
+            lambda: self._normalize_typed_time_overflow(time_edit, meridiem_combo)
+        )
+
+    def _remember_typed_time_text(self, time_edit: QTimeEdit, text: str) -> None:
+        self._typed_time_text[time_edit] = text
+
+    def _normalize_typed_time_overflow(self, time_edit: QTimeEdit, meridiem_combo: QComboBox) -> None:
+        typed = self._typed_time_text.pop(time_edit, "").strip()
+        if not typed:
+            return
+        parsed = self._parse_typed_time(typed, default_minute=time_edit.time().minute())
+        if parsed is None:
+            return
+        hour, minute = parsed
+        if hour == 0:
+            self._apply_time_and_meridiem(
+                time_edit, meridiem_combo, normalized_hour=12, minute=minute, meridiem="AM"
+            )
+            return
+        if hour > 12:
+            normalized_hour = 12 if hour >= 24 else ((hour - 1) % 12) + 1
+            self._apply_time_and_meridiem(
+                time_edit, meridiem_combo, normalized_hour=normalized_hour, minute=minute, meridiem="PM"
+            )
+
+    def _normalize_time_overflow(self, time_edit: QTimeEdit, meridiem_combo: QComboBox) -> None:
+        if self._time_normalization_active:
+            return
+
+        raw_time = time_edit.time()
+        hour = raw_time.hour()
+        minute = raw_time.minute()
+        if hour == 0:
+            normalized_hour = 12
+            normalized_meridiem = "AM"
+        elif hour > 12:
+            normalized_hour = ((hour - 1) % 12) + 1
+            normalized_meridiem = "PM"
+        else:
+            return
+        self._apply_time_and_meridiem(
+            time_edit,
+            meridiem_combo,
+            normalized_hour=normalized_hour,
+            minute=minute,
+            meridiem=normalized_meridiem,
+        )
+
+    def _apply_time_and_meridiem(
+        self,
+        time_edit: QTimeEdit,
+        meridiem_combo: QComboBox,
+        *,
+        normalized_hour: int,
+        minute: int,
+        meridiem: str,
+    ) -> None:
+        self._time_normalization_active = True
+        try:
+            if meridiem_combo.currentText() != meridiem:
+                meridiem_combo.setCurrentText(meridiem)
+            time_edit.setTime(QTime(normalized_hour, minute))
+        finally:
+            self._time_normalization_active = False
+
+    def _parse_typed_time(self, text: str, *, default_minute: int) -> tuple[int, int] | None:
+        cleaned = (text or "").strip()
+        if not cleaned:
+            return None
+        parts = cleaned.split(":", maxsplit=1)
+        hour_digits = "".join(ch for ch in parts[0] if ch.isdigit())
+        if not hour_digits:
+            return None
+        hour = int(hour_digits)
+        minute = default_minute
+        if len(parts) == 2:
+            minute_digits = "".join(ch for ch in parts[1] if ch.isdigit())
+            if minute_digits:
+                minute = max(0, min(int(minute_digits[:2]), 59))
+        return hour, minute
+
     def _time_value(self, time_edit: QTimeEdit, meridiem_combo: QComboBox) -> str:
         raw_time = time_edit.time()
         hour_12 = raw_time.hour() % 12 or 12
@@ -148,6 +252,63 @@ class WindEntryGrid(QWidget):
             minute=raw_time.minute(),
             meridiem=meridiem_combo.currentText(),
         )
+
+    def start_time_24h_text(self) -> str:
+        return self._time_value(self.start_time_edit, self.start_meridiem_combo)
+
+    def end_time_24h_text(self) -> str:
+        return self._time_value(self.end_time_edit, self.end_meridiem_combo)
+
+    def start_time_display_text(self) -> str:
+        return f"{self.start_time_edit.time().toString('h:mm')} {self.start_meridiem_combo.currentText()}"
+
+    def end_time_display_text(self) -> str:
+        return f"{self.end_time_edit.time().toString('h:mm')} {self.end_meridiem_combo.currentText()}"
+
+    def apply_autofill_rows(self, *, start: WindAutofillRow, end: WindAutofillRow) -> AutofillApplySummary:
+        start_applied = self._apply_single_row(
+            row=start,
+            direction_edit=self.start_direction_edit,
+            speed_spin=self.start_speed_spin,
+            gust_spin=self.start_gust_spin,
+            temp_spin=self.start_temp_spin,
+        )
+        end_applied = self._apply_single_row(
+            row=end,
+            direction_edit=self.end_direction_edit,
+            speed_spin=self.end_speed_spin,
+            gust_spin=self.end_gust_spin,
+            temp_spin=self.end_temp_spin,
+        )
+        self.changed.emit()
+        return AutofillApplySummary(
+            start_applied_fields=tuple(start_applied),
+            end_applied_fields=tuple(end_applied),
+        )
+
+    def _apply_single_row(
+        self,
+        *,
+        row: WindAutofillRow,
+        direction_edit: QLineEdit,
+        speed_spin: QSpinBox,
+        gust_spin: QSpinBox,
+        temp_spin: QSpinBox,
+    ) -> list[str]:
+        applied_fields: list[str] = []
+        if row.direction is not None:
+            direction_edit.setText(row.direction)
+            applied_fields.append("direction")
+        if row.speed_mph is not None:
+            speed_spin.setValue(row.speed_mph)
+            applied_fields.append("speed")
+        if row.gust_mph is not None:
+            gust_spin.setValue(row.gust_mph)
+            applied_fields.append("gust")
+        if row.temp_f is not None:
+            temp_spin.setValue(row.temp_f)
+            applied_fields.append("temp")
+        return applied_fields
 
     def _add_row(
         self,

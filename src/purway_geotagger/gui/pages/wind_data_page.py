@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -24,6 +26,11 @@ from purway_geotagger.core.wind_docx import (
     WindReportMetadataRaw,
     build_wind_template_payload,
 )
+from purway_geotagger.core.wind_weather_autofill import (
+    LocationSuggestion,
+    WindAutofillRequest,
+    WindAutofillResult,
+)
 from purway_geotagger.core.wind_docx_writer import WindDocxWriterError, generate_wind_docx_report
 from purway_geotagger.gui.pages.wind_data_logic import (
     build_live_preview_payload,
@@ -31,6 +38,8 @@ from purway_geotagger.gui.pages.wind_data_logic import (
     resolve_default_wind_template_path,
 )
 from purway_geotagger.gui.widgets.wind_entry_grid import WindEntryGrid
+from purway_geotagger.gui.widgets.wind_autofill_dialog import WindAutofillDialog
+from purway_geotagger.gui.workers import WindAutofillWorker, WindLocationSearchWorker
 from purway_geotagger.util.platform import open_in_finder
 
 
@@ -42,6 +51,11 @@ class WindDataPage(QWidget):
         self._last_output_docx: Path | None = None
         self._last_debug_json: Path | None = None
         self._last_validation_error: str | None = None
+        self._last_autofill_source_url: str | None = None
+        self._autofill_dialog: WindAutofillDialog | None = None
+        self._autofill_search_workers: dict[int, WindLocationSearchWorker] = {}
+        self._autofill_fill_worker: WindAutofillWorker | None = None
+        self._autofill_search_generation = 0
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -146,9 +160,25 @@ class WindDataPage(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(12)
 
+        header_container = QWidget()
+        header_container.setMinimumHeight(36)
+
+        header_row = QHBoxLayout(header_container)
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(8)
+
         title = QLabel("2) Wind Inputs")
         title.setProperty("cssClass", "h2")
-        layout.addWidget(title)
+        header_row.addWidget(title)
+        header_row.addStretch(1)
+
+        self.autofill_btn = QPushButton("Autofill Wind/Temp Data…")
+        self.autofill_btn.setProperty("cssClass", "primary")
+        self.autofill_btn.setCursor(Qt.PointingHandCursor)
+        self.autofill_btn.clicked.connect(self._open_autofill_dialog)
+        header_row.addWidget(self.autofill_btn)
+
+        layout.addWidget(header_container)
 
         note = QLabel(
             "Wind Direction is direct text. Speed/Gust/Temp are integer-only inputs."
@@ -278,6 +308,11 @@ class WindDataPage(QWidget):
         self.open_debug_btn.setEnabled(False)
         self.open_debug_btn.clicked.connect(self._open_generated_debug)
         layout.addWidget(self.open_debug_btn)
+
+        self.open_source_btn = QPushButton("Open Autofill Source URL")
+        self.open_source_btn.setEnabled(False)
+        self.open_source_btn.clicked.connect(self._open_autofill_source_url)
+        layout.addWidget(self.open_source_btn)
 
         layout.addStretch(1)
 
@@ -430,6 +465,194 @@ class WindDataPage(QWidget):
     def _open_generated_debug(self) -> None:
         if self._last_debug_json:
             open_in_finder(self._last_debug_json)
+
+    def _open_autofill_source_url(self) -> None:
+        if not self._last_autofill_source_url:
+            return
+        QDesktopServices.openUrl(QUrl(self._last_autofill_source_url))
+
+    def _open_autofill_dialog(self) -> None:
+        if self._autofill_dialog is not None and self._autofill_dialog.isVisible():
+            self._autofill_dialog.raise_()
+            self._autofill_dialog.activateWindow()
+            return
+        if self._autofill_fill_worker and self._autofill_fill_worker.isRunning():
+            return
+
+        dialog = WindAutofillDialog(
+            start_time_24h=self.entry_grid.start_time_24h_text(),
+            end_time_24h=self.entry_grid.end_time_24h_text(),
+            report_date=self._selected_report_date(),
+            parent=self,
+        )
+        self._autofill_dialog = dialog
+
+        dialog.search_requested.connect(self._start_location_search)
+        dialog.autofill_requested.connect(self._start_autofill_fill)
+        dialog.finished.connect(self._on_autofill_dialog_closed)
+
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
+    def _start_location_search(self, query: str) -> None:
+        if not self._autofill_dialog:
+            return
+        cleaned = (query or "").strip()
+        if not cleaned:
+            self._autofill_dialog.set_suggestions([])
+            self._autofill_dialog.set_status(
+                "Type a location to begin search.",
+                css_class="subtitle",
+            )
+            return
+
+        self._autofill_search_generation += 1
+        generation = self._autofill_search_generation
+        worker = WindLocationSearchWorker(cleaned, limit=8)
+        self._autofill_search_workers[generation] = worker
+        self._autofill_dialog.set_busy(
+            True,
+            message="Searching locations...",
+            allow_typing_when_busy=True,
+        )
+        worker.results_ready.connect(
+            lambda results, g=generation: self._on_location_search_success(g, results)
+        )
+        worker.failed.connect(
+            lambda message, g=generation: self._on_location_search_failed(g, message)
+        )
+        worker.finished.connect(
+            lambda g=generation: self._on_location_search_worker_finished(g)
+        )
+        worker.start()
+
+    def _on_location_search_success(self, generation: int, results: object) -> None:
+        if generation != self._autofill_search_generation:
+            return
+        if self._autofill_dialog is None:
+            return
+        suggestions: list[LocationSuggestion] = [
+            item for item in (results or []) if isinstance(item, LocationSuggestion)
+        ]
+        self._autofill_dialog.set_busy(False)
+        self._autofill_dialog.set_suggestions(suggestions)
+
+    def _on_location_search_failed(self, generation: int, message: str) -> None:
+        if generation != self._autofill_search_generation:
+            return
+        if self._autofill_dialog is None:
+            return
+        self._autofill_dialog.set_busy(False)
+        self._autofill_dialog.set_suggestions([])
+        self._autofill_dialog.set_status(
+            f"Location search failed: {message}",
+            css_class="status_error",
+        )
+
+    def _on_location_search_worker_finished(self, generation: int) -> None:
+        worker = self._autofill_search_workers.pop(generation, None)
+        if worker is not None:
+            worker.deleteLater()
+
+    def _start_autofill_fill(self) -> None:
+        if self._autofill_dialog is None:
+            return
+        if self._autofill_fill_worker and self._autofill_fill_worker.isRunning():
+            return
+
+        location = self._autofill_dialog.selected_location()
+        if location is None:
+            self._autofill_dialog.set_status(
+                "Select a location before autofill.",
+                css_class="status_error",
+            )
+            return
+
+        report_date = self._autofill_dialog.selected_report_date()
+        selected_qdate = QDate(report_date.year, report_date.month, report_date.day)
+        if self.date_edit.date() != selected_qdate:
+            self.date_edit.setDate(selected_qdate)
+        request = WindAutofillRequest(
+            location=location,
+            report_date=report_date,
+            start_time_24h=self._autofill_dialog.selected_start_time_24h(),
+            end_time_24h=self._autofill_dialog.selected_end_time_24h(),
+        )
+
+        worker = WindAutofillWorker(request=request)
+        self._autofill_fill_worker = worker
+        self._autofill_dialog.set_busy(True, message="Fetching retrospective weather data...")
+        self.autofill_btn.setEnabled(False)
+        worker.result_ready.connect(self._on_autofill_success)
+        worker.failed.connect(self._on_autofill_failed)
+        worker.finished.connect(lambda w=worker: self._on_autofill_worker_finished(w))
+        worker.start()
+
+    def _on_autofill_success(self, payload: object) -> None:
+        self.autofill_btn.setEnabled(True)
+        if not isinstance(payload, WindAutofillResult):
+            self._on_autofill_failed("Autofill returned an unexpected payload.")
+            return
+
+        summary = self.entry_grid.apply_autofill_rows(start=payload.start, end=payload.end)
+        self._last_autofill_source_url = payload.verification_url
+        self.open_source_btn.setEnabled(bool(self._last_autofill_source_url))
+        self._refresh_preview()
+
+        message_parts = [
+            f"Autofill applied from {payload.location.display_name}.",
+            (
+                "Applied fields: "
+                f"Start[{', '.join(summary.start_applied_fields) or 'none'}], "
+                f"End[{', '.join(summary.end_applied_fields) or 'none'}]."
+            ),
+        ]
+
+        warning_lines: list[str] = []
+        for warning in payload.warnings:
+            warning_lines.append(warning)
+        for warning in payload.start.warnings:
+            warning_lines.append(f"Start: {warning}")
+        for warning in payload.end.warnings:
+            warning_lines.append(f"End: {warning}")
+
+        if warning_lines:
+            message_parts.append("Some fields were not available from the provider:")
+            message_parts.extend(warning_lines)
+            if payload.verification_url:
+                message_parts.append("Use 'Open Autofill Source URL' to manually verify source observations.")
+            self._set_status("\n".join(message_parts), css_class="status_info")
+        else:
+            if payload.verification_url:
+                message_parts.append("Use 'Open Autofill Source URL' to manually verify source observations.")
+            self._set_status(" ".join(message_parts), css_class="status_success")
+
+        if self._autofill_dialog is not None:
+            self._autofill_dialog.set_busy(False)
+            self._autofill_dialog.accept()
+
+    def _on_autofill_failed(self, message: str) -> None:
+        self.autofill_btn.setEnabled(True)
+        self._set_status(f"Autofill failed: {message}", css_class="status_error")
+        if self._autofill_dialog is not None:
+            self._autofill_dialog.set_busy(False)
+            self._autofill_dialog.set_status(
+                f"Autofill failed: {message}",
+                css_class="status_error",
+            )
+
+    def _on_autofill_worker_finished(self, worker: WindAutofillWorker) -> None:
+        if self._autofill_fill_worker is worker:
+            self._autofill_fill_worker = None
+        worker.deleteLater()
+
+    def _on_autofill_dialog_closed(self) -> None:
+        self._autofill_dialog = None
+
+    def _selected_report_date(self) -> date:
+        value = self.date_edit.date()
+        return date(value.year(), value.month(), value.day())
 
     def _set_status(self, text: str, *, css_class: str) -> None:
         self.status_label.setText(text)

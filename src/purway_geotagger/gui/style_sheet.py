@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from purway_geotagger.core.utils import resource_path
+
 if TYPE_CHECKING:
     from PySide6.QtGui import QPalette
 
@@ -156,6 +158,8 @@ def get_palette(theme: str) -> QPalette:
 def get_stylesheet(theme: str) -> str:
     """Returns the QSS stylesheet for the given theme ('light' or 'dark')."""
     c = get_theme_colors(theme)
+    checkmark_white_icon = str(resource_path("assets/icons/checkmark_white.png")).replace("\\", "/")
+    checkmark_blue_icon = str(resource_path("assets/icons/checkmark_blue.png")).replace("\\", "/")
     
     # Typography (System Font San Francisco equivalent)
     font_family = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
@@ -771,11 +775,42 @@ def get_stylesheet(theme: str) -> str:
         border-radius: 3px;
         border: 1px solid {c['primary']};
         background-color: {c['primary']};
+        image: url("{checkmark_white_icon}");
+        border-image: url("{checkmark_white_icon}");
     }}
 
     QCheckBox::indicator:checked:disabled {{
         border: 1px solid {c['border']};
         background-color: {c['disabled_bg']};
+    }}
+
+    /* Settings dialog checkbox variant: less saturated, clearer state separation. */
+    QCheckBox[cssClass="settings_checkbox"]::indicator:unchecked {{
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        border: 1px solid {c['input_border']};
+        background-color: {c['surface_bg']};
+    }}
+
+    QCheckBox[cssClass="settings_checkbox"]::indicator:unchecked:hover {{
+        border: 1px solid {c['focus_ring']};
+        background-color: {c['table_alt_bg']};
+    }}
+
+    QCheckBox[cssClass="settings_checkbox"]::indicator:checked {{
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        border: 1px solid {c['primary']};
+        background-color: {c['surface_bg']};
+        image: url("{checkmark_blue_icon}");
+        border-image: url("{checkmark_blue_icon}");
+    }}
+
+    QCheckBox[cssClass="settings_checkbox"]::indicator:checked:hover {{
+        border: 1px solid {c['focus_ring']};
+        background-color: {c['dropzone_hover']};
     }}
     
     /* --- Lists --- */

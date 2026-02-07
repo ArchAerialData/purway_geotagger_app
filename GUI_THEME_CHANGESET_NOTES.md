@@ -141,3 +141,18 @@ This file documents the GUI updates as isolated change sets so each set can be r
   - Added subprocess startup regression test using `QT_QPA_PLATFORM=offscreen`.
 - Revert only this set:
   - `git restore src/purway_geotagger/gui/main_window.py tests/test_main_window_startup.py`
+
+## CHG-011: Template UI simplification (pilot-friendly labels only)
+
+- Purpose: remove backend template syntax/jargon from Templates views and show only pilot-relevant values.
+- Files:
+  - `src/purway_geotagger/gui/main_window.py`
+  - `src/purway_geotagger/gui/widgets/template_editor.py`
+- Key updates:
+  - Templates tab list now shows `Client Name`, `Client Abbreviation`, and `Starting Index` instead of template IDs and raw `{client}_{index...}` pattern syntax.
+  - Template Editor removed token-reference helper text from the main flow.
+  - Suffix field placeholder now uses plain language (`Optional suffix, e.g. _AREA`).
+  - Preview labels now show pilot-facing wording (`Output format`, `Example output`) instead of backend pattern labels.
+  - Pattern-related error wording changed to generic template/preview wording.
+- Revert only this set:
+  - `git restore src/purway_geotagger/gui/main_window.py src/purway_geotagger/gui/widgets/template_editor.py`
