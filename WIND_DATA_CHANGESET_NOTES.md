@@ -409,6 +409,25 @@ This file groups Wind Data work into isolated change sets so each phase can be k
 
 ---
 
+## Change Set WS2.7 - Calendar Hover Polish + Month Arrow Alignment
+
+### Modified
+- `src/purway_geotagger/gui/style_sheet.py`
+
+### Key updates
+- Refined date-picker popover navigation bar sizing and spacing for cleaner alignment.
+- Added explicit month/year button sizing and padding in the calendar header.
+- Repositioned month dropdown indicator (`menu-indicator`) to right-center so it sits aligned with the month label instead of clipping/drooping.
+- Added richer calendar hover feedback:
+  - nav button hover/pressed states,
+  - day-cell hover state for clearer pointer targeting.
+
+### Rollback block (WS2.7 only)
+- Revert:
+  - `src/purway_geotagger/gui/style_sheet.py`
+
+---
+
 ## Validation Snapshot
 
 - `python3 -m pytest tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_main_window_startup.py tests/test_wind_template_contract.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` -> 30 passed

@@ -753,6 +753,8 @@ def get_stylesheet(theme: str) -> str:
         background-color: {c['table_header_bg']};
         border: 1px solid {c['border']};
         border-radius: 8px;
+        min-height: 32px;
+        padding: 2px 6px;
     }}
 
     QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton {{
@@ -760,12 +762,43 @@ def get_stylesheet(theme: str) -> str:
         border: none;
         color: {c['text_primary']};
         font-weight: 600;
-        padding: 4px 6px;
+        padding: 4px 8px;
+        min-height: 24px;
+        border-radius: 7px;
     }}
 
     QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton:hover {{
         background-color: {c['nav_hover']};
-        border-radius: 6px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton:pressed {{
+        background-color: {c['dropzone_hover']};
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton#qt_calendar_prevmonth,
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton#qt_calendar_nextmonth {{
+        min-width: 22px;
+        max-width: 22px;
+        padding: 0px;
+        font-size: 13px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton#qt_calendar_monthbutton {{
+        min-width: 112px;
+        text-align: left;
+        padding: 2px 18px 2px 8px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton#qt_calendar_monthbutton::menu-indicator {{
+        subcontrol-origin: padding;
+        subcontrol-position: right center;
+        right: 6px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton#qt_calendar_yearbutton {{
+        min-width: 56px;
+        text-align: left;
+        padding: 2px 8px;
     }}
 
     QMenu[cssClass="calendar_menu"] QCalendarWidget QAbstractItemView:enabled {{
@@ -774,6 +807,11 @@ def get_stylesheet(theme: str) -> str:
         selection-color: {c['text_inverted']};
         background-color: {c['surface_bg']};
         outline: 0;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QAbstractItemView::item:hover {{
+        background-color: {c['nav_hover']};
+        border-radius: 6px;
     }}
 
     QMenu[cssClass="calendar_menu"] QCalendarWidget QAbstractItemView:disabled {{
