@@ -4,8 +4,8 @@ import math
 from datetime import date
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QTimer, Qt, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QLinearGradient, QPainter, QPainterPath, QRadialGradient
+from PySide6.QtCore import QDate, QSize, QTimer, Qt, QUrl
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QLinearGradient, QPainter, QPainterPath, QRadialGradient
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -41,6 +42,7 @@ from purway_geotagger.gui.pages.wind_data_logic import (
 from purway_geotagger.gui.widgets.wind_entry_grid import WindEntryGrid
 from purway_geotagger.gui.widgets.wind_autofill_dialog import WindAutofillDialog
 from purway_geotagger.gui.workers import WindAutofillWorker, WindLocationSearchWorker
+from purway_geotagger.core.utils import resource_path
 from purway_geotagger.util.platform import open_in_finder
 
 
@@ -205,7 +207,6 @@ class WindDataPage(QWidget):
         self.content_layout.addStretch(1)
 
         self._wire_signals()
-        self.template_edit.setText(str(self._template_path))
 
         last_dir = (self.settings.last_output_dir or "").strip()
         if last_dir:
@@ -270,7 +271,34 @@ class WindDataPage(QWidget):
         self.autofill_btn.setProperty("cssClass", "run")
         self.autofill_btn.setCursor(Qt.PointingHandCursor)
         self.autofill_btn.clicked.connect(self._open_autofill_dialog)
-        root.addWidget(self._build_section_header("2) Wind Inputs", right_widget=self.autofill_btn))
+        info_btn = QToolButton()
+        info_btn.setProperty("cssClass", "wind_info_icon")
+        info_btn.setIcon(QIcon(str(resource_path("assets/icons/info_circle.svg"))))
+        info_btn.setIconSize(QSize(18, 18))
+        info_btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        info_btn.setFixedSize(24, 24)
+        info_btn.setCursor(Qt.PointingHandCursor)
+        info_btn.setToolTip(
+            "<b>Autofill Data Sources</b><br><br>"
+            "<b>Source hierarchy:</b><br>"
+            "1) NOAA/NWS station observations (api.weather.gov)<br>"
+            "2) AviationWeather METAR observations (aviationweather.gov)<br>"
+            "3) Open-Meteo historical hourly archive (archive-api.open-meteo.com)<br><br>"
+            "<b>Missing-value fill order:</b><br>"
+            "NWS -> METAR -> Open-Meteo (missing fields only).<br><br>"
+            "<span style='color:#D93025; font-weight:700;'>"
+            "Pilots are responsible for verifying data accuracy before client delivery. "
+            "Any data uploaded to internal folders is treated as accurate and verified."
+            "</span>"
+        )
+
+        autofill_actions = QWidget(card)
+        autofill_actions_layout = QHBoxLayout(autofill_actions)
+        autofill_actions_layout.setContentsMargins(0, 0, 0, 0)
+        autofill_actions_layout.setSpacing(8)
+        autofill_actions_layout.addWidget(info_btn)
+        autofill_actions_layout.addWidget(self.autofill_btn)
+        root.addWidget(self._build_section_header("2) Wind Inputs", right_widget=autofill_actions))
 
         body = QWidget(card)
         layout = QVBoxLayout(body)
@@ -298,32 +326,42 @@ class WindDataPage(QWidget):
         root.addWidget(self._build_section_header("3) Output Preview"))
 
         body = QWidget(card)
-        layout = QGridLayout(body)
+        layout = QVBoxLayout(body)
         layout.setContentsMargins(20, 20, 20, 20)
-        layout.setHorizontalSpacing(12)
-        layout.setVerticalSpacing(12)
+        layout.setSpacing(12)
         root.addWidget(body)
 
+        header_row = QWidget(body)
+        header_layout = QHBoxLayout(header_row)
+        header_layout.setContentsMargins(12, 0, 12, 0)
+        header_layout.setSpacing(14)
+        label_spacer = QWidget(header_row)
+        label_spacer.setFixedWidth(54)
         time_heading = QLabel("Time")
         time_heading.setProperty("cssClass", "wind_preview_heading")
-        layout.addWidget(time_heading, 0, 1)
+        time_heading.setFixedWidth(120)
+        time_heading.setAlignment(Qt.AlignCenter)
         summary_heading = QLabel("Wind Summary")
         summary_heading.setProperty("cssClass", "wind_preview_heading")
-        layout.addWidget(summary_heading, 0, 2)
+        summary_heading.setAlignment(Qt.AlignCenter)
+        header_layout.addWidget(label_spacer)
+        header_layout.addWidget(time_heading)
+        header_layout.addWidget(summary_heading, 1)
+        layout.addWidget(header_row)
 
         (
             start_row,
             self.start_time_preview,
             self.start_string_preview,
         ) = self._build_preview_row("Start")
-        layout.addWidget(start_row, 1, 0, 1, 3)
+        layout.addWidget(start_row)
 
         (
             end_row,
             self.end_time_preview,
             self.end_string_preview,
         ) = self._build_preview_row("End")
-        layout.addWidget(end_row, 2, 0, 1, 3)
+        layout.addWidget(end_row)
         return card
 
     def _build_preview_row(self, label_text: str) -> tuple[QFrame, QLabel, QLabel]:
@@ -340,6 +378,7 @@ class WindDataPage(QWidget):
         time_value = QLabel("\u2014")
         time_value.setProperty("cssClass", "wind_preview_time")
         time_value.setFixedWidth(120)
+        time_value.setAlignment(Qt.AlignCenter)
 
         summary_value = QLabel("\u2014")
         summary_value.setProperty("cssClass", "wind_preview_string")
@@ -356,7 +395,7 @@ class WindDataPage(QWidget):
         root = QVBoxLayout(card)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        root.addWidget(self._build_section_header("4) Template + Save"))
+        root.addWidget(self._build_section_header("4) Output + Save"))
 
         body = QWidget(card)
         layout = QGridLayout(body)
@@ -365,34 +404,28 @@ class WindDataPage(QWidget):
         layout.setVerticalSpacing(10)
         root.addWidget(body)
 
-        template_lbl = QLabel("Template")
-        template_lbl.setProperty("cssClass", "subtitle")
-        layout.addWidget(template_lbl, 0, 0)
-        self.template_edit = QLineEdit()
-        self.template_edit.setReadOnly(True)
-        layout.addWidget(self.template_edit, 0, 1)
-        self.template_btn = QPushButton("Select Template…")
-        self.template_btn.setProperty("cssClass", "primary")
-        self.template_btn.clicked.connect(self._select_template)
-        layout.addWidget(self.template_btn, 0, 2)
-
         output_lbl = QLabel("Output Folder")
         output_lbl.setProperty("cssClass", "subtitle")
-        layout.addWidget(output_lbl, 1, 0)
+        layout.addWidget(output_lbl, 0, 0)
         self.output_dir_edit = QLineEdit()
         self.output_dir_edit.textChanged.connect(self._refresh_preview)
-        layout.addWidget(self.output_dir_edit, 1, 1)
+        layout.addWidget(self.output_dir_edit, 0, 1)
         self.output_btn = QPushButton("Select Output Folder…")
         self.output_btn.setProperty("cssClass", "primary")
         self.output_btn.clicked.connect(self._select_output_folder)
-        layout.addWidget(self.output_btn, 1, 2)
+        layout.addWidget(self.output_btn, 0, 2)
 
         filename_lbl = QLabel("Output Filename")
         filename_lbl.setProperty("cssClass", "subtitle")
-        layout.addWidget(filename_lbl, 2, 0)
+        layout.addWidget(filename_lbl, 1, 0)
         self.filename_edit = QLineEdit()
         self.filename_edit.setReadOnly(True)
-        layout.addWidget(self.filename_edit, 2, 1, 1, 2)
+        self.filename_edit.setPlaceholderText("Auto-generated once required fields above are filled out.")
+        layout.addWidget(self.filename_edit, 1, 1, 1, 2)
+        filename_hint = QLabel("Auto-generated after the required fields above are complete.")
+        filename_hint.setProperty("cssClass", "breadcrumb")
+        filename_hint.setWordWrap(True)
+        layout.addWidget(filename_hint, 2, 1, 1, 2)
         return card
 
     def _build_section_header(self, title_text: str, right_widget: QWidget | None = None) -> _AnimatedSectionHeader:
@@ -512,19 +545,6 @@ class WindDataPage(QWidget):
             self._set_status(reason, css_class="subtitle")
         elif not reason and not self.status_label.text():
             self._set_status("", css_class="subtitle")
-
-    def _select_template(self) -> None:
-        start = str(self._template_path.parent if self._template_path else Path.home())
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Wind DOCX Template",
-            start,
-            "Word Documents (*.docx)",
-        )
-        if path:
-            self._template_path = Path(path)
-            self.template_edit.setText(path)
-            self._refresh_preview()
 
     def _select_output_folder(self) -> None:
         base = self.output_dir_edit.text().strip() or self.settings.last_output_dir or str(Path.home())

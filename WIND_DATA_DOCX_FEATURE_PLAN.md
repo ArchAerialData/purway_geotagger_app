@@ -599,7 +599,7 @@ These are intentionally deferred discussion items to review before expanding sco
   - support for 30-minute/hourly granularity at location/time specificity,
   - macOS app constraints for optional location-based UX (for example, "Use my location") versus explicit ZIP/city input.
 
-4. DOCX embedded metadata for downstream report automation (future)
+4. DOCX embedded metadata for downstream report automation
 - Exploration target: evaluate adding backend placeholder/value payload into generated DOCX metadata so external automation can extract the same source values used for replacement.
 - Desired behavior:
   - preserve normal visible template output for pilots,
@@ -608,3 +608,9 @@ These are intentionally deferred discussion items to review before expanding sco
   - best container in DOCX package (custom properties vs custom XML part),
   - compatibility of extraction across Word/Pages/save cycles,
   - size/format conventions and versioning for robust downstream parsing.
+- Status update (2026-02-07):
+  - Implemented using a custom XML part in generated DOCX outputs:
+    - `customXml/purway_wind_metadata.xml`
+  - Embedded payload includes:
+    - resolved template placeholder map (`CLIENT_NAME`, `SYSTEM_NAME`, `DATE`, `TZ`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`)
+    - component value map (`S_WIND`, `S_SPEED`, `S_GUST`, `S_TEMP`, `E_WIND`, `E_SPEED`, `E_GUST`, `E_TEMP`)

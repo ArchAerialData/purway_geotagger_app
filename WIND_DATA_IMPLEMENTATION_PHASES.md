@@ -401,7 +401,7 @@ Ensure packaged `.app` includes required resources/dependencies and pilots can u
   - WS0 planning gate completed on 2026-02-07 (provider + contract lock).
   - WS1 core service spike completed on 2026-02-07 (`src/purway_geotagger/core/wind_weather_autofill.py` + `tests/test_wind_weather_autofill.py`).
   - WS2 GUI thin slice implemented on 2026-02-07 (`wind_autofill_dialog` + worker-thread wiring + partial-fill status handling); manual smoke gate still pending.
-- [ ] DOCX embedded metadata spike for downstream automation:
+- [x] DOCX embedded metadata spike for downstream automation:
   - inject backend placeholder/value map (for example `S_WIND`, `S_SPEED`, `S_GUST`, `S_TEMP`, `E_*` and resolved display values) into DOCX-accessible metadata/custom fields.
   - evaluate extraction-friendly formats for the report automation program (for example custom document properties vs custom XML part).
 
@@ -425,6 +425,9 @@ Ensure packaged `.app` includes required resources/dependencies and pilots can u
   - WS2.1 lifecycle hardening landed to prevent autofill worker teardown races that could trigger `QThread` crash on rapid/stale completion paths.
   - WS2.3 control-consistency hardening aligned popup time steppers with main Wind UI and added 24h typed-hour normalization (`13`-`23` -> `1`-`11` + `PM`) across both pages.
   - WS2.4 date-bounds hardening added popup report-date selection constrained to current-year-through-today and synced popup date into main Wind metadata before autofill request execution.
+  - WS2.5 data-completeness hardening added provider-level backfill: when NWS rows are partial (for example missing gust), missing fields are now backfilled from Open-Meteo archive while preserving resolved NWS fields.
+  - WS2.6 source-chain hardening added AviationWeather METAR as the middle provider: `NWS -> METAR -> Open-Meteo`, with partial-row merge performed in that order for higher gust/data fill rates.
+  - DOCX metadata spike landed via embedded custom XML part `customXml/purway_wind_metadata.xml` carrying template placeholder values and component values (`S_WIND`, `S_SPEED`, `S_GUST`, `S_TEMP`, `E_*`) for downstream extraction.
 
 ---
 

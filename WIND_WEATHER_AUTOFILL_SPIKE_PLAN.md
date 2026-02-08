@@ -2,7 +2,7 @@
 
 Date created: 2026-02-07
 Last updated: 2026-02-07
-Status: WS0 complete, WS1 complete, WS2 implemented (manual macOS smoke pending gate close).
+Status: WS0 complete, WS1 complete, WS2 implemented (manual macOS smoke pending gate close), WS2.6 source-chain hardening landed.
 
 ## 1) Spike Goal
 
@@ -76,7 +76,10 @@ Partial fill policy:
 - Show per-row/per-field warnings when values are missing or stale.
 
 Manual verification policy:
-- Persist a source verification URL from the exact NWS observations query used for autofill.
+- Persist a source verification URL from the provider used for returned values:
+  - NWS station observations URL when NWS data is complete,
+  - AviationWeather METAR URL when METAR was used as primary fallback/backfill,
+  - Open-Meteo archive URL when historical fallback/backfill values were used.
 - Expose an `Open Autofill Source URL` action in the Wind Data UI after a successful autofill run.
 
 Preview policy:
@@ -228,6 +231,16 @@ Output mapping (to existing Wind controls):
   - Added WS2.1 lifecycle hardening after crash report: autofill worker cleanup is now instance-specific to prevent stale `finished` signals from deleting the active running worker.
   - Added WS2.3 control consistency hardening: popup target-time controls now use the same custom stepper style as main Wind Inputs and both pages auto-normalize 24h typed hours (`13`-`23`) to 12h + `PM`.
   - Added WS2.4 report-date hardening: popup now includes explicit report-date selection constrained to current-year-through-today and uses that selected date for autofill requests.
+  - Added WS2.5 weather-source hardening: when NWS returns partial rows (for example missing gust), service now requests Open-Meteo archive and backfills only missing fields while preserving NWS values that were present.
+  - WS2.5 verification:
+    - `python3 -m pytest tests/test_wind_weather_autofill.py` (8 passed)
+    - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py` (47 passed)
+    - `python3 -m compileall src` (pass)
+  - Added WS2.6 provider-chain hardening: fallback order is now `NWS -> AviationWeather METAR -> Open-Meteo archive`, and partial rows are backfilled in that order to improve gust/data completion.
+  - WS2.6 verification:
+    - `python3 -m pytest tests/test_wind_weather_autofill.py` (9 passed)
+    - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py` (48 passed)
+    - `python3 -m compileall src` (pass)
 
 ## Phase WS3 - Hardening + Packaged App Readiness
 

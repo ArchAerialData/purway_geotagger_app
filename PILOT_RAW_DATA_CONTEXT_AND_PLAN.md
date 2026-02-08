@@ -573,3 +573,27 @@ Execution source of truth:
   - `python3 -m compileall src` (pass)
 - Deviations:
   - W3 code/test work is complete, but phase gate remains open until manual macOS UI smoke checks are performed.
+
+### Wind Autofill Tracking (WS)
+
+- Date updated: 2026-02-07
+- WS2.6 source-chain hardening added AviationWeather METAR fallback/backfill between NWS and Open-Meteo:
+  - provider order now `NWS -> AviationWeather METAR -> Open-Meteo archive`
+  - missing fields (for example gust) are merged in that order while preserving already-resolved values
+- Verification:
+  - `python3 -m pytest tests/test_wind_weather_autofill.py` (9 passed)
+  - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py` (48 passed)
+  - `python3 -m compileall src` (pass)
+
+### Wind DOCX Metadata Tracking
+
+- Date updated: 2026-02-07
+- Embedded custom XML metadata part added to generated DOCX files for downstream automation parsing:
+  - `customXml/purway_wind_metadata.xml`
+- Embedded payload includes:
+  - resolved template placeholders (`CLIENT_NAME`, `SYSTEM_NAME`, `DATE`, `TZ`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`)
+  - component values (`S_WIND`, `S_SPEED`, `S_GUST`, `S_TEMP`, `E_WIND`, `E_SPEED`, `E_GUST`, `E_TEMP`)
+- Verification:
+  - `python3 -m pytest tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` (5 passed)
+  - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py` (49 passed)
+  - `python3 -m compileall src` (pass)

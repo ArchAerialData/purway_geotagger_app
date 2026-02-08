@@ -161,8 +161,8 @@ def get_stylesheet(theme: str) -> str:
     checkmark_white_icon = str(resource_path("assets/icons/checkmark_white.png")).replace("\\", "/")
     checkmark_blue_icon = str(resource_path("assets/icons/checkmark_blue.png")).replace("\\", "/")
     
-    # Typography (System Font San Francisco equivalent)
-    font_family = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+    # Typography (Qt-safe macOS stack, avoids web-only family aliases)
+    font_family = "Helvetica Neue, Helvetica, Arial"
 
     # The QSS Template
     qss = f"""
@@ -513,17 +513,20 @@ def get_stylesheet(theme: str) -> str:
     QPushButton[cssClass="primary"]:hover {{
         background-color: {c['primary_hover']};
         border-color: {c['primary_hover']};
+        border-radius: 8px;
     }}
     
     QPushButton[cssClass="primary"]:pressed {{
         background-color: {c['primary_pressed']};
         border-color: {c['primary_pressed']};
+        border-radius: 8px;
     }}
     
     QPushButton[cssClass="primary"]:disabled {{
         background-color: {c['disabled_bg']};
         border-color: {c['border']};
         color: {c['disabled_text']};
+        border-radius: 8px;
     }}
 
     /* Run/Go Button (Green) */
@@ -551,6 +554,26 @@ def get_stylesheet(theme: str) -> str:
         background-color: {c['disabled_bg']};
         border-color: {c['border']};
         color: {c['disabled_text']};
+    }}
+
+    QToolButton[cssClass="wind_info_icon"] {{
+        background: transparent;
+        border: none;
+        min-width: 24px;
+        max-width: 24px;
+        min-height: 24px;
+        max-height: 24px;
+        padding: 0;
+    }}
+
+    QToolButton[cssClass="wind_info_icon"]:hover {{
+        background-color: rgba(255, 255, 255, 0.16);
+        border-radius: 12px;
+    }}
+
+    QToolButton[cssClass="wind_info_icon"]:pressed {{
+        background-color: rgba(255, 255, 255, 0.28);
+        border-radius: 12px;
     }}
 
     /* Open File Button */
@@ -713,23 +736,27 @@ def get_stylesheet(theme: str) -> str:
     QToolButton[cssClass="chip"]:hover {{
         background-color: {c['button_secondary_hover']};
         border-color: {c['focus_ring']};
+        border-radius: 14px;
     }}
 
     QToolButton[cssClass="chip"]:pressed {{
         background-color: {c['button_secondary_pressed']};
         border-color: {c['focus_ring']};
+        border-radius: 14px;
     }}
 
     QToolButton[cssClass="chip"]:checked {{
         background-color: {c['nav_checked_bg']};
         color: {c['primary']};
         border-color: {c['primary']};
+        border-radius: 14px;
     }}
 
     QToolButton[cssClass="chip"]:disabled {{
         background-color: {c['disabled_bg']};
         border-color: {c['border']};
         color: {c['disabled_text']};
+        border-radius: 14px;
     }}
 
     /* Sticky Nav Buttons */

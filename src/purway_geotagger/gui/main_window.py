@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QCheckBox, QSpinBox, QLineEdit, QProgressBar, QTableView,
     QMessageBox, QComboBox, QListWidget, QToolButton,
-    QStyle, QApplication, QStackedWidget, QButtonGroup, QFrame,
+    QStyle, QApplication, QStackedWidget, QButtonGroup, QFrame, QSizePolicy,
     QSplitter, QFormLayout, QHeaderView, QMenu
 )
 
@@ -251,13 +251,22 @@ class MainWindow(QMainWindow):
         self.jobs_search_edit.setPlaceholderText("Search job name, mode, path, or message")
         controls_row.addWidget(self.jobs_search_edit, 1)
 
-        self.jobs_show_all_chk = QCheckBox("Show all history")
-        controls_row.addWidget(self.jobs_show_all_chk)
-        self.jobs_advanced_chk = QCheckBox("Show advanced columns")
-        controls_row.addWidget(self.jobs_advanced_chk)
-        self.jobs_details_toggle = QCheckBox("Show details panel")
-        controls_row.addWidget(self.jobs_details_toggle)
         jobs_intro_layout.addLayout(controls_row)
+
+        toggles_row = QHBoxLayout()
+        toggles_row.setSpacing(16)
+        toggles_row.addStretch(1)
+
+        self.jobs_show_all_chk = QCheckBox("Show all history")
+        self.jobs_show_all_chk.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        toggles_row.addWidget(self.jobs_show_all_chk)
+        self.jobs_advanced_chk = QCheckBox("Show advanced columns")
+        self.jobs_advanced_chk.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        toggles_row.addWidget(self.jobs_advanced_chk)
+        self.jobs_details_toggle = QCheckBox("Show details panel")
+        self.jobs_details_toggle.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        toggles_row.addWidget(self.jobs_details_toggle)
+        jobs_intro_layout.addLayout(toggles_row)
         jobs_layout.addWidget(jobs_intro)
 
         jobs_splitter = QSplitter(Qt.Horizontal)
@@ -300,12 +309,10 @@ class MainWindow(QMainWindow):
         self.view_report_btn.setProperty("cssClass", "primary")
         self.open_out_btn = QPushButton("Open Output")
         self.open_out_btn.clicked.connect(self._open_selected_output)
-        self.open_out_btn.setProperty("cssClass", "open_file")
-        self.jobs_more_btn = QToolButton()
-        self.jobs_more_btn.setText("More")
-        self.jobs_more_btn.setPopupMode(QToolButton.InstantPopup)
+        self.open_out_btn.setProperty("cssClass", "primary")
+        self.jobs_more_btn = QPushButton("More \u25BE")
         self.jobs_more_btn.setCursor(Qt.PointingHandCursor)
-        self.jobs_more_btn.setProperty("cssClass", "chip")
+        self.jobs_more_btn.setProperty("cssClass", "primary")
         self.jobs_more_menu = QMenu(self.jobs_more_btn)
         self.cancel_action = self.jobs_more_menu.addAction("Cancel selected job")
         self.cancel_action.triggered.connect(self._cancel_selected)
@@ -314,6 +321,8 @@ class MainWindow(QMainWindow):
         self.export_manifest_action = self.jobs_more_menu.addAction("Export manifest.csv")
         self.export_manifest_action.triggered.connect(self._export_selected_manifest)
         self.jobs_more_btn.setMenu(self.jobs_more_menu)
+        jobs_action_size = self.view_report_btn.sizeHint().expandedTo(self.open_out_btn.sizeHint())
+        self.jobs_more_btn.setFixedSize(jobs_action_size)
 
         act_row.addWidget(self.view_report_btn)
         act_row.addWidget(self.open_out_btn)
