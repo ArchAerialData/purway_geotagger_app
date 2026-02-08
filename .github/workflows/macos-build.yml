@@ -9,7 +9,8 @@ jobs:
   build:
     # Pin a specific runner to avoid surprises when `macos-latest` advances.
     runs-on: macos-14
-    timeout-minutes: 90
+    # Cap total macOS runner time to limit cost if signing/notarization stalls.
+    timeout-minutes: 60
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
       BUNDLE_ID: "com.archaerial.purwaygeotagger"
