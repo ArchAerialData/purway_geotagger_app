@@ -62,6 +62,11 @@ DMG_PATH="${REPO_DIR}/dist/PurwayGeotagger.dmg"
 
 echo "Submitting for notarization..."
 xcrun notarytool submit "${DMG_PATH}" --key "${API_KEY}" --key-id "${APPLE_KEY_ID}" --issuer "${APPLE_ISSUER_ID}" --wait
+xcrun stapler staple "${APP_PATH}"
 xcrun stapler staple "${DMG_PATH}"
+
+echo "Running Gatekeeper assessments..."
+spctl --assess --type execute -vv "${APP_PATH}"
+spctl --assess --type open -vv "${DMG_PATH}"
 
 echo "Notarization complete: ${DMG_PATH}"

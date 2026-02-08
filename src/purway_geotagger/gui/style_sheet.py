@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from purway_geotagger.core.utils import resource_path
+
 if TYPE_CHECKING:
     from PySide6.QtGui import QPalette
 
@@ -52,6 +54,11 @@ def get_theme_colors(theme: str) -> dict[str, str]:
             "button_secondary_hover": "#2B2B30",
             "button_secondary_pressed": "#303036",
             "button_secondary_border": "#4A4A50",
+            "stepper_bg": "#343842",
+            "stepper_border": "#636A78",
+            "stepper_divider": "#6D7482",
+            "stepper_hover_bg": "#3D4450",
+            "stepper_pressed_bg": "#2F3641",
             "button_primary_fg": "#1C1C1E",
             "button_run_fg": "#1C1C1E",
             "disabled_bg": "#2A2A2F",
@@ -103,6 +110,11 @@ def get_theme_colors(theme: str) -> dict[str, str]:
             "button_secondary_hover": "#F3F4F6",
             "button_secondary_pressed": "#E9EBF0",
             "button_secondary_border": "#BEBEC5",
+            "stepper_bg": "#EEF1F5",
+            "stepper_border": "#AEB4BF",
+            "stepper_divider": "#BCC2CC",
+            "stepper_hover_bg": "#E3E8F0",
+            "stepper_pressed_bg": "#D8DFEA",
             "button_primary_fg": "#FFFFFF",
             "button_run_fg": "#1D1D1F",
             "disabled_bg": "#F0F1F4",
@@ -146,9 +158,11 @@ def get_palette(theme: str) -> QPalette:
 def get_stylesheet(theme: str) -> str:
     """Returns the QSS stylesheet for the given theme ('light' or 'dark')."""
     c = get_theme_colors(theme)
+    checkmark_white_icon = str(resource_path("assets/icons/checkmark_white.png")).replace("\\", "/")
+    checkmark_blue_icon = str(resource_path("assets/icons/checkmark_blue.png")).replace("\\", "/")
     
-    # Typography (System Font San Francisco equivalent)
-    font_family = "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+    # Typography (Qt-safe macOS stack, avoids web-only family aliases)
+    font_family = "Helvetica Neue, Helvetica, Arial"
 
     # The QSS Template
     qss = f"""
@@ -227,6 +241,48 @@ def get_stylesheet(theme: str) -> str:
         color: {c['text_muted']};
     }}
 
+    QLabel[cssClass="wind_row_badge"] {{
+        background-color: {c['nav_checked_bg']};
+        border: 1px solid {c['card_border']};
+        border-radius: 12px;
+        color: {c['text_primary']};
+        font-size: 12px;
+        font-weight: 700;
+        padding: 3px 10px;
+    }}
+
+    QLabel[cssClass="wind_preview_title"] {{
+        color: {c['text_secondary']};
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+    }}
+
+    QLabel[cssClass="wind_preview_heading"] {{
+        color: {c['text_secondary']};
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+    }}
+
+    QFrame[cssClass="wind_preview_row"] {{
+        background-color: {c['table_alt_bg']};
+        border: 1px solid {c['card_border']};
+        border-radius: 10px;
+    }}
+
+    QLabel[cssClass="wind_preview_time"] {{
+        color: {c['text_primary']};
+        font-size: 14px;
+        font-weight: 700;
+    }}
+
+    QLabel[cssClass="wind_preview_string"] {{
+        color: {c['text_primary']};
+        font-size: 14px;
+        font-weight: 600;
+    }}
+
     QLabel[cssClass="error"] {{
         color: {c['status_error_text']};
         font-weight: 600;
@@ -298,6 +354,86 @@ def get_stylesheet(theme: str) -> str:
         background-color: {c['surface_bg']};
         border: 1px solid {c['card_border']};
         border-radius: 12px;
+    }}
+
+    QFrame[cssClass="mode_card"] {{
+        background-color: {c['surface_bg']};
+        border: 1px solid {c['card_border']};
+        border-radius: 14px;
+    }}
+
+    QFrame[cssClass="mode_card"][hovered="true"] {{
+        border: 1px solid {c['focus_ring']};
+        background-color: {c['table_alt_bg']};
+    }}
+
+    QFrame[cssClass="mode_card"][lastUsed="true"] {{
+        border: 1px solid {c['primary']};
+    }}
+
+    QFrame[cssClass="mode_card"]:focus {{
+        border: 1px solid {c['focus_ring']};
+    }}
+
+    QLabel[cssClass="mode_card_icon"] {{
+        min-width: 28px;
+        max-width: 28px;
+        min-height: 28px;
+        max-height: 28px;
+        border-radius: 8px;
+        background-color: {c['nav_checked_bg']};
+        color: {c['primary']};
+        font-size: 12px;
+        font-weight: 700;
+    }}
+
+    QFrame[cssClass="mode_card_header"] QLabel[cssClass="mode_card_icon"] {{
+        background-color: rgba(255, 255, 255, 0.16);
+        color: #EAF1FF;
+    }}
+
+    QLabel[cssClass="mode_card_title"] {{
+        font-size: 15px;
+        font-weight: 650;
+        color: {c['text_primary']};
+    }}
+
+    QFrame[cssClass="mode_card_header"] QLabel[cssClass="mode_card_title"] {{
+        color: #F4F7FF;
+        font-weight: 700;
+    }}
+
+    QLabel[cssClass="mode_card_chevron"] {{
+        color: {c['text_muted']};
+        font-size: 17px;
+        font-weight: 700;
+        min-width: 12px;
+    }}
+
+    QFrame[cssClass="mode_card_header"] QLabel[cssClass="mode_card_chevron"] {{
+        color: rgba(235, 241, 255, 0.92);
+    }}
+
+    QFrame[cssClass="mode_card"][hovered="true"] QLabel[cssClass="mode_card_chevron"] {{
+        color: {c['primary']};
+    }}
+
+    QFrame[cssClass="mode_card_divider"] {{
+        border: none;
+        min-height: 1px;
+        max-height: 1px;
+        background-color: {c['card_border']};
+    }}
+
+    QLabel[cssClass="mode_card_bullets"] {{
+        color: {c['text_secondary']};
+        font-size: 14px;
+    }}
+
+    QLabel[cssClass="mode_card_hint"] {{
+        color: {c['text_muted']};
+        font-size: 12px;
+        font-weight: 600;
     }}
     
     QGroupBox {{
@@ -377,17 +513,20 @@ def get_stylesheet(theme: str) -> str:
     QPushButton[cssClass="primary"]:hover {{
         background-color: {c['primary_hover']};
         border-color: {c['primary_hover']};
+        border-radius: 8px;
     }}
     
     QPushButton[cssClass="primary"]:pressed {{
         background-color: {c['primary_pressed']};
         border-color: {c['primary_pressed']};
+        border-radius: 8px;
     }}
     
     QPushButton[cssClass="primary"]:disabled {{
         background-color: {c['disabled_bg']};
         border-color: {c['border']};
         color: {c['disabled_text']};
+        border-radius: 8px;
     }}
 
     /* Run/Go Button (Green) */
@@ -415,6 +554,26 @@ def get_stylesheet(theme: str) -> str:
         background-color: {c['disabled_bg']};
         border-color: {c['border']};
         color: {c['disabled_text']};
+    }}
+
+    QToolButton[cssClass="wind_info_icon"] {{
+        background: transparent;
+        border: none;
+        min-width: 24px;
+        max-width: 24px;
+        min-height: 24px;
+        max-height: 24px;
+        padding: 0;
+    }}
+
+    QToolButton[cssClass="wind_info_icon"]:hover {{
+        background-color: rgba(255, 255, 255, 0.16);
+        border-radius: 12px;
+    }}
+
+    QToolButton[cssClass="wind_info_icon"]:pressed {{
+        background-color: rgba(255, 255, 255, 0.28);
+        border-radius: 12px;
     }}
 
     /* Open File Button */
@@ -577,23 +736,27 @@ def get_stylesheet(theme: str) -> str:
     QToolButton[cssClass="chip"]:hover {{
         background-color: {c['button_secondary_hover']};
         border-color: {c['focus_ring']};
+        border-radius: 14px;
     }}
 
     QToolButton[cssClass="chip"]:pressed {{
         background-color: {c['button_secondary_pressed']};
         border-color: {c['focus_ring']};
+        border-radius: 14px;
     }}
 
     QToolButton[cssClass="chip"]:checked {{
         background-color: {c['nav_checked_bg']};
         color: {c['primary']};
         border-color: {c['primary']};
+        border-radius: 14px;
     }}
 
     QToolButton[cssClass="chip"]:disabled {{
         background-color: {c['disabled_bg']};
         border-color: {c['border']};
         color: {c['disabled_text']};
+        border-radius: 14px;
     }}
 
     /* Sticky Nav Buttons */
@@ -629,7 +792,7 @@ def get_stylesheet(theme: str) -> str:
     }}
 
     /* --- Inputs --- */
-    QLineEdit, QSpinBox, QComboBox {{
+    QLineEdit, QSpinBox, QComboBox, QDateEdit, QTimeEdit, QDateTimeEdit {{
         background-color: {c['input_bg']};
         border: 1px solid {c['input_border']};
         border-radius: 6px;
@@ -639,7 +802,7 @@ def get_stylesheet(theme: str) -> str:
         selection-color: {c['text_inverted']};
     }}
     
-    QLineEdit:focus, QSpinBox:focus, QComboBox:focus {{
+    QLineEdit:focus, QSpinBox:focus, QComboBox:focus, QDateEdit:focus, QTimeEdit:focus, QDateTimeEdit:focus {{
         border: 1px solid {c['focus_ring']};
     }}
 
@@ -650,6 +813,155 @@ def get_stylesheet(theme: str) -> str:
 
     QComboBox::drop-down {{
         border: none;
+    }}
+
+    QDateEdit::drop-down, QDateTimeEdit::drop-down {{
+        border: none;
+    }}
+
+    QLineEdit[cssClass="date_picker_display"] {{
+        font-weight: 600;
+    }}
+
+    QToolButton[cssClass="date_picker_btn"] {{
+        background-color: {c['button_secondary_bg']};
+        border: 1px solid {c['button_secondary_border']};
+        border-radius: 8px;
+        color: {c['text_primary']};
+        padding: 5px 10px;
+        min-height: 30px;
+        font-size: 12px;
+        font-weight: 600;
+    }}
+
+    QToolButton[cssClass="date_picker_btn"]:hover {{
+        background-color: {c['button_secondary_hover']};
+        border-color: {c['focus_ring']};
+    }}
+
+    QToolButton[cssClass="date_picker_btn"]:pressed {{
+        background-color: {c['button_secondary_pressed']};
+        border-color: {c['focus_ring']};
+    }}
+
+    QMenu[cssClass="calendar_menu"] {{
+        background-color: {c['surface_bg']};
+        border: 1px solid {c['card_border']};
+        border-radius: 12px;
+        padding: 8px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget {{
+        background-color: {c['surface_bg']};
+        color: {c['text_primary']};
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QWidget#qt_calendar_navigationbar {{
+        background-color: {c['table_header_bg']};
+        border: 1px solid {c['border']};
+        border-radius: 8px;
+        min-height: 32px;
+        padding: 2px 6px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton {{
+        background-color: transparent;
+        border: none;
+        color: {c['text_primary']};
+        font-weight: 600;
+        padding: 4px 8px;
+        min-height: 24px;
+        border-radius: 7px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton:hover {{
+        background-color: {c['nav_hover']};
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton:pressed {{
+        background-color: {c['dropzone_hover']};
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton#qt_calendar_prevmonth,
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton#qt_calendar_nextmonth {{
+        min-width: 22px;
+        max-width: 22px;
+        padding: 0px;
+        font-size: 13px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton#qt_calendar_monthbutton {{
+        min-width: 112px;
+        text-align: left;
+        padding: 2px 18px 2px 8px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton#qt_calendar_monthbutton::menu-indicator {{
+        subcontrol-origin: padding;
+        subcontrol-position: right center;
+        right: 6px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QToolButton#qt_calendar_yearbutton {{
+        min-width: 56px;
+        text-align: left;
+        padding: 2px 8px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QAbstractItemView:enabled {{
+        color: {c['text_primary']};
+        selection-background-color: {c['primary']};
+        selection-color: {c['text_inverted']};
+        background-color: {c['surface_bg']};
+        outline: 0;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QAbstractItemView::item:hover {{
+        background-color: {c['nav_hover']};
+        border-radius: 6px;
+    }}
+
+    QMenu[cssClass="calendar_menu"] QCalendarWidget QAbstractItemView:disabled {{
+        color: {c['disabled_text']};
+    }}
+
+    QWidget[cssClass="wind_stepper"] {{
+        border: 1px solid {c['stepper_border']};
+        border-radius: 8px;
+        background-color: {c['stepper_bg']};
+    }}
+
+    QToolButton[cssClass="wind_stepper_btn"] {{
+        border: none;
+        padding: 0px;
+        margin: 0px;
+        min-width: 16px;
+        min-height: 14px;
+        max-width: 16px;
+        max-height: 14px;
+        font-size: 10px;
+        font-weight: 700;
+        color: {c['primary']};
+        background-color: {c['stepper_bg']};
+    }}
+
+    QToolButton[cssClass="wind_stepper_btn"][stepPos="up"] {{
+        border-top-left-radius: 7px;
+        border-top-right-radius: 7px;
+        border-bottom: 1px solid {c['stepper_divider']};
+    }}
+
+    QToolButton[cssClass="wind_stepper_btn"][stepPos="down"] {{
+        border-bottom-left-radius: 7px;
+        border-bottom-right-radius: 7px;
+    }}
+
+    QToolButton[cssClass="wind_stepper_btn"]:hover {{
+        background-color: {c['stepper_hover_bg']};
+    }}
+
+    QToolButton[cssClass="wind_stepper_btn"]:pressed {{
+        background-color: {c['stepper_pressed_bg']};
     }}
 
     /* --- Checkboxes --- */
@@ -676,11 +988,42 @@ def get_stylesheet(theme: str) -> str:
         border-radius: 3px;
         border: 1px solid {c['primary']};
         background-color: {c['primary']};
+        image: url("{checkmark_white_icon}");
+        border-image: url("{checkmark_white_icon}");
     }}
 
     QCheckBox::indicator:checked:disabled {{
         border: 1px solid {c['border']};
         background-color: {c['disabled_bg']};
+    }}
+
+    /* Settings dialog checkbox variant: less saturated, clearer state separation. */
+    QCheckBox[cssClass="settings_checkbox"]::indicator:unchecked {{
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        border: 1px solid {c['input_border']};
+        background-color: {c['surface_bg']};
+    }}
+
+    QCheckBox[cssClass="settings_checkbox"]::indicator:unchecked:hover {{
+        border: 1px solid {c['focus_ring']};
+        background-color: {c['table_alt_bg']};
+    }}
+
+    QCheckBox[cssClass="settings_checkbox"]::indicator:checked {{
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        border: 1px solid {c['primary']};
+        background-color: {c['surface_bg']};
+        image: url("{checkmark_blue_icon}");
+        border-image: url("{checkmark_blue_icon}");
+    }}
+
+    QCheckBox[cssClass="settings_checkbox"]::indicator:checked:hover {{
+        border: 1px solid {c['focus_ring']};
+        background-color: {c['dropzone_hover']};
     }}
     
     /* --- Lists --- */

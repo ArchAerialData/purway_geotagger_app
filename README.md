@@ -1,389 +1,345 @@
-# Purway Photo Geotagger (macOS field app) — Implementation Guide + Skeleton Repo
+# Purway Geotagger (macOS Pilot App)
 
-This repo is a **modular** Python desktop application intended for macOS pilot laptops (MacBooks) to:
-- ingest Purway CH-4 payload flight outputs (folders containing **JPG + CSV**),
-- **inject GPS EXIF/XMP** (and optional additional tags) into the JPGs using **ExifTool**,
-- optionally **copy vs overwrite originals**,
-- optionally **flatten/move** all resulting JPGs into a single folder,
-- optionally **rename** with client-specific templates + configurable starting index,
-- optionally **sort into concentration (PPM) bins**,
-- show **progress**, job results, and **open output folder** actions.
+Purway Geotagger is a macOS-first PySide6 desktop app for pilot workflows that process Purway raw data exports and Wind Data DOCX generation.
 
-This guide is written so a VS Code CODEX agent can implement the full application without inventing requirements.
-All “TODO”s in code are **explicit** and bounded.
+This README is the canonical repo map for humans and agents. Every section includes file pointers so you can jump straight to implementation code.
 
----
+## What This App Does
 
-## 0) Non-negotiable implementation decisions (do not deviate)
+- Methane workflow: scan dropped Raw Data folders, correlate JPGs to CSV records, inject EXIF/XMP, generate cleaned methane CSVs, and optionally KMZ outputs.
+  - Core pipeline: `src/purway_geotagger/core/pipeline.py`
+  - Methane outputs: `src/purway_geotagger/ops/methane_outputs.py`
+  - Methane GUI: `src/purway_geotagger/gui/pages/methane_page.py`
+- Encroachment workflow: copy JPGs into one output folder, optional chronological renaming/indexing, optional flatten/sort operations.
+  - Encroachment GUI: `src/purway_geotagger/gui/pages/encroachment_page.py`
+  - Rename ordering: `src/purway_geotagger/ops/renamer.py`
+- Combined workflow: one run does methane outputs and encroachment copies in one pass.
+  - Combined GUI: `src/purway_geotagger/gui/pages/combined_wizard.py`
+  - Combined pipeline branch: `src/purway_geotagger/core/pipeline.py`
+- Wind Data DOCX workflow: generate production wind docx + debug metadata sidecar; includes weather autofill.
+  - Wind GUI: `src/purway_geotagger/gui/pages/wind_data_page.py`
+  - Wind core formatting/validation: `src/purway_geotagger/core/wind_docx.py`
+  - Wind render/writer: `src/purway_geotagger/core/wind_docx_writer.py`
+  - Autofill weather providers: `src/purway_geotagger/core/wind_weather_autofill.py`
 
-1. **GUI toolkit**: Use **PySide6 (Qt)**.
-   - Reason: robust drag-and-drop, threads, native macOS feel, long-term maintainability.
-2. **EXIF/XMP writing**: Use **ExifTool** as the canonical writer.
-   - Reason: reliable for GPS + XMP, handles JPEG metadata edge cases better than pure-Python.
-3. **No reverse engineering of payload**.
-   - This app only processes exported artifacts (JPG/CSV) from Purway outputs.
+## Primary Entry Points
 
----
+- App entrypoint: `src/purway_geotagger/app.py`
+- Main window and tabs: `src/purway_geotagger/gui/main_window.py`
+- Job orchestration controller: `src/purway_geotagger/gui/controllers.py`
+- Background workers (QThread): `src/purway_geotagger/gui/workers.py`
 
-## 1) Supported input layouts (must support all)
+## Run Modes and Their Outputs
 
-The pilot can drag/drop either:
-- A **single parent folder** containing multiple flight subfolders, OR
-- **many individual folders** (each may contain subfolders), OR
-- A mixture of both.
+### 1) Methane Mode
 
-The app must recursively scan dropped folders and find:
-- JPG files (extensions: `.jpg`, `.jpeg`, case-insensitive)
-- CSV files (extension: `.csv`)
+Behavior:
+- Forces in-place EXIF injection on matched JPGs.
+- Generates cleaned methane CSV files beside source methane CSVs.
+- Optionally generates KMZ files from cleaned CSV outputs.
+- Writes run artifacts (`manifest.csv`, `run_log.txt`, `run_config.json`, `run_summary.json`) to a run log folder.
 
-**Expected Purway patterns** (do not hardcode exact names; handle variants):
-- CSVs may include `Methane.csv` and/or other CSV(s) with coordinate + PPM fields.
-- Some CSVs may include a column pointing to an image filename (e.g. `Photo`).
-- Some outputs may only correlate by **timestamp**.
+Code pointers:
+- Mode defaults/options mapping: `src/purway_geotagger/gui/controllers.py`
+- Mode state model/validation: `src/purway_geotagger/gui/mode_state.py`
+- Cleaned CSV + KMZ generation: `src/purway_geotagger/ops/methane_outputs.py`
 
-If a photo cannot be matched to a CSV record, the photo must be marked **FAILED** with a reason; do not silently skip.
+Output naming:
+- Cleaned CSV: `*_Cleaned_<threshold>-PPM.csv`
+- KMZ: same stem with `.kmz`
+- Naming helper: `src/purway_geotagger/ops/methane_outputs.py`
 
----
+### 2) Encroachment Mode
 
-## 2) Correlation logic (photo ⇄ CSV row) — exact algorithm
+Behavior:
+- Copies input JPGs into a single output area.
+- Optional renaming uses template tokens and chronological ordering.
+- Logs failures and preserves manifest-level failure reasons.
 
-For each discovered JPG:
+Code pointers:
+- GUI flow: `src/purway_geotagger/gui/pages/encroachment_page.py`
+- Copy behavior: `src/purway_geotagger/ops/copier.py`
+- Chronological rename/indexing: `src/purway_geotagger/ops/renamer.py`
 
-### Step A: Prefer explicit filename join if possible
-If any parsed CSV row contains a column that looks like an image reference (one of):
-- `Photo`, `photo`, `Image`, `image`, `Filename`, `filename`, `File`, `file`, `SourceFile`
+### 3) Combined Mode
 
-Then join by:
-- `basename(row[photo_col]) == basename(photo_path)`
+Behavior:
+- Runs methane outputs and EXIF pass, then generates encroachment copy output in same run.
+- Renaming applies to encroachment copies, not methane originals.
 
-### Step B: Timestamp join (fallback)
-If Step A fails, and CSV contains a time column (one of):
-- `Timestamp`, `timestamp`, `Time`, `time`, `DateTime`, `datetime`, `Date`
+Code pointers:
+- GUI wizard: `src/purway_geotagger/gui/pages/combined_wizard.py`
+- Combined branch in pipeline: `src/purway_geotagger/core/pipeline.py`
 
-Then:
-1. Parse CSV time -> `datetime` (support common formats; see `util/timeparse.py`)
-2. Attempt to parse a timestamp from the photo filename (common patterns):
-   - `YYYY-MM-DD_HH-MM-SS` / `YYYY-MM-DD HH-MM-SS` / `YYYYMMDD_HHMMSS`
-3. If photo timestamp exists:
-   - choose the CSV row with the **smallest absolute time delta**
-   - accept if delta ≤ `max_join_delta_seconds` (default: **3 seconds**)
-4. If photo timestamp does not exist:
-   - mark FAILED: “no filename timestamp and no explicit Photo column correlation”.
+## Wind Data DOCX Feature
 
-### Step C: Ambiguity handling
-If multiple rows have the same minimal delta within 0.1s (ties), mark FAILED: “ambiguous timestamp join”.
+The Wind tab produces a rendered report docx from production template placeholders and also writes debug metadata for downstream automation.
 
----
+Core contract:
+- Required placeholders: `CLIENT_NAME`, `SYSTEM_NAME`, `DATE`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`, `TZ`
+- Contract validation: `src/purway_geotagger/core/wind_template_contract.py`
+- Payload builder and input validation: `src/purway_geotagger/core/wind_docx.py`
+- DOCX render + write + debug sidecar: `src/purway_geotagger/core/wind_docx_writer.py`
 
-## 3) EXIF/XMP fields to write (exact, default behavior)
+Template paths:
+- Bundled production template: `config/wind_templates/PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx`
+- Dev fallback template path candidate: `wind_data_generator/Example of Template Structure/PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx`
+- Resolution logic: `src/purway_geotagger/gui/pages/wind_data_logic.py`
 
-For each matched photo, write:
+Generated artifacts:
+- DOCX output: `WindData_<ClientName>_<YYYY_MM_DD>.docx` (collision-safe suffixes `_01`, `_02`, ...)
+- Debug JSON sidecar: `<output>.debug.json`
+- Embedded custom XML metadata in DOCX: `customXml/purway_wind_metadata.xml`
 
-### Required
-- EXIF GPS:
-  - `GPSLatitude`
-  - `GPSLongitude`
-  - `GPSLatitudeRef` (N/S)
-  - `GPSLongitudeRef` (E/W)
-- XMP GPS (optional but enabled by default):
-  - `XMP:GPSLatitude`
-  - `XMP:GPSLongitude`
+### Wind Autofill Data Sources (Current Hierarchy)
 
-### Recommended additional (configurable)
-- `DateTimeOriginal` (if a reliable time exists)
-- `ImageDescription` (append structured key/value for downstream parsing)
-  - include at least:
-    - `ppm=<value>`
-    - `source_csv=<csv name>`
-    - `purway_payload=<user-entered string, optional>`
-- `XMP:Description` mirrors ImageDescription (optional)
+Provider order for full-row fetch:
+1. NOAA/NWS observations (`api.weather.gov`)
+2. AviationWeather METAR observations (`aviationweather.gov`)
+3. Open-Meteo historical archive (`archive-api.open-meteo.com`)
 
-**Do not change visible burned-in overlays**; this app cannot alter pixels.
+Missing-field backfill order:
+- NWS primary rows are backfilled field-by-field from METAR, then Open-Meteo when fields are missing.
 
----
+Code pointers:
+- Provider clients + merge logic: `src/purway_geotagger/core/wind_weather_autofill.py`
+- Autofill dialog UI: `src/purway_geotagger/gui/widgets/wind_autofill_dialog.py`
 
-## 4) Output behaviors (all must be configurable in GUI)
+## Input Scanning and Correlation
 
-### 4.1 Output root folder selection
-- User selects a destination folder.
-- The app creates a run subfolder:
-  - `<output_root>/PurwayGeotagger_<YYYYMMDD_HHMMSS>/`
+Scanner:
+- Recursively scans folders for JPG and CSV.
+- Skips macOS artifacts (`._*`, `.DS_Store`, `__MACOSX`).
+- Implementation: `src/purway_geotagger/core/scanner.py`
+- Artifact filter helpers: `src/purway_geotagger/util/paths.py`
 
-### 4.2 Overwrite vs Copy
-Two mutually exclusive modes:
-- **Overwrite originals**: write metadata into source JPGs in place.
-- **Copy then write**: copy JPGs to output run folder first, then write metadata into copies.
+CSV parsing and photo matching:
+- Column heuristics for photo/lat/lon/time/ppm + extended telemetry.
+- Filename join preferred; timestamp join fallback with threshold and ambiguity handling.
+- Implementation: `src/purway_geotagger/parsers/purway_csv.py`
+- Time parsing utilities: `src/purway_geotagger/util/timeparse.py`
 
-### 4.3 Optional “Flatten / Strip JPGs”
-If enabled:
-- After successful injection, move all processed JPGs into:
-  - `<run_folder>/JPG_FLAT/`
-- Optionally remove now-empty source folders (only if user checks “cleanup empty dirs”).
+Preview/schema tools:
+- Preview builder: `src/purway_geotagger/core/preview.py`
+- CSV schema dialog plumbing: `src/purway_geotagger/gui/widgets/schema_dialog.py`
 
-### 4.4 Renaming templates (client profiles)
-If enabled:
-- Rename output JPGs according to a selected template.
-- Templates must be creatable/editable/deletable inside the GUI.
-- Provide a start index value per job to prevent duplicates.
+## EXIF/XMP Injection Contract
 
-Template tokens (must implement):
-- `{client}`: client name (from template profile)
-- `{date}`: run date `YYYYMMDD`
-- `{time}`: run time `HHMMSS`
-- `{index}`: incrementing integer starting at job start value
-- `{index:05d}`: python format spec support (zero pad etc.)
-- `{ppm}`: methane concentration numeric (rounded int by default)
-- `{lat}`, `{lon}`: decimal degrees (6 decimals)
-- `{orig}`: original base filename (no extension)
+EXIF writing engine:
+- Uses ExifTool import CSV write pass + verification read pass.
+- Writer: `src/purway_geotagger/exif/exiftool_writer.py`
 
-On collisions: append `_dupN` suffix (N starts at 1).
+Required GPS tags:
+- `GPSLatitude`, `GPSLongitude`, `GPSLatitudeRef`, `GPSLongitudeRef`
 
-### 4.5 Sorting by concentration (PPM)
-If enabled, output JPGs are additionally placed into bins:
-- bins default:
-  - `0000-0999ppm`
-  - `1000+ppm`
-Configurable in Settings UI (list of bin edges).
+Optional/default tags:
+- `DateTimeOriginal`
+- `ImageDescription`
+- `XMP:GPSLatitude`, `XMP:GPSLongitude`, `XMP:Description` (when enabled)
 
-Note: sorting should operate on the **output JPG path** after copy/rename.
+Extended custom XMP namespace fields:
+- Written under `XMP-ArchAerial:*` keys (methane concentration, PAC, UAV/gimbal values, capture time, focal length, zoom).
+- CSV field map and write contract: `src/purway_geotagger/exif/exiftool_writer.py`
 
----
+ExifTool resolution order:
+1. `PURWAY_EXIFTOOL_PATH`
+2. bundled app binary path (`bin/exiftool`)
+3. PATH lookup
+4. common macOS locations
 
-## 5) Job model + progress requirements
+## Pipeline Stages and Run Artifacts
 
-The GUI must support multiple jobs queued in a session.
+Pipeline stage sequence:
+- `SCAN -> PARSE -> METHANE_OUTPUTS (mode-dependent) -> COPY/PREPARE -> MATCH -> WRITE -> ENCROACHMENT_COPY (combined) -> RENAME -> SORT -> FLATTEN -> DONE`
+- Pipeline orchestration: `src/purway_geotagger/core/pipeline.py`
 
-For each job:
-- Display:
-  - Job name
-  - Input folder count
-  - Photo count
-  - Matched count
-  - Success count
-  - Failed count
-  - Current stage (SCAN / PARSE / MATCH / WRITE / SORT / RENAME / DONE)
-  - Progress bar (0–100)
-- Provide buttons:
-  - Cancel
-  - Open output folder (enabled on DONE)
-  - Export manifest CSV (enabled on DONE)
+Per-run files (always expected even on cancel/failure):
+- `run_config.json`
+- `run_log.txt`
+- `manifest.csv`
+- `run_summary.json`
 
-Progress must update at least once per 25 files or once per second.
+Writers/models:
+- Manifest writer/model: `src/purway_geotagger/core/manifest.py`
+- Run logger: `src/purway_geotagger/core/run_logger.py`
+- Run summary model/writer: `src/purway_geotagger/core/run_summary.py`
 
----
+Run report UI:
+- Reads summary + manifest + logs and shows outputs/failures table.
+- `src/purway_geotagger/gui/widgets/run_report_view.py`
 
-## 6) Logs + manifests (must implement)
+## GUI Structure Map
 
-For each run, write:
-- `manifest.csv` containing one row per discovered photo:
-  - `source_path, output_path, status, reason, lat, lon, ppm, csv_path, join_method, exif_written`
-- `run_log.txt` (human-readable)
-- `run_config.json` snapshot of settings used
+Top-level tabs in main window:
+- Run
+- Jobs
+- Templates
+- Wind Data
+- Help
 
----
+File pointers:
+- Window shell and tab wiring: `src/purway_geotagger/gui/main_window.py`
+- Home mode picker: `src/purway_geotagger/gui/pages/home_page.py`
+- Jobs table/filter models: `src/purway_geotagger/gui/models/job_table_model.py`, `src/purway_geotagger/gui/models/jobs_filter_proxy_model.py`
+- Theme + styles: `src/purway_geotagger/gui/theme.py`, `src/purway_geotagger/gui/style_sheet.py`
 
-## 7) macOS setup + packaging (must implement)
+Reusable widgets:
+- Drop zone: `src/purway_geotagger/gui/widgets/drop_zone.py`
+- Sticky nav row: `src/purway_geotagger/gui/widgets/sticky_nav_row.py`
+- Template editor: `src/purway_geotagger/gui/widgets/template_editor.py`
+- Settings dialog: `src/purway_geotagger/gui/widgets/settings_dialog.py`
+- Wind entry grid: `src/purway_geotagger/gui/widgets/wind_entry_grid.py`
 
-### 7.1 Field setup script (run once per pilot laptop)
-Provide `scripts/macos/setup_macos.sh` that:
-- installs Homebrew if missing
-- installs Python (3.11 recommended) via brew if missing
-- installs ExifTool via brew
-- creates a venv
-- installs pip requirements
-- verifies:
-  - `python3 --version`
-  - `exiftool -ver`
-- `python -c "import PySide6"`
+## Template System (Photo Renaming)
 
-### 7.2 Running during development
-Provide `scripts/macos/run_gui.sh` to activate venv and run the GUI.
+Template data model:
+- `src/purway_geotagger/templates/models.py`
 
-### 7.3 Building a `.app`
-Provide `scripts/macos/build_app.sh` using **PyInstaller**:
-- produce `dist/PurwayGeotagger.dmg` (containing .app)
+Template manager:
+- Default templates from `config/default_templates.json`
+- User template overrides in user config dir (`templates.json`)
+- Implementation: `src/purway_geotagger/templates/template_manager.py`
 
-## 7.5 Running the Unsigned App (Important)
+Supported rename tokens:
+- `{client}`, `{date}`, `{time}`, `{index}`, `{index:05d}`, `{ppm}`, `{lat}`, `{lon}`, `{orig}`
 
-Since this application is not signed with an Apple Developer ID, macOS Gatekeeper may block it from opening with a "damaged" or "malicious software" error.
+## Config, Resource Paths, and Persistence
 
-**To run the app:**
+Settings:
+- Model: `src/purway_geotagger/core/settings.py`
+- Stored at macOS user config path (`~/Library/Application Support/PurwayGeotagger/settings.json`)
 
-1.  **Option A (GUI):**
-    - Right-click (or Control-click) the `PurwayGeotagger` app in Finder.
-    - Select **Open**.
-    - Click **Open** in the warning dialog.
+Resource path helpers:
+- GUI/core helper: `src/purway_geotagger/core/utils.py`
+- Utility helper: `src/purway_geotagger/util/paths.py`
 
-2.  **Option B (Terminal - Guaranteed):**
-    - Drag the app to your Applications folder.
-    - Run this command in Terminal to remove the quarantine attribute:
-      ```bash
-      xattr -cr /Applications/PurwayGeotagger.app
-      ```
+Bundled static resources:
+- app config: `config/default_templates.json`, `config/exiftool_config.txt`, `config/wind_templates/...`
+- assets: `assets/`
 
----
+## macOS Scripts, Build, Signing
 
-## 7.4 Windows dev setup (optional)
+Local dev scripts:
+- Setup machine/venv: `scripts/macos/setup_macos.sh`
+- Run GUI: `scripts/macos/run_gui.sh`
+- Run tests: `scripts/macos/run_tests.sh`
 
-For local development on Windows, run:
+Build and packaging:
+- PyInstaller build: `scripts/macos/build_app.sh`
+- Optional spec-based build config: `PurwayGeotagger.spec`
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\windows\setup_windows.ps1
+Signing/notarization docs/scripts:
+- Setup guide: `scripts/macos/APPLE_SIGNING_NOTARIZATION_SETUP.md`
+- Sign/notarize script: `scripts/macos/sign_and_notarize.sh`
+- CI pipeline docs/scripts: `scripts/ci/README.md`, `scripts/ci/macos_build.sh`, `scripts/ci/macos_package.sh`, `scripts/ci/macos_sign_and_notarize.sh`
+- Workflow: `.github/workflows/macos-build.yml`
+
+## Canonical Planning and Tracking Docs
+
+Use these as source-of-truth planning artifacts:
+- Global phase gates: `IMPLEMENTATION_PHASES.md`
+- Pilot workflow context + phased gaps: `PILOT_RAW_DATA_CONTEXT_AND_PLAN.md`
+- Wind feature phased gates: `WIND_DATA_IMPLEMENTATION_PHASES.md`
+- Wind autofill spike tracker: `WIND_WEATHER_AUTOFILL_SPIKE_PLAN.md`
+- Wind feature/change logs: `WIND_DATA_DOCX_FEATURE_PLAN.md`, `WIND_DATA_CHANGESET_NOTES.md`
+
+## Development Commands
+
+Install dependencies:
+
+```bash
+python3 -m pip install -r requirements.txt -r requirements-dev.txt
 ```
 
-This creates `.venv` and installs `requirements.txt` (+ `requirements-dev.txt` if present).
+Run the app from source:
 
-Run the GUI (Windows):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\windows\run_gui.ps1
+```bash
+bash scripts/macos/run_gui.sh
 ```
 
-Run tests (Windows):
+Run tests:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\windows\run_tests.ps1
+```bash
+python3 -m pytest -q
 ```
 
----
+Build macOS app:
 
-## 8) Suggested extra features (implement if time allows, but skeletons included)
-
-1. **Dry run** mode: scan+match only; do not write EXIF.
-2. **Validation view**: preview a sample of matched rows (first 20) before running.
-3. **Auto-detect client profile** from folder naming rules (optional).
-4. **CSV schema inspector** tab: show detected columns and which were used.
-5. **“Re-run failed only”** button to retry after settings adjustments.
-
----
-
-## 9) Repository layout (final)
-
+```bash
+bash scripts/macos/build_app.sh
 ```
+
+## Troubleshooting
+
+- ExifTool missing at runtime:
+  - Check Settings > Tool Paths (`src/purway_geotagger/gui/widgets/settings_dialog.py`)
+  - Resolver logic/order: `src/purway_geotagger/exif/exiftool_writer.py`
+  - macOS setup/build notes: `scripts/macos/README.md`
+- Many unmatched photos:
+  - Validate CSV schema detection and join inputs in Preview/Schema tools
+  - Matching logic: `src/purway_geotagger/parsers/purway_csv.py`
+  - Preview builder: `src/purway_geotagger/core/preview.py`
+  - Run report failure table: `src/purway_geotagger/gui/widgets/run_report_view.py`
+- Dropbox/macOS artifact files (`._*`, `.DS_Store`, `__MACOSX`):
+  - Scanner skip logic: `src/purway_geotagger/core/scanner.py`
+  - Artifact detection helper: `src/purway_geotagger/util/paths.py`
+
+## Test Suite Map
+
+Representative test coverage pointers:
+- Scanner/macOS artifact handling: `tests/test_scanner.py`
+- CSV parsing + join logic: `tests/test_purway_csv_parse.py`, `tests/test_join_logic.py`
+- EXIF writer contract: `tests/test_exiftool_writer.py`, `tests/test_exif_extended.py`
+- Pipeline and outputs: `tests/test_pipeline_artifacts.py`, `tests/test_pipeline_phase3_e2e.py`, `tests/test_methane_outputs.py`
+- Renaming chronology: `tests/test_renamer_chronological.py`
+- Wind template/docx/autofill: `tests/test_wind_template_contract.py`, `tests/test_wind_docx_writer.py`, `tests/test_wind_weather_autofill.py`
+- GUI logic tests: `tests/test_wind_page_logic.py`, `tests/test_wind_autofill_dialog.py`, `tests/test_main_window_startup.py`
+
+## Repository Layout
+
+```text
 purway_geotagger_app/
+  AGENTS.md
   README.md
-  requirements.txt
-  src/
-    purway_geotagger/
-      app.py
-      __init__.py
-      core/
-        job.py
-        photo_task.py
-        pipeline.py
-        settings.py
-        scanner.py
-        manifest.py
-        run_logger.py
-      parsers/
-        purway_csv.py
-      exif/
-        exiftool_writer.py
-      ops/
-        copier.py
-        sorter.py
-        renamer.py
-        flattener.py
-      templates/
-        template_manager.py
-        models.py
-      gui/
-        main_window.py
-        controllers.py
-        workers.py
-        models/
-          job_table_model.py
-        widgets/
-          drop_zone.py
-          template_editor.py
-      util/
-        timeparse.py
-        paths.py
-        errors.py
-        platform.py
+  IMPLEMENTATION_PHASES.md
+  PILOT_RAW_DATA_CONTEXT_AND_PLAN.md
+  WIND_DATA_IMPLEMENTATION_PHASES.md
   config/
-    default_templates.json
+  assets/
   scripts/
-    setup_macos.sh
-    run_gui.sh
-    build_macos_app.sh
+    macos/
+    windows/
+    ci/
+  src/purway_geotagger/
+    app.py
+    core/
+    parsers/
+    exif/
+    ops/
+    gui/
+    templates/
+    util/
   tests/
-    test_timeparse.py
-    test_template_tokens.py
 ```
 
----
+## Notes for New Agents
 
-## 10) Implementation notes for CODEX agent
+- Read `AGENTS.md` first.
+- Treat this README as the navigation index, then jump to the file pointers in the section relevant to your task.
+- Keep macOS/Finder-launch behavior as default assumption for packaging/runtime decisions.
 
-- Do not invent additional file formats.
-- Do not assume fixed CSV headers; use heuristics in `parsers/purway_csv.py`.
-- All I/O must be robust: handle spaces, unicode paths, deep directories.
-- All long-running work must be off the UI thread (`QThread` + signals).
-- Always keep originals safe:
-  - when overwrite mode is enabled, create a **.bak** copy option (checkbox) OR at minimum warn user in UI.
-- Use `pathlib` everywhere.
+## Deferred Manual Gates (To Revisit)
 
----
+The following are intentionally deferred manual checks to complete before final distribution:
 
-## 11) Minimal commands
-
-After setup:
-
-```bash
-./scripts/macos/run_gui.sh
-```
-
-Build .app:
-
-```bash
-./scripts/macos/build_app.sh
-```
-
-Notes:
-- The build uses `--onedir` to bundle Qt plugins more reliably.
-- Default templates are bundled from `config/default_templates.json` into the app.
-
----
-
-## 11.1) Development & tests
-
-Install dev/test dependencies:
-
-```bash
-python -m pip install -r requirements.txt -r requirements-dev.txt
-```
-
-Run tests (includes `compileall`):
-
-```bash
-./scripts/macos/run_tests.sh
-```
-
----
-
-## 12) ExifTool invocation contract (must use)
-
-Writing metadata is performed by creating a temporary “import CSV” with columns:
-- `SourceFile, GPSLatitude, GPSLongitude, DateTimeOriginal, XMP:GPSLatitude, XMP:GPSLongitude, ImageDescription`
-
-Then invoke:
-
-```bash
-exiftool -overwrite_original -csv="<import.csv>"
-```
-
-In overwrite-originals mode, `SourceFile` points to originals.
-In copy mode, `SourceFile` points to copied files.
-
-Note: ExifTool CSV mode has weak per-file status; implement a verification pass if needed.
-
----
-
-## 13) Concentration units
-Assume CSV concentration values are **PPM** unless CSV explicitly indicates otherwise.
-Store as float in internal model; show in UI rounded integer by default.
-
----
-
-End of guide.
+- `IMPLEMENTATION_PHASES.md`
+  - Phase 0 GUI startup/manual run check
+  - Phase 4 manual smoke
+  - Phase 5 packaged app launch smoke
+- `WIND_DATA_IMPLEMENTATION_PHASES.md`
+  - W3 manual macOS smoke and visual QA gate
+  - Remaining release/manual signoff gates
+- `PILOT_RAW_DATA_CONTEXT_AND_PLAN.md`
+  - Finder-launch ExifTool preflight gate
+  - Phase 4 and 4A pilot-manual UX gates
+  - Phase 5 new-pilot end-to-end manual gate

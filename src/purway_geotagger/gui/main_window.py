@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFileDialog, QCheckBox, QSpinBox, QLineEdit, QProgressBar, QTableView,
     QMessageBox, QComboBox, QListWidget, QToolButton,
-    QStyle, QApplication, QStackedWidget, QButtonGroup, QFrame,
+    QStyle, QApplication, QStackedWidget, QButtonGroup, QFrame, QSizePolicy,
     QSplitter, QFormLayout, QHeaderView, QMenu
 )
 
@@ -29,6 +29,7 @@ from purway_geotagger.gui.pages.home_page import HomePage
 from purway_geotagger.gui.pages.methane_page import MethanePage
 from purway_geotagger.gui.pages.encroachment_page import EncroachmentPage
 from purway_geotagger.gui.pages.combined_wizard import CombinedWizard
+from purway_geotagger.gui.pages.wind_data_page import WindDataPage
 from purway_geotagger.gui.pages.help_page import HelpPage
 from purway_geotagger.gui.widgets.template_editor import TemplateEditorDialog
 from purway_geotagger.gui.widgets.theme_toggle import ThemeToggle
@@ -113,7 +114,8 @@ class MainWindow(QMainWindow):
         self.btn_run = _create_nav_btn("Run", 0)
         self.btn_jobs = _create_nav_btn("Jobs", 1)
         self.btn_templates = _create_nav_btn("Templates", 2)
-        self.btn_help = _create_nav_btn("Help", 3)
+        self.btn_wind = _create_nav_btn("Wind Data", 3)
+        self.btn_help = _create_nav_btn("Help", 4)
         self.btn_run.setChecked(True)
 
         # Add the container with Center alignment
@@ -166,6 +168,7 @@ class MainWindow(QMainWindow):
 
         self.home_page.set_last_mode(self._last_mode)
         self.home_page.mode_selected.connect(self._on_mode_selected)
+        self.home_page.wind_data_selected.connect(self._open_wind_data_tab)
 
         self.methane_page = MethanePage(self._mode_states[RunMode.METHANE], self.controller)
         self.encroachment_page = EncroachmentPage(self._mode_states[RunMode.ENCROACHMENT], self.controller)
@@ -248,13 +251,22 @@ class MainWindow(QMainWindow):
         self.jobs_search_edit.setPlaceholderText("Search job name, mode, path, or message")
         controls_row.addWidget(self.jobs_search_edit, 1)
 
-        self.jobs_show_all_chk = QCheckBox("Show all history")
-        controls_row.addWidget(self.jobs_show_all_chk)
-        self.jobs_advanced_chk = QCheckBox("Show advanced columns")
-        controls_row.addWidget(self.jobs_advanced_chk)
-        self.jobs_details_toggle = QCheckBox("Show details panel")
-        controls_row.addWidget(self.jobs_details_toggle)
         jobs_intro_layout.addLayout(controls_row)
+
+        toggles_row = QHBoxLayout()
+        toggles_row.setSpacing(16)
+        toggles_row.addStretch(1)
+
+        self.jobs_show_all_chk = QCheckBox("Show all history")
+        self.jobs_show_all_chk.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        toggles_row.addWidget(self.jobs_show_all_chk)
+        self.jobs_advanced_chk = QCheckBox("Show advanced columns")
+        self.jobs_advanced_chk.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        toggles_row.addWidget(self.jobs_advanced_chk)
+        self.jobs_details_toggle = QCheckBox("Show details panel")
+        self.jobs_details_toggle.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        toggles_row.addWidget(self.jobs_details_toggle)
+        jobs_intro_layout.addLayout(toggles_row)
         jobs_layout.addWidget(jobs_intro)
 
         jobs_splitter = QSplitter(Qt.Horizontal)
@@ -271,20 +283,16 @@ class MainWindow(QMainWindow):
         self.table.setSelectionMode(QTableView.SingleSelection)
         self.table.setSortingEnabled(True)
         self.table.setEditTriggers(QTableView.NoEditTriggers)
-        self.table.horizontalHeader().setSectionsMovable(False)
-        self.table.horizontalHeader().setStretchLastSection(False)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
+        header = self.table.horizontalHeader()
+        header.setSectionsMovable(False)
+        header.setStretchLastSection(False)
 
         self.model = JobTableModel(self.controller)
         self.jobs_proxy = JobsFilterProxyModel(self)
         self.jobs_proxy.setSourceModel(self.model)
         self.jobs_proxy.set_recent_limit(20)
         self.table.setModel(self.jobs_proxy)
+        self._configure_jobs_table_columns()
         self.table.sortByColumn(0, Qt.DescendingOrder)
         self.table.selectionModel().selectionChanged.connect(self._update_action_buttons)
         jobs_left_layout.addWidget(self.table, 1)
@@ -301,12 +309,10 @@ class MainWindow(QMainWindow):
         self.view_report_btn.setProperty("cssClass", "primary")
         self.open_out_btn = QPushButton("Open Output")
         self.open_out_btn.clicked.connect(self._open_selected_output)
-        self.open_out_btn.setProperty("cssClass", "open_file")
-        self.jobs_more_btn = QToolButton()
-        self.jobs_more_btn.setText("More")
-        self.jobs_more_btn.setPopupMode(QToolButton.InstantPopup)
+        self.open_out_btn.setProperty("cssClass", "primary")
+        self.jobs_more_btn = QPushButton("More \u25BE")
         self.jobs_more_btn.setCursor(Qt.PointingHandCursor)
-        self.jobs_more_btn.setProperty("cssClass", "chip")
+        self.jobs_more_btn.setProperty("cssClass", "primary")
         self.jobs_more_menu = QMenu(self.jobs_more_btn)
         self.cancel_action = self.jobs_more_menu.addAction("Cancel selected job")
         self.cancel_action.triggered.connect(self._cancel_selected)
@@ -315,6 +321,8 @@ class MainWindow(QMainWindow):
         self.export_manifest_action = self.jobs_more_menu.addAction("Export manifest.csv")
         self.export_manifest_action.triggered.connect(self._export_selected_manifest)
         self.jobs_more_btn.setMenu(self.jobs_more_menu)
+        jobs_action_size = self.view_report_btn.sizeHint().expandedTo(self.open_out_btn.sizeHint())
+        self.jobs_more_btn.setFixedSize(jobs_action_size)
 
         act_row.addWidget(self.view_report_btn)
         act_row.addWidget(self.open_out_btn)
@@ -396,7 +404,11 @@ class MainWindow(QMainWindow):
         tmpl_btn_row.addWidget(self.template_refresh_btn)
         templates_layout.addLayout(tmpl_btn_row)
 
-        # ----- Tab 4: Help -----
+        # ----- Tab 4: Wind Data -----
+        self.wind_data_page = WindDataPage(self.settings)
+        self.main_stack.addWidget(self.wind_data_page)
+
+        # ----- Tab 5: Help -----
         self.help_page = HelpPage()
         
         # Link action buttons inside Help Page if we add them, 
@@ -428,6 +440,10 @@ class MainWindow(QMainWindow):
     def _show_home(self) -> None:
         self.run_stack.setCurrentWidget(self.home_page)
         self.home_page.set_last_mode(self._last_mode)
+
+    def _open_wind_data_tab(self) -> None:
+        self.main_stack.setCurrentWidget(self.wind_data_page)
+        self.btn_wind.setChecked(True)
 
     def _reset_all_modes_and_home(self) -> None:
         self.methane_page.reset_for_new_run()
@@ -487,7 +503,14 @@ class MainWindow(QMainWindow):
                 self._open_settings()
             return
         if self.overwrite_chk.isChecked():
-            msg = "You are about to overwrite original JPG files in place. This cannot be undone."
+            msg = "You are about to overwrite original JPG files in place."
+            if self.settings.create_backup_on_overwrite:
+                msg += (
+                    "\n\nBackup behavior: enabled; originals are copied to BACKUPS/ as *.jpg.bak "
+                    "before overwrite."
+                )
+            else:
+                msg += "\n\nBackup behavior: disabled in Settings; no .bak copy will be created."
             if self.cleanup_chk.isChecked():
                 msg += "\n\nCleanup of empty source folders is enabled and may remove empty directories under your selected input roots."
             msg += "\n\nContinue?"
@@ -571,7 +594,7 @@ class MainWindow(QMainWindow):
         if hasattr(self, "templates_list"):
             self.templates_list.clear()
             for t in self.controller.template_manager.list_templates():
-                self.templates_list.addItem(f"{t.name} ({t.id}) — {t.pattern}")
+                self.templates_list.addItem(f"{t.name} ({t.client}) - {t.client}_{t.start_index:04d}")
         self._template_user_selected = False
         self._auto_select_template()
 
@@ -638,8 +661,7 @@ class MainWindow(QMainWindow):
         basic_columns = {0, 1, 2, 3, 4, 5}
         for col in range(self.model.columnCount()):
             self.table.setColumnHidden(col, not (enabled or col in basic_columns))
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
-        self.table.resizeColumnsToContents()
+        self._configure_jobs_table_columns()
 
     def _set_jobs_details_visible(self, enabled: bool) -> None:
         self.jobs_detail_panel.setVisible(enabled)
@@ -875,3 +897,23 @@ class MainWindow(QMainWindow):
             self.preview_btn.setEnabled(has_inputs and advanced_enabled)
         if hasattr(self, "schema_btn"):
             self.schema_btn.setEnabled(has_inputs and advanced_enabled)
+
+    def _configure_jobs_table_columns(self) -> None:
+        """Apply safe jobs-table header sizing only when columns are available.
+
+        Qt 6.7 on newer macOS builds can segfault if section resize modes are set
+        before a model with matching sections is bound.
+        """
+        if not hasattr(self, "table") or not hasattr(self, "jobs_proxy"):
+            return
+        header = self.table.horizontalHeader()
+        if header is None:
+            return
+        column_count = self.jobs_proxy.columnCount()
+        if column_count <= 0:
+            return
+        for col in range(min(5, column_count)):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+        if column_count > 5:
+            header.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
+        self.table.resizeColumnsToContents()

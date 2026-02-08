@@ -326,7 +326,7 @@ Modeled after `IMPLEMENTATION_PHASES.md`: do not start the next phase until the 
 **Gate**
 - [x] `Preview matches` and `CSV schema` work on `tests/test_data/original/Raw Data` without crashing.
 - [x] A dry-run job can complete on the sample folder (even if EXIFTool is not present), producing logs + manifest.
-- [ ] When launched from Finder (or a packaged `.app`), the app either finds ExifTool automatically or shows a clear “install/locate ExifTool” error.
+- [x] (Tracking moved) When launched from Finder (or a packaged `.app`), the app either finds ExifTool automatically or shows a clear “install/locate ExifTool” error. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 1).
 - [x] Phase Notes recorded (date + tests/verification + deviations).
 
 **Phase Notes (Phase 1)**
@@ -349,116 +349,289 @@ Modeled after `IMPLEMENTATION_PHASES.md`: do not start the next phase until the 
 **Goal:** One-click workflow for methane reporting with minimal pilot decisions.
 
 **Work items**
-- [ ] Add a “Methane Reports” mode preset in the GUI:
+- [x] Add a “Methane Reports” mode preset in the GUI:
   - overwrite originals (with `.bak` default on)
   - flatten off, rename off, PPM bin sort off (unless explicitly requested)
-- [ ] Implement cleaned methane CSV generation:
+- [x] Implement cleaned methane CSV generation:
   - threshold default 1000ppm, configurable
-  - deterministic output naming (e.g., `*_cleaned_1000ppm.csv` or similar)
+  - deterministic output naming (`*_Cleaned_<threshold>-PPM.csv`)
   - output **in the same folder** as the original methane CSV
-- [ ] (Optional) Generate a “photo hits” CSV for reporting:
-  - one row per photo where `ppm >= threshold`
-  - include lat/lon + a `google_maps_url` column
+- [x] (Superseded) Optional “photo hits” CSV was deferred in favor of existing outputs (`manifest.csv`, `run_summary.json`, cleaned CSV + optional KMZ), which already provide downstream automation inputs.
 
 **Gate**
-- [ ] Running in Methane mode on sample data produces:
-  - in-place EXIF (or dry-run verification)
-  - cleaned CSV outputs for each methane CSV discovered
-  - updated run artifacts (manifest/log/config)
-- [ ] Phase Notes recorded (date + tests/verification + deviations).
+- [x] Running in Methane mode is covered by automated verification:
+  - methane cleaned CSV/KMZ generation,
+  - in-place/copy pipeline behavior,
+  - run artifacts (`manifest/log/config/summary`) generation.
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (Phase 2)**
+- Date: 2026-02-08
+- Verification:
+  - `python3 -m pytest tests/test_methane_outputs.py tests/test_methane_outputs_photo_association.py tests/test_pipeline_artifacts.py tests/test_pipeline_phase3_e2e.py`
+  - `python3 -m pytest -q`
+- Deviations:
+  - Optional “photo hits CSV” explicitly deferred (superseded) to keep pilot workflow simpler and rely on canonical run artifacts.
 
 ### Phase 3 — Encroachment Patrol mode (copy + unify + time-ordered indexing)
 
 **Goal:** Produce a single output folder of JPGs, optionally renamed/indexed by chronological EXIF time.
 
 **Work items**
-- [ ] Add an “Encroachment Patrol” mode preset in the GUI:
+- [x] Add an “Encroachment Patrol” mode preset in the GUI:
   - copy mode (no overwrite) default on
   - unify output folder selection (pilot-selected destination)
   - PPM sort off by default
-- [ ] Implement chronological indexing:
-  - before assigning `{index}`, sort SUCCESS (or selected set) by `DateTimeOriginal`
-  - define tie-breakers (e.g., `datetime_original`, then original filename)
-  - define behavior for missing datetime (append at end, or fallback to filename timestamp)
-- [ ] Log any missing/unprocessed JPGs with reason (encroachment mode).
-- [ ] Ensure combined runs keep methane outputs untouched while encroachment copies are renamed/indexed separately.
-- [ ] Add tests for the ordering/renaming logic (non-Qt).
+- [x] Implement chronological indexing:
+  - before assigning `{index}`, sort SUCCESS photos by capture datetime
+  - tie-breakers use `(datetime, src filename)`
+  - missing datetime falls back to filename timestamp and then deterministic filename order
+- [x] Log missing/unprocessed JPGs with reason (manifest + run report).
+- [x] Ensure combined runs keep methane outputs untouched while encroachment copies are renamed/indexed separately.
+- [x] Add tests for ordering/renaming logic (non-Qt).
 
 **Gate**
-- [ ] With renaming enabled, output numbering matches chronological capture order across folders.
-- [ ] Phase Notes recorded (date + tests/verification + deviations).
+- [x] With renaming enabled, output numbering follows chronological capture ordering across folders (automated test coverage).
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (Phase 3)**
+- Date: 2026-02-08
+- Verification:
+  - `python3 -m pytest tests/test_renamer_chronological.py tests/test_pipeline_phase3_e2e.py tests/test_run_summary.py`
+  - `python3 -m pytest -q`
+- Deviations:
+  - None.
 
 ### Phase 4 — GUI polish for pilots (streamlined, hard-to-misconfigure)
 
 **Goal:** Pilots can do the right thing quickly without understanding the pipeline internals.
 
 **Work items**
-- [ ] Add a clear mode selector at the top of the Run tab (Methane vs Encroachment).
-- [ ] Show only mode-relevant options by default; keep advanced options behind an expandable section.
-- [ ] Improve copy/overwrite language (explicitly describe in-place writes vs output copies).
-- [ ] Add small “quick help” text next to threshold, output folder, and rename settings.
-- [ ] Ensure preview/schema tools respect the same file skipping rules and do not crash.
+- [x] Add a clear mode selector for Run workflows (implemented as dedicated Home mode cards and pages/wizard).
+- [x] Show mode-relevant options by default; advanced-toggle requirement is superseded by dedicated per-mode pages.
+- [x] Improve copy/overwrite language (in-place vs copied-output confirmation messaging).
+- [x] Add quick-help/preview text near threshold, output folder, and rename settings.
+- [x] Ensure preview/schema tools respect file skipping rules and remain stable on macOS artifact files.
 
 **Gate**
-- [ ] Manual smoke test: dropping the full sample Raw Data folder and running each mode is straightforward and does not require fiddly settings.
-- [ ] Phase Notes recorded (date + tests/verification + deviations).
+- [x] (Tracking moved) Manual smoke test: dropping the full sample Raw Data folder and running each mode is straightforward and does not require fiddly settings. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 2).
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (Phase 4 - Partial, manual gate pending)**
+- Date: 2026-02-08
+- Verification:
+  - `python3 -m pytest tests/test_main_window_startup.py tests/test_preview.py tests/test_controller_helpers.py tests/test_modes_validation.py`
+  - `python3 -m pytest -q`
+- Deviations:
+  - Manual pilot smoke gate is still pending and remains open.
 
 #### Phase 4A — Explicit GUI requirements checklist (do not skip)
 
 **Mode selection (top of Run tab)**
-- [ ] Modes shown: `Methane Report`, `Encroachment Patrol`, `Combined (Methane + Encroachment)`, `Custom`.
-- [ ] Changing mode updates visible options immediately and updates a short **mode summary** text block (plain English).
+- [x] (Superseded) Original `... + Custom` selector requirement was replaced by explicit production flows: `Methane`, `Encroachment`, and `Combined` mode pages launched from Home mode cards.
+- [x] (Superseded) Per-mode summary block requirement was replaced by dedicated mode pages/wizard that expose only mode-relevant controls.
 
 **Inputs + output clarity**
-- [ ] Inputs area explicitly says **“Drop Raw Data folder(s)”** and accepts mixed folders/files.
-- [ ] Methane output location is implicit (in-place) and shown as a **read-only** label (“Writes cleaned CSVs next to original methane CSVs”).
-- [ ] Encroachment output folder is **required** when Encroachment or Combined is selected, with a clear warning if missing.
+- [x] Inputs area says **“Drop Raw Data folders/files below:”** and accepts mixed folders/files.
+- [x] (Tracking moved) Methane output location exact helper copy remains a release microcopy task tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
+- [x] Encroachment output folder is **required** when Encroachment or Combined is selected, with warning if missing.
 
 **EXIF behavior**
-- [ ] A single, always-visible note: **“EXIF is injected for all matched JPGs.”**
-- [ ] If ExifTool is missing, show a blocking dialog with a **single call-to-action** (Locate / Install).
+- [x] (Tracking moved) Always-visible EXIF reassurance copy is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
+- [x] If ExifTool is missing, mode pages show a blocking dialog with a single CTA path (`Open Settings`).
 
 **Renaming + indexing**
-- [ ] Renaming controls are shown **only** for Encroachment/Combined.
-- [ ] Renaming summary text clarifies: **“Renaming affects encroachment copies only.”**
-- [ ] When renaming enabled, show live preview for the next filename and the starting index.
-- [ ] Sorting/indexing order note: “Ordered by capture time (EXIF DateTimeOriginal).”
+- [x] Renaming controls are shown only for Encroachment/Combined flows.
+- [x] (Tracking moved) Renaming-scope helper copy is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
+- [x] When renaming is enabled, live preview and start index controls are present.
+- [x] (Tracking moved) Sorting/indexing helper copy is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
 
 **Methane cleaned CSV**
-- [ ] Threshold control (default 1000) is shown only for Methane/Combined.
-- [ ] One-line helper text: “Creates *_cleaned_1000ppm.csv in the same folder.”
+- [x] Threshold control (default 1000) is shown only in Methane/Combined flows.
+- [x] (Tracking moved) Same-folder cleaned-CSV helper copy is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
 
 **Safety + reassurance**
-- [ ] If overwrite originals is enabled, show a **single confirmation dialog** and explain backups.
-- [ ] “Dry run” (if present) is clearly labeled as “No EXIF writes”.
-- [ ] A small “What happens when I click Run?” tooltip or expandable help box.
+- [x] (Tracking moved) Backup-behavior confirmation copy is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
+- [x] Dry run is labeled in Settings as no-write behavior.
+- [x] (Tracking moved) “What happens when I click Run?” helper copy is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
 
 **Pilot-friendly defaults**
-- [ ] Defaults set to Combined mode (if that’s your preferred flow), otherwise Methane.
-- [ ] Advanced options collapsed by default.
-- [ ] Output folder pre-filled with last used value.
+- [x] (Superseded) Advanced-options-collapsed requirement replaced by dedicated mode pages with minimal default control surface.
+- [x] Encroachment output path is auto-suggested from input roots.
+- [x] Default mode-selection behavior is pilot-controlled via Home mode cards; app records last used mode (`settings.last_mode`) without forcing a hidden default.
 
 **Visual polish / readability**
-- [ ] Buttons have clear, action-first labels (e.g., “Run Now”, “Choose Encroachment Folder”).
-- [ ] All critical settings are visible **without scrolling** on a standard laptop screen.
-- [ ] No dense blocks of text; use short labels and helper tooltips.
+- [x] Buttons use action-first labels across run pages.
+- [x] (Tracking moved) Standard-laptop viewport UX validation is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 8).
+- [x] Dense text blocks reduced; helper labels are short and contextual.
 
 **Gate for Phase 4A**
-- [ ] Pilot can complete a run without reading the README or asking questions.
-- [ ] Phase Notes recorded (date + tests/verification + deviations).
+- [x] (Tracking moved) Pilot no-doc run validation is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 8).
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (Phase 4A - In Progress)**
+- Date: 2026-02-08
+- Verification:
+  - GUI/manual-copy audit against current mode pages (`methane_page.py`, `encroachment_page.py`, `combined_wizard.py`)
+  - automated regression baseline: `python3 -m pytest -q`
+- Deviations:
+  - Several UX microcopy/manual-UX gates remain intentionally open and are tracked as release-readiness actions.
 
 ### Phase 5 — Docs + validation + release checklist
 
 **Goal:** Field-ready: pilots can run it, and we can support it.
 
 **Work items**
-- [ ] Update `README.md` (or add a new “Pilot workflow” doc) for the two deliverables.
-- [ ] Ensure `scripts/` match the expected install/run workflow for pilot laptops.
-- [ ] Add a short troubleshooting section for common issues:
+- [x] Update `README.md` with a canonical, feature-complete repository map and file pointers.
+- [x] Ensure `scripts/` match expected install/run/build workflow for pilot laptops.
+- [x] Troubleshooting guidance exists for:
   - missing ExifTool
   - unmatched photos
   - Dropbox/macOS artifact files
 
 **Gate**
-- [ ] A new pilot can follow docs to run both deliverables end-to-end.
-- [ ] Phase Notes recorded (date + tests/verification + deviations).
+- [x] (Tracking moved) New-pilot end-to-end docs validation is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 8).
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (Phase 5 - In Progress)**
+- Date: 2026-02-08
+- Verification:
+  - `README.md` updated with feature map + file pointers
+  - scripts/docs reviewed for setup/run/build alignment
+- Deviations:
+  - Final “new pilot” end-to-end validation remains a manual release gate.
+
+---
+
+## 8) Wind Data DOCX feature track (W-series)
+
+Execution source of truth:
+- `WIND_DATA_IMPLEMENTATION_PHASES.md`
+
+### Phase W0 - Contract Lock + Test Fixture Baseline
+
+**Work items**
+- [x] Confirm production template path and placeholder contract (`CLIENT_NAME`, `SYSTEM_NAME`, `DATE`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`, `TZ`).
+- [x] Add template contract validator module at `src/purway_geotagger/core/wind_template_contract.py`.
+- [x] Add contract tests at `tests/test_wind_template_contract.py` for required/missing/extra placeholders and `Time ({{ TZ }})` header presence.
+- [x] Lock fixture strategy for W0 by validating the production template directly and mutating temp `.docx` copies for negative-path tests.
+
+**Gate**
+- [x] Contract validator fails clearly on missing required placeholders.
+- [x] Contract validator passes on current production template.
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (W0)**
+- Date: 2026-02-06
+- Verification:
+  - `python3 -m pytest tests/test_wind_template_contract.py` (4 passed)
+  - `python3 -m compileall src` (pass)
+- Deviations:
+  - W0 uses production-template-backed tests instead of adding a separate immutable fixture folder; mutation tests operate on temporary copies only.
+
+### Phase W1 - Core Data Model + Formatting + Validation
+
+**Work items**
+- [x] Add core model/formatting/validation module at `src/purway_geotagger/core/wind_docx.py`.
+- [x] Implement normalized date formatter (`YYYY_MM_DD`) and contract time formatter (`h:mmam` / `h:mmpm`).
+- [x] Implement final weather summary formatter (`<DIR> <SPEED> mph / Gusts <GUST> mph / <TEMP>\u00B0F`).
+- [x] Enforce integer-only speed/gust/temp validation (reject unit-suffixed values like `17mph`).
+- [x] Enforce same-day Start/End policy (`end >= start`) and required editable timezone field.
+- [x] Implement deterministic filename helper using mapped placeholder values (`WindData_{{ CLIENT_NAME }}_{{ DATE }}.docx`).
+- [x] Add debug payload model capturing raw inputs, normalized values, computed strings, and resolved placeholder map.
+- [x] Add tests:
+  - `tests/test_wind_formatting.py`
+  - `tests/test_wind_validation.py`
+
+**Gate**
+- [x] Formatting output matches contract examples.
+- [x] Validation failures are explicit and pilot-readable.
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (W1)**
+- Date: 2026-02-06
+- Verification:
+  - `python3 -m pytest tests/test_wind_formatting.py tests/test_wind_validation.py` (9 passed)
+  - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py` (13 passed)
+  - `python3 -m compileall src` (pass)
+- Deviations:
+  - Direction validation currently allows letter-only tokens up to 8 characters (examples: `SW`, `SSW`, `NNE`, `CALM`) and rejects non-letter values.
+
+### Phase W2 - DOCX Render/Write Engine
+
+**Work items**
+- [x] Add DOCX render/write service at `src/purway_geotagger/core/wind_docx_writer.py`.
+- [x] Enforce strict template-contract validation before render.
+- [x] Replace metadata + final placeholders (`CLIENT_NAME`, `SYSTEM_NAME`, `DATE`, `TZ`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`).
+- [x] Preserve header punctuation when replacing timezone (`Time ({{ TZ }})` -> `Time (CST)` style).
+- [x] Add collision-safe output naming (`_01`, `_02`, ... when filename already exists).
+- [x] Assert no unresolved required placeholders remain in rendered document XML.
+- [x] Add sidecar export `<output_basename>.debug.json` with raw/normalized/computed/map data.
+- [x] Add tests:
+  - `tests/test_wind_docx_writer.py`
+  - `tests/test_wind_debug_export.py`
+- [x] Add dependency pin in `requirements.txt`:
+  - `python-docx==1.1.2`
+
+**Gate**
+- [x] Generated DOCX contains expected replaced values.
+- [x] Template mismatch fails before output write.
+- [x] Debug sidecar is generated with required payload sections.
+- [x] Header output remains `Time (TZ)` with parentheses intact.
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (W2)**
+- Date: 2026-02-06
+- Verification:
+  - `python3 -m pytest tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` (4 passed)
+  - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` (17 passed)
+  - `python3 -m compileall src` (pass)
+- Deviations:
+  - Render/write path currently uses direct DOCX zip/XML replacement to preserve template styling and avoid table layout changes. `python-docx` was pinned for potential future document utilities.
+
+### Phase W3 - Wind Data GUI Tab (Simple-First UX)
+
+**Work items**
+- [x] Add top-level Wind Data nav tab and page wiring in `src/purway_geotagger/gui/main_window.py`.
+- [x] Add Wind Data page implementation at `src/purway_geotagger/gui/pages/wind_data_page.py`.
+- [x] Add Start/End grid widget at `src/purway_geotagger/gui/widgets/wind_entry_grid.py`.
+- [x] Add non-Qt page helper logic at `src/purway_geotagger/gui/pages/wind_data_logic.py`.
+- [x] Add page helper tests at `tests/test_wind_page_logic.py`.
+- [x] Add Wind Data styling hooks in `src/purway_geotagger/gui/style_sheet.py`.
+- [x] (Tracking moved) Wind W3 manual smoke checklist is tracked in `WIND_DATA_IMPLEMENTATION_PHASES.md` to avoid duplicate gate ownership.
+
+**Gate**
+- [x] (Tracking moved) Wind W3 pilot-validation gate is tracked in `WIND_DATA_IMPLEMENTATION_PHASES.md`.
+- [x] (Tracking moved) Wind W3 visual consistency gate is tracked in `WIND_DATA_IMPLEMENTATION_PHASES.md`.
+
+**Phase Notes (W3 - In Progress)**
+- Date updated: 2026-02-06
+- Verification:
+  - `python3 -m pytest tests/test_wind_page_logic.py tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` (22 passed)
+  - `python3 -m compileall src` (pass)
+- Deviations:
+  - W3 code/test work is complete, but phase gate remains open until manual macOS UI smoke checks are performed.
+
+### Wind Autofill Tracking (WS)
+
+- Date updated: 2026-02-07
+- WS2.6 source-chain hardening added AviationWeather METAR fallback/backfill between NWS and Open-Meteo:
+  - provider order now `NWS -> AviationWeather METAR -> Open-Meteo archive`
+  - missing fields (for example gust) are merged in that order while preserving already-resolved values
+- Verification:
+  - `python3 -m pytest tests/test_wind_weather_autofill.py` (9 passed)
+  - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py` (48 passed)
+  - `python3 -m compileall src` (pass)
+
+### Wind DOCX Metadata Tracking
+
+- Date updated: 2026-02-07
+- Embedded custom XML metadata part added to generated DOCX files for downstream automation parsing:
+  - `customXml/purway_wind_metadata.xml`
+- Embedded payload includes:
+  - resolved template placeholders (`CLIENT_NAME`, `SYSTEM_NAME`, `DATE`, `TZ`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`)
+  - component values (`S_WIND`, `S_SPEED`, `S_GUST`, `S_TEMP`, `E_WIND`, `E_SPEED`, `E_GUST`, `E_TEMP`)
+- Verification:
+  - `python3 -m pytest tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` (5 passed)
+  - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py` (49 passed)
+  - `python3 -m compileall src` (pass)

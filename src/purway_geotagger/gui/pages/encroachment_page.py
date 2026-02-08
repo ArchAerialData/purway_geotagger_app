@@ -152,6 +152,14 @@ class EncroachmentPage(QWidget):
         output_help.setProperty("cssClass", "subtitle")
         output_help.setWordWrap(True)
         output_layout.addWidget(output_help)
+
+        self.exif_note = QLabel(
+            "EXIF note: Encroachment runs write metadata to copied JPGs in the selected output "
+            "folder. Source JPGs remain unchanged."
+        )
+        self.exif_note.setProperty("cssClass", "subtitle")
+        self.exif_note.setWordWrap(True)
+        output_layout.addWidget(self.exif_note)
         
         self.content_layout.addWidget(output_card)
 
@@ -219,6 +227,23 @@ class EncroachmentPage(QWidget):
         # We can rely on cssClass subtitle, which is already grey. 
         # But if we want it distinctly lighter, subtitle should be fine.
         rename_layout.addWidget(self.rename_note)
+
+        self.rename_scope_note = QLabel(
+            "Renaming scope: applies only to copied encroachment JPGs in the selected output "
+            "folder. Source files and methane outputs are not renamed."
+        )
+        self.rename_scope_note.setProperty("cssClass", "subtitle")
+        self.rename_scope_note.setWordWrap(True)
+        rename_layout.addWidget(self.rename_scope_note)
+
+        self.rename_order_note = QLabel(
+            "Index/order: files are grouped by source folder and processed chronologically "
+            "(EXIF DateTimeOriginal, then filename timestamp fallback), then by filename. "
+            "Start Index increments sequentially."
+        )
+        self.rename_order_note.setProperty("cssClass", "subtitle")
+        self.rename_order_note.setWordWrap(True)
+        rename_layout.addWidget(self.rename_order_note)
         
         self.content_layout.addWidget(rename_card)
 
@@ -248,6 +273,14 @@ class EncroachmentPage(QWidget):
         self.run_btn.setMinimumHeight(44)
         actions_row.addWidget(self.run_btn)
         self.content_layout.addLayout(actions_row)
+
+        self.run_help = QLabel(
+            "What happens when I click Run? JPGs are copied to the output folder, EXIF metadata "
+            "is written on the copies, optional renaming is applied, and run artifacts are saved."
+        )
+        self.run_help.setProperty("cssClass", "subtitle")
+        self.run_help.setWordWrap(True)
+        self.content_layout.addWidget(self.run_help)
 
         
         self.status_label = QLabel("")
@@ -525,7 +558,8 @@ class EncroachmentPage(QWidget):
             return
 
         if not self._confirm_run(
-            "Encroachment mode copies JPGs to the output folder and may rename them.\n\nContinue?",
+            "Encroachment mode copies JPGs to the output folder, writes EXIF on the copies, "
+            "and may rename copied files only.\n\nContinue?",
             "confirm_encroachment",
             "Confirm encroachment run",
         ):

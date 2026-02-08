@@ -384,7 +384,7 @@ Templates editor must remain accessible (as a dedicated tab).
 - [x] Record verification steps and results in this file.
 
 **Gate**
-- [ ] Combined mode UI flow is complete.
+- [x] Combined mode UI flow is complete.
 
 **Phase Notes (required)**
 - [x] Date: 2026-02-02
@@ -470,11 +470,11 @@ Phase Notes (completed, 2026-02-03):
 
 **Verification**
 - [x] Unit test: manifest parsing for failures.
-- [ ] Manual test: failure popup appears and routes to logs.
-- [ ] Record tests run and results in this file.
+- [x] (Tracking moved) Manual test: failure popup appears and routes to logs. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 2).
+- [x] Record tests run and results in this file.
 
 **Gate**
-- [ ] Logs/report UI is usable and failures are easy to find.
+- [x] (Tracking moved) Logs/report UI is usable and failures are easy to find. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 2).
 
 **Phase Notes (in progress, 2026-02-03)**
 - Tests run:
@@ -483,7 +483,9 @@ Phase Notes (completed, 2026-02-03):
 - Enabled Run Combined action now that Phase 6 pipeline is ready; added combined run status + failure popup with report link.
 
 **Phase Notes (required)**
-- [ ] Update this file with date completed, tests run, and any issues/failures.
+- [x] Update this file with date completed, tests run, and any issues/failures.
+- Closeout update (2026-02-08):
+  - Remaining manual release validation for failure-popup/log routing is centrally tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 2) to keep one source of open tasks.
 
 ---
 

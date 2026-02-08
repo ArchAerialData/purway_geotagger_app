@@ -36,6 +36,8 @@ htmlcov/
 *.png
 !assets/**/*.png
 *.docx
+!config/wind_templates/*.docx
+!PurwayGeotagger.spec
 
 # IDE / OS
 .vscode/

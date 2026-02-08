@@ -11,12 +11,11 @@ def test_build_preview_rows_and_schema(tmp_path: Path) -> None:
     jpg = input_dir / "IMG_0001.jpg"
     jpg.write_text("x", encoding="utf-8")
     csv_path = input_dir / "data.csv"
-    csv_path.write_text(
-        "Latitude,Longitude,PPM,Photo\n"
-        "1.0,2.0,10,IMG_0001.jpg\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    with csv_path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(
+            "Latitude,Longitude,PPM,Photo\n"
+            "1.0,2.0,10,IMG_0001.jpg\n",
+        )
 
     result = build_preview([input_dir], max_rows=5, max_join_delta_seconds=3)
     assert result.scanned_photos == 1

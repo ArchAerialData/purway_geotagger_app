@@ -12,8 +12,6 @@ def configure_macos_app_identity() -> None:
     if sys.platform != "darwin":
         return
 
-    # Qt uses these to label the app in the macOS menu bar.
-    os.environ.setdefault("QT_MAC_WANTS_LAYER", "1")
     # Optional: set organization/app name for QSettings if used later.
     os.environ.setdefault("PURWAY_GEOTAGGER_ORG", "YourOrg")
     os.environ.setdefault("PURWAY_GEOTAGGER_APP", "PurwayGeotagger")

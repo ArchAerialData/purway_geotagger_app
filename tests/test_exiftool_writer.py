@@ -11,6 +11,7 @@ from purway_geotagger.exif.exiftool_writer import (
     ExifWriteResult,
     _gps_lat_ref,
     _gps_lon_ref,
+    _resolve_exiftool_path,
 )
 from purway_geotagger.util.errors import ExifToolError
 
@@ -145,3 +146,28 @@ def test_write_tasks_verifies_per_file(tmp_path: Path, monkeypatch: pytest.Monke
         cancel_cb=lambda: False,
     )
     assert results[t.output_path] == ExifWriteResult(success=True)
+
+
+def test_resolve_exiftool_path_prefers_pyinstaller_resource_bin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundled = tmp_path / "bin" / "exiftool"
+    bundled.parent.mkdir(parents=True, exist_ok=True)
+    bundled.write_text("#!/bin/sh\n", encoding="utf-8")
+    bundled.chmod(0o755)
+
+    monkeypatch.delenv("PURWAY_EXIFTOOL_PATH", raising=False)
+    monkeypatch.setattr("purway_geotagger.exif.exiftool_writer.sys.frozen", True, raising=False)
+    monkeypatch.setattr(
+        "purway_geotagger.exif.exiftool_writer.sys.executable",
+        str(tmp_path / "PurwayGeotagger"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "purway_geotagger.exif.exiftool_writer.resource_path",
+        lambda _rel: bundled,
+    )
+    monkeypatch.setattr("purway_geotagger.exif.exiftool_writer.shutil.which", lambda _name: None)
+
+    resolved = _resolve_exiftool_path()
+    assert resolved == str(bundled)

@@ -255,8 +255,16 @@ class CombinedWizard(QWidget):
         self.kmz_preview = QLabel()
         self.kmz_preview.setProperty("cssClass", "subtitle")
         self.kmz_preview.setWordWrap(True)
+        self.methane_exif_note = QLabel(
+            "EXIF note: Combined mode writes methane metadata directly into source JPGs. "
+            "If 'Create .bak before overwrite' is enabled in Settings, backups are saved under "
+            "the run folder in BACKUPS/ as *.jpg.bak."
+        )
+        self.methane_exif_note.setProperty("cssClass", "subtitle")
+        self.methane_exif_note.setWordWrap(True)
         methane_layout.addWidget(self.cleaned_preview)
         methane_layout.addWidget(self.kmz_preview)
+        methane_layout.addWidget(self.methane_exif_note)
         
         layout.addWidget(methane_card)
 
@@ -392,6 +400,23 @@ class CombinedWizard(QWidget):
         self.rename_note.setProperty("cssClass", "subtitle")
         self.rename_note.setWordWrap(True)
         rename_layout.addWidget(self.rename_note)
+
+        self.rename_scope_note = QLabel(
+            "Renaming scope: applies only to copied encroachment JPGs in the selected output "
+            "folder. Source files and methane outputs are not renamed."
+        )
+        self.rename_scope_note.setProperty("cssClass", "subtitle")
+        self.rename_scope_note.setWordWrap(True)
+        rename_layout.addWidget(self.rename_scope_note)
+
+        self.rename_order_note = QLabel(
+            "Index/order: files are grouped by source folder and processed chronologically "
+            "(EXIF DateTimeOriginal, then filename timestamp fallback), then by filename. "
+            "Start Index increments sequentially."
+        )
+        self.rename_order_note.setProperty("cssClass", "subtitle")
+        self.rename_order_note.setWordWrap(True)
+        rename_layout.addWidget(self.rename_order_note)
         
         layout.addWidget(rename_card)
 
@@ -431,6 +456,15 @@ class CombinedWizard(QWidget):
         note.setProperty("cssClass", "subtitle")
         note.setWordWrap(True)
         layout.addWidget(note)
+
+        self.run_help = QLabel(
+            "What happens when I click Run Combined? Methane outputs are generated, methane EXIF "
+            "is written in-place, encroachment JPGs are copied, optional renaming applies to those "
+            "copies, and run artifacts are saved."
+        )
+        self.run_help.setProperty("cssClass", "subtitle")
+        self.run_help.setWordWrap(True)
+        layout.addWidget(self.run_help)
 
         # Removed addStretch
         self.confirm_scroll = _wrap_scroll(content)
@@ -595,8 +629,15 @@ class CombinedWizard(QWidget):
 
         self.run_another_btn.setVisible(False)
         self.view_outputs_btn.setVisible(False)
+        confirm_message = (
+            "Combined mode writes methane EXIF metadata in-place on source JPGs and copies "
+            "encroachment photos.\n"
+            "Renaming applies to copied encroachment files only.\n"
+            f"{self._backup_behavior_text()}\n\n"
+            "Continue?"
+        )
         if not self._confirm_run(
-            "Combined mode writes EXIF metadata in-place for methane inputs and copies encroachment photos.\n\nContinue?",
+            confirm_message,
             "confirm_combined",
             "Confirm combined run",
         ):
@@ -725,6 +766,14 @@ class CombinedWizard(QWidget):
             return True
         return False
 
+    def _backup_behavior_text(self) -> str:
+        if self.controller.settings.create_backup_on_overwrite:
+            return (
+                "Backup behavior: enabled; original methane JPGs are copied to BACKUPS/ as "
+                "*.jpg.bak before overwrite."
+            )
+        return "Backup behavior: disabled in Settings; no .bak copy is created before overwrite."
+
     def _on_paths_dropped(self, paths: list[str]) -> None:
         self._add_inputs([Path(p) for p in paths])
 
@@ -761,7 +810,10 @@ class CombinedWizard(QWidget):
 
     def _update_naming_preview(self) -> None:
         threshold = max(1, int(self.state.methane_threshold))
-        self.cleaned_preview.setText(f"Cleaned CSV name: *_Cleaned_{threshold}-PPM.csv")
+        self.cleaned_preview.setText(
+            f"Cleaned CSV name: *_Cleaned_{threshold}-PPM.csv "
+            "(saved next to each source methane CSV)"
+        )
         self.kmz_preview.setVisible(self.kmz_chk.isChecked())
         if self.kmz_chk.isChecked():
             self.kmz_preview.setText(f"KMZ name: *_Cleaned_{threshold}-PPM.kmz")

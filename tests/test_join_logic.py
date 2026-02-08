@@ -14,7 +14,8 @@ from purway_geotagger.util.errors import CorrelationError
 
 
 def _write_csv(path: Path, text: str) -> None:
-    path.write_text(text, encoding="utf-8", newline="\n")
+    with path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
 
 
 def test_filename_join_wins_when_photo_column_present(tmp_path: Path) -> None:

@@ -11,12 +11,10 @@ jobs:
     runs-on: macos-14
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
+      BUNDLE_ID: "com.archaerial.purwaygeotagger"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: brew install exiftool
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -27,8 +25,33 @@ jobs:
       - name: Build app + run tests
         run: bash scripts/ci/macos_build.sh
 
+      - name: Detect signing readiness
+        id: signing_ready
+        shell: bash
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+          APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          if [[ -n "${MACOS_CERT_P12}" && -n "${MACOS_CERT_PASSWORD}" && -n "${APPLE_KEY_ID}" && -n "${APPLE_ISSUER_ID}" && -n "${APPLE_API_KEY_P8}" ]]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+            echo "Signing + notarization enabled."
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "Signing + notarization disabled: one or more secrets missing."
+          fi
+
+      - name: Enforce signing/notarization on main
+        if: ${{ github.ref == 'refs/heads/main' && steps.signing_ready.outputs.enabled != 'true' }}
+        run: |
+          echo "::error::Signing/notarization secrets are required for main-branch distribution artifacts."
+          echo "::error::Provide MACOS_CERT_P12, MACOS_CERT_PASSWORD, APPLE_KEY_ID, APPLE_ISSUER_ID, and APPLE_API_KEY_P8."
+          exit 1
+
       - name: Sign + notarize (optional)
-        if: ${{ secrets.MACOS_CERT_P12 != '' && secrets.MACOS_CERT_PASSWORD != '' && secrets.APPLE_KEY_ID != '' && secrets.APPLE_ISSUER_ID != '' && secrets.APPLE_API_KEY_P8 != '' }}
+        if: ${{ steps.signing_ready.outputs.enabled == 'true' }}
         run: bash scripts/ci/macos_sign_and_notarize.sh
         env:
           MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
@@ -38,7 +61,7 @@ jobs:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
 
       - name: Package DMG (unsigned)
-        if: ${{ !(secrets.MACOS_CERT_P12 != '' && secrets.MACOS_CERT_PASSWORD != '' && secrets.APPLE_KEY_ID != '' && secrets.APPLE_ISSUER_ID != '' && secrets.APPLE_API_KEY_P8 != '') }}
+        if: ${{ steps.signing_ready.outputs.enabled != 'true' && github.ref != 'refs/heads/main' }}
         run: bash scripts/ci/macos_package.sh
 
       - name: Upload DMG

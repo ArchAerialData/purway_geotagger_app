@@ -9,9 +9,15 @@ VENV_DIR="${REPO_DIR}/.venv"
 
 # Optional overrides:
 #   EXIFTOOL_PATH=/path/to/exiftool
-#   BUNDLE_ID=com.yourorg.PurwayGeotagger
+#   BUNDLE_ID=com.archaerial.purwaygeotagger
 EXIFTOOL_PATH="${EXIFTOOL_PATH:-}"
-BUNDLE_ID="${BUNDLE_ID:-com.yourorg.PurwayGeotagger}"
+BUNDLE_ID="${BUNDLE_ID:-com.archaerial.purwaygeotagger}"
+
+if [[ ! -d "${VENV_DIR}" ]]; then
+  echo "Missing venv at ${VENV_DIR}."
+  echo "Run: bash scripts/macos/setup_macos.sh"
+  exit 1
+fi
 
 # shellcheck disable=SC1090
 source "${VENV_DIR}/bin/activate"
@@ -23,8 +29,22 @@ cd "${REPO_DIR}"
 # Try to locate ExifTool for bundling (preferred for pilot builds).
 # 1) Prefer vendored ExifTool in scripts/macos/vendor/Image-ExifTool-*/
 EXIFTOOL_LIB_DIR=""
+VENDOR_ROOT="${REPO_DIR}/scripts/macos/vendor"
+VENDOR_DIR=""
+
+if [[ -d "${VENDOR_ROOT}" ]]; then
+  VENDOR_DIR="$(find "${VENDOR_ROOT}" -maxdepth 1 -type d -name 'Image-ExifTool-*' | sort | tail -n 1)"
+  if [[ -z "${VENDOR_DIR}" ]]; then
+    VENDOR_ARCHIVE="$(find "${VENDOR_ROOT}" -maxdepth 1 -type f -name 'Image-ExifTool-*.tar.gz' | sort | tail -n 1)"
+    if [[ -n "${VENDOR_ARCHIVE}" ]]; then
+      echo "Extracting vendored ExifTool archive: ${VENDOR_ARCHIVE}"
+      tar -xzf "${VENDOR_ARCHIVE}" -C "${VENDOR_ROOT}"
+      VENDOR_DIR="$(find "${VENDOR_ROOT}" -maxdepth 1 -type d -name 'Image-ExifTool-*' | sort | tail -n 1)"
+    fi
+  fi
+fi
+
 if [[ -z "${EXIFTOOL_PATH}" ]]; then
-  VENDOR_DIR="$(ls -d "${REPO_DIR}/scripts/macos/vendor/Image-ExifTool-"* 2>/dev/null | sort | tail -n 1)"
   if [[ -n "${VENDOR_DIR}" && -f "${VENDOR_DIR}/exiftool" ]]; then
     EXIFTOOL_PATH="${VENDOR_DIR}/exiftool"
     EXIFTOOL_LIB_DIR="${VENDOR_DIR}/lib"
@@ -46,30 +66,77 @@ if [[ -z "${EXIFTOOL_PATH}" ]]; then
 fi
 
 EXIFTOOL_ARGS=()
-if [[ -n "${EXIFTOOL_PATH}" ]]; then
-  if [[ ! -x "${EXIFTOOL_PATH}" ]]; then
-    chmod +x "${EXIFTOOL_PATH}" || true
-  fi
-  echo "Bundling ExifTool from: ${EXIFTOOL_PATH}"
-  EXIFTOOL_ARGS+=(--add-binary "${EXIFTOOL_PATH}:bin")
-  if [[ -n "${EXIFTOOL_LIB_DIR}" && -d "${EXIFTOOL_LIB_DIR}" ]]; then
-    EXIFTOOL_ARGS+=(--add-data "${EXIFTOOL_LIB_DIR}:bin/lib")
-  fi
-else
-  echo "ExifTool not found. Build will rely on system ExifTool at runtime."
+if [[ -z "${EXIFTOOL_PATH}" ]]; then
+  echo "ERROR: ExifTool not found for bundling."
+  echo "Expected vendored ExifTool under scripts/macos/vendor/Image-ExifTool-*/exiftool"
+  echo "or pass EXIFTOOL_PATH=/path/to/exiftool."
+  exit 1
 fi
+
+if [[ ! -x "${EXIFTOOL_PATH}" ]]; then
+  chmod +x "${EXIFTOOL_PATH}" || true
+fi
+if [[ -z "${EXIFTOOL_LIB_DIR}" ]]; then
+  EXIFTOOL_DIR="$(cd "$(dirname "${EXIFTOOL_PATH}")" && pwd)"
+  if [[ -d "${EXIFTOOL_DIR}/lib" ]]; then
+    EXIFTOOL_LIB_DIR="${EXIFTOOL_DIR}/lib"
+  fi
+fi
+if [[ -z "${EXIFTOOL_LIB_DIR}" || ! -d "${EXIFTOOL_LIB_DIR}" ]]; then
+  echo "ERROR: ExifTool lib directory not found for portable bundling."
+  echo "Resolved ExifTool path: ${EXIFTOOL_PATH}"
+  exit 1
+fi
+
+echo "Bundling ExifTool from: ${EXIFTOOL_PATH}"
+echo "Bundling ExifTool libs from: ${EXIFTOOL_LIB_DIR}"
+EXIFTOOL_ARGS+=(--add-binary "${EXIFTOOL_PATH}:bin")
+EXIFTOOL_ARGS+=(--add-data "${EXIFTOOL_LIB_DIR}:bin/lib")
 
 pyinstaller --noconfirm --clean \
   --name "PurwayGeotagger" \
   --windowed \
   --onedir \
+  --specpath "build" \
   --osx-bundle-identifier "${BUNDLE_ID}" \
-  --paths "src" \
-  --add-data "config/default_templates.json:config" \
-  --add-data "config/exiftool_config.txt:config" \
-  --add-data "assets:assets" \
+  --paths "${REPO_DIR}/src" \
+  --add-data "${REPO_DIR}/config/default_templates.json:config" \
+  --add-data "${REPO_DIR}/config/wind_templates:config/wind_templates" \
+  --add-data "${REPO_DIR}/config/exiftool_config.txt:config" \
+  --add-data "${REPO_DIR}/assets:assets" \
   "${EXIFTOOL_ARGS[@]}" \
-  "src/purway_geotagger/app.py"
+  "${REPO_DIR}/src/purway_geotagger/app.py"
+
+APP_RESOURCES="${REPO_DIR}/dist/PurwayGeotagger.app/Contents/Resources"
+BUNDLED_EXIFTOOL="${APP_RESOURCES}/bin/exiftool"
+BUNDLED_EXIFTOOL_LIB="${APP_RESOURCES}/bin/lib"
+
+for rel in \
+  "config/default_templates.json" \
+  "config/wind_templates/PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx" \
+  "config/exiftool_config.txt" \
+  "assets"
+do
+  if [[ ! -e "${APP_RESOURCES}/${rel}" ]]; then
+    echo "ERROR: Missing bundled resource: ${APP_RESOURCES}/${rel}"
+    exit 1
+  fi
+done
+
+if [[ ! -x "${BUNDLED_EXIFTOOL}" ]]; then
+  echo "ERROR: Missing bundled ExifTool at ${BUNDLED_EXIFTOOL}"
+  exit 1
+fi
+if [[ ! -d "${BUNDLED_EXIFTOOL_LIB}" ]]; then
+  echo "ERROR: Missing bundled ExifTool lib directory at ${BUNDLED_EXIFTOOL_LIB}"
+  exit 1
+fi
+if grep -q "Cellar/exiftool" "${BUNDLED_EXIFTOOL}"; then
+  echo "ERROR: Bundled ExifTool references Homebrew Cellar paths and is not portable."
+  echo "Use vendored ExifTool distribution (scripts/macos/vendor/Image-ExifTool-*/)."
+  exit 1
+fi
+PERL5LIB="" "${BUNDLED_EXIFTOOL}" -ver >/dev/null
 
 
 echo "Build complete. See dist/ (or dist/PurwayGeotagger.app depending on flags)."

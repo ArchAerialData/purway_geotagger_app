@@ -7,7 +7,8 @@ from purway_geotagger.parsers.purway_csv import PurwayCSVIndex
 
 def _write_csv(path: Path, text: str, bom: bool = False) -> None:
     encoding = "utf-8-sig" if bom else "utf-8"
-    path.write_text(text, encoding=encoding, newline="\n")
+    with path.open("w", encoding=encoding, newline="\n") as f:
+        f.write(text)
 
 
 def test_parse_csv_with_bom_and_column_variants(tmp_path: Path) -> None:

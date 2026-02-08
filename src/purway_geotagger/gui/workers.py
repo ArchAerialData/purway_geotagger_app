@@ -4,6 +4,10 @@ from PySide6.QtCore import QThread, Signal
 from pathlib import Path
 
 from purway_geotagger.core.preview import build_preview, PreviewResult
+from purway_geotagger.core.wind_weather_autofill import (
+    WindAutofillRequest,
+    WindWeatherAutofillService,
+)
 
 from purway_geotagger.core.job import Job
 from purway_geotagger.core.pipeline import run_job
@@ -50,5 +54,40 @@ class PreviewWorker(QThread):
         try:
             result = build_preview(self.inputs, self.max_rows, self.max_join_delta_seconds)
             self.finished.emit(result)
+        except Exception as e:
+            self.failed.emit(str(e))
+
+
+class WindLocationSearchWorker(QThread):
+    results_ready = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, query: str, limit: int = 8) -> None:
+        super().__init__()
+        self.query = query
+        self.limit = limit
+
+    def run(self) -> None:
+        try:
+            service = WindWeatherAutofillService()
+            results = service.search_locations(self.query, limit=self.limit)
+            self.results_ready.emit(results)
+        except Exception as e:
+            self.failed.emit(str(e))
+
+
+class WindAutofillWorker(QThread):
+    result_ready = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, request: WindAutofillRequest) -> None:
+        super().__init__()
+        self.request = request
+
+    def run(self) -> None:
+        try:
+            service = WindWeatherAutofillService()
+            result = service.build_autofill(self.request)
+            self.result_ready.emit(result)
         except Exception as e:
             self.failed.emit(str(e))

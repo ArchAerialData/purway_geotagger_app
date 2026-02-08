@@ -1,0 +1,63 @@
+{
+  "computed_strings": {
+    "E_STRING": "E 11 mph / Gusts 14 mph / 72\u00b0F",
+    "S_STRING": "E 10 mph / Gusts 18 mph / 66\u00b0F",
+    "output_filename": "WindData_TargaResources_2023_02_07.docx"
+  },
+  "generation": {
+    "generated_at_utc": "2026-02-07T22:09:13.152806+00:00",
+    "output_docx_name": "WindData_TargaResources_2023_02_07.docx",
+    "output_docx_path": "/Users/archaerialtesting/Documents/purway_geotagger_app/wind_data_generator/test_output_xml/WindData_TargaResources_2023_02_07.docx",
+    "template_path": "/Users/archaerialtesting/Documents/purway_geotagger_app/wind_data_generator/Example of Template Structure/PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx"
+  },
+  "normalized_end": {
+    "gust_mph": "14",
+    "temp_f": "72",
+    "time": "1:00pm",
+    "wind_direction": "E",
+    "wind_speed_mph": "11"
+  },
+  "normalized_metadata": {
+    "client_name": "Targa Resources",
+    "date": "2023_02_07",
+    "system_name": "KDB 20\"",
+    "timezone": "CST"
+  },
+  "normalized_start": {
+    "gust_mph": "18",
+    "temp_f": "66",
+    "time": "10:00am",
+    "wind_direction": "E",
+    "wind_speed_mph": "10"
+  },
+  "placeholder_map": {
+    "CLIENT_NAME": "Targa Resources",
+    "DATE": "2023_02_07",
+    "E_STRING": "E 11 mph / Gusts 14 mph / 72\u00b0F",
+    "E_TIME": "1:00pm",
+    "SYSTEM_NAME": "KDB 20\"",
+    "S_STRING": "E 10 mph / Gusts 18 mph / 66\u00b0F",
+    "S_TIME": "10:00am",
+    "TZ": "CST"
+  },
+  "raw_end": {
+    "gust_mph": "14",
+    "temp_f": "72",
+    "time_value": "13:00",
+    "wind_direction": "E",
+    "wind_speed_mph": "11"
+  },
+  "raw_metadata": {
+    "client_name": "Targa Resources",
+    "report_date": "2023_02_07",
+    "system_name": "KDB 20\"",
+    "timezone": "CST"
+  },
+  "raw_start": {
+    "gust_mph": "18",
+    "temp_f": "66",
+    "time_value": "10:00",
+    "wind_direction": "E",
+    "wind_speed_mph": "10"
+  }
+}
