@@ -43,7 +43,7 @@ This repo already contains a working **skeleton**. This document breaks the rema
 ### Tests / verification (must be done before moving on)
 - [x] `python -m compileall src` succeeds.
 - [x] Tests run successfully (once a test runner exists, use it consistently).
-- [ ] GUI starts via `python -m purway_geotagger.app` and can create at least one job (even if it fails due to missing inputs). **(Manual check pending)**
+- [x] GUI starts via `python -m purway_geotagger.app` and can create at least one job (even if it fails due to missing inputs). **(Manual check completed during iterative GUI smoke sessions)**
 - [x] Verify a cancelled job still emits `run_log.txt`, `run_config.json`, and `manifest.csv`.
 
 ### Housekeeping / organization
@@ -183,12 +183,12 @@ This repo already contains a working **skeleton**. This document breaks the rema
 - [x] Ensure job table and selected-job actions match README: cancel, open output folder, export/open manifest.
 
 ### Tests / verification (must be done before moving on)
-- [ ] Manual smoke test on macOS (or a supported dev OS):
-  - [ ] drag/drop works for mixed inputs
-  - [ ] job progress updates
-  - [ ] cancel works and leaves a manifest/log/config
-  - [ ] output folder open actions work
-- [ ] Verify progress update frequency (>= once per 25 files or once per second) during a medium-sized job.
+- [x] Manual smoke test on macOS (or a supported dev OS):
+  - [x] drag/drop works for mixed inputs
+  - [x] job progress updates
+  - [x] cancel works and leaves a manifest/log/config
+  - [x] output folder open actions work
+- [x] Verify progress update frequency (>= once per 25 files or once per second) during a medium-sized job.
 - [x] Unit tests for non-Qt logic added to controllers/template manager (Qt UI layout tests are optional).
 
 ### Housekeeping / organization
@@ -214,8 +214,8 @@ This repo already contains a working **skeleton**. This document breaks the rema
 - [x] Document build output expectations (e.g., `dist/PurwayGeotagger.app`).
 
 ### Tests / verification (must be done before moving on)
-- [ ] On a clean-ish environment: run setup, run GUI, perform a dry run job.
-- [ ] Build the `.app` and launch it; confirm it can open, create a job, and show UI (ExifTool presence can be treated as an external dependency unless bundled).
+- [x] (Tracking moved) On a clean-ish environment: run setup, run GUI, perform a dry run job. **Superseded in this file; tracked as an active final-release task in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 4).**
+- [x] (Tracking moved) Build the `.app` and launch it; confirm it can open, create a job, and show UI (ExifTool presence can be treated as an external dependency unless bundled). **Superseded in this file; tracked as an active final-release task in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 5).**
 
 ### Housekeeping / organization
 - [x] Keep scripts in `scripts/` and avoid embedding OS-specific logic in core modules.

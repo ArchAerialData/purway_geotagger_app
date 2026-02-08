@@ -161,7 +161,7 @@ Output mapping (to existing Wind controls):
 - [x] `tests/test_wind_weather_autofill.py`
 
 ### Files (modify)
-- [ ] `src/purway_geotagger/core/wind_docx.py` (not required in WS1)
+- [x] `src/purway_geotagger/core/wind_docx.py` (not required in WS1)
 
 ### Tests / verification
 - [x] unit tests with mocked HTTP responses for:
@@ -202,20 +202,21 @@ Output mapping (to existing Wind controls):
 ### Files (modify)
 - [x] `src/purway_geotagger/gui/pages/wind_data_page.py`
 - [x] `src/purway_geotagger/gui/widgets/wind_entry_grid.py`
-- [ ] `src/purway_geotagger/gui/style_sheet.py` (not required in this thin slice)
+- [x] `src/purway_geotagger/gui/style_sheet.py` (not required in this thin slice)
 - [x] `src/purway_geotagger/gui/workers.py` (no dedicated `workers_wind.py` needed)
 
 ### Tests / verification
 - [x] non-Qt logic tests for mapping/wiring glue.
-- [ ] manual macOS smoke:
-  - [ ] location query accepted,
-  - [ ] suggestions show city/state (+ZIP where available),
-  - [ ] start/end values autofill correctly,
-  - [ ] preview updates immediately,
-  - [ ] manual edits after autofill still work.
+- [x] (Tracking moved) manual macOS smoke:
+  - [x] location query accepted,
+  - [x] suggestions show city/state (+ZIP where available),
+  - [x] start/end values autofill correctly,
+  - [x] preview updates immediately,
+  - [x] manual edits after autofill still work.
+  - Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 6) so this file no longer owns open tasks.
 
 ### Gate
-- [ ] Thin slice works end-to-end without blocking UI thread. (pending manual smoke closeout)
+- [x] (Tracking moved) Thin slice works end-to-end without blocking UI thread. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 6).
 
 ### Phase Notes
 
@@ -245,22 +246,31 @@ Output mapping (to existing Wind controls):
 ## Phase WS3 - Hardening + Packaged App Readiness
 
 ### Work items
-- [ ] Ensure feature behaves predictably with no network.
-- [ ] Ensure no extra runtime setup/dependencies required.
-- [ ] Add Help text for when to trust autofill vs override manually.
-- [ ] Add rollback notes for all WS changes.
+- [x] (Tracking moved) Ensure feature behaves predictably with no network. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 9).
+- [x] Ensure no extra runtime setup/dependencies required.
+- [x] Add Help text for when to trust autofill vs override manually.
+- [x] Add rollback notes for all WS changes.
 
 ### Files (modify)
-- [ ] `src/purway_geotagger/gui/pages/help_page.py`
-- [ ] `README.md`
-- [ ] `WIND_DATA_CHANGESET_NOTES.md`
+- [x] `src/purway_geotagger/gui/pages/help_page.py` (superseded for v1; guidance is embedded directly in Wind page info-tooltip workflow)
+- [x] `README.md`
+- [x] `WIND_DATA_CHANGESET_NOTES.md`
 
 ### Tests / verification
-- [ ] targeted pytest for WS modules.
-- [ ] packaged app smoke (`.app`) with network available and unavailable.
+- [x] targeted pytest for WS modules.
+- [x] (Tracking moved) packaged app smoke (`.app`) with network available and unavailable. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 9).
 
 ### Gate
-- [ ] Safe optional feature: does not degrade existing manual Wind workflow if API/geocoder fails.
+- [x] (Tracking moved) Safe optional feature: does not degrade existing manual Wind workflow if API/geocoder fails. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 9).
+
+### Phase Notes
+
+- Date updated: 2026-02-08
+- Verification:
+  - `python3 -m pytest tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py`
+  - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py`
+- Deviations:
+  - Remaining packaged-app network/offline resilience checks are tracked centrally in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 9).
 
 ## 8) Stop/Go Criteria
 

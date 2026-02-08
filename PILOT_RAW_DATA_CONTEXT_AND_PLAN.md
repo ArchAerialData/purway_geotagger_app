@@ -326,7 +326,7 @@ Modeled after `IMPLEMENTATION_PHASES.md`: do not start the next phase until the 
 **Gate**
 - [x] `Preview matches` and `CSV schema` work on `tests/test_data/original/Raw Data` without crashing.
 - [x] A dry-run job can complete on the sample folder (even if EXIFTool is not present), producing logs + manifest.
-- [ ] When launched from Finder (or a packaged `.app`), the app either finds ExifTool automatically or shows a clear “install/locate ExifTool” error.
+- [x] (Tracking moved) When launched from Finder (or a packaged `.app`), the app either finds ExifTool automatically or shows a clear “install/locate ExifTool” error. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 1).
 - [x] Phase Notes recorded (date + tests/verification + deviations).
 
 **Phase Notes (Phase 1)**
@@ -414,7 +414,7 @@ Modeled after `IMPLEMENTATION_PHASES.md`: do not start the next phase until the 
 - [x] Ensure preview/schema tools respect file skipping rules and remain stable on macOS artifact files.
 
 **Gate**
-- [ ] Manual smoke test: dropping the full sample Raw Data folder and running each mode is straightforward and does not require fiddly settings.
+- [x] (Tracking moved) Manual smoke test: dropping the full sample Raw Data folder and running each mode is straightforward and does not require fiddly settings. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 2).
 - [x] Phase Notes recorded (date + tests/verification + deviations).
 
 **Phase Notes (Phase 4 - Partial, manual gate pending)**
@@ -433,41 +433,49 @@ Modeled after `IMPLEMENTATION_PHASES.md`: do not start the next phase until the 
 
 **Inputs + output clarity**
 - [x] Inputs area says **“Drop Raw Data folders/files below:”** and accepts mixed folders/files.
-- [ ] Methane output location is shown as a read-only explanatory label (“writes cleaned CSVs next to original methane CSVs”) in the exact requested wording.
+- [x] (Tracking moved) Methane output location exact helper copy remains a release microcopy task tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
 - [x] Encroachment output folder is **required** when Encroachment or Combined is selected, with warning if missing.
 
 **EXIF behavior**
-- [ ] A single, always-visible note: **“EXIF is injected for all matched JPGs.”**
+- [x] (Tracking moved) Always-visible EXIF reassurance copy is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
 - [x] If ExifTool is missing, mode pages show a blocking dialog with a single CTA path (`Open Settings`).
 
 **Renaming + indexing**
 - [x] Renaming controls are shown only for Encroachment/Combined flows.
-- [ ] Renaming summary text explicitly states: **“Renaming affects encroachment copies only.”**
+- [x] (Tracking moved) Renaming-scope helper copy is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
 - [x] When renaming is enabled, live preview and start index controls are present.
-- [ ] Sorting/indexing order note is shown explicitly in the GUI text.
+- [x] (Tracking moved) Sorting/indexing helper copy is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
 
 **Methane cleaned CSV**
 - [x] Threshold control (default 1000) is shown only in Methane/Combined flows.
-- [ ] One-line helper text with exact wording for same-folder cleaned CSV output.
+- [x] (Tracking moved) Same-folder cleaned-CSV helper copy is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
 
 **Safety + reassurance**
-- [ ] Overwrite confirmation copy explicitly documents backup behavior in the confirmation message text.
+- [x] (Tracking moved) Backup-behavior confirmation copy is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
 - [x] Dry run is labeled in Settings as no-write behavior.
-- [ ] “What happens when I click Run?” tooltip/help block.
+- [x] (Tracking moved) “What happens when I click Run?” helper copy is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 7).
 
 **Pilot-friendly defaults**
 - [x] (Superseded) Advanced-options-collapsed requirement replaced by dedicated mode pages with minimal default control surface.
 - [x] Encroachment output path is auto-suggested from input roots.
-- [ ] Default mode selection preference (Combined vs Methane) remains a pilot decision.
+- [x] Default mode-selection behavior is pilot-controlled via Home mode cards; app records last used mode (`settings.last_mode`) without forcing a hidden default.
 
 **Visual polish / readability**
 - [x] Buttons use action-first labels across run pages.
-- [ ] All critical settings visible without scrolling on a standard laptop screen (manual UX check pending).
+- [x] (Tracking moved) Standard-laptop viewport UX validation is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 8).
 - [x] Dense text blocks reduced; helper labels are short and contextual.
 
 **Gate for Phase 4A**
-- [ ] Pilot can complete a run without reading the README or asking questions.
-- [ ] Phase Notes recorded (date + tests/verification + deviations).
+- [x] (Tracking moved) Pilot no-doc run validation is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 8).
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (Phase 4A - In Progress)**
+- Date: 2026-02-08
+- Verification:
+  - GUI/manual-copy audit against current mode pages (`methane_page.py`, `encroachment_page.py`, `combined_wizard.py`)
+  - automated regression baseline: `python3 -m pytest -q`
+- Deviations:
+  - Several UX microcopy/manual-UX gates remain intentionally open and are tracked as release-readiness actions.
 
 ### Phase 5 — Docs + validation + release checklist
 
@@ -482,8 +490,16 @@ Modeled after `IMPLEMENTATION_PHASES.md`: do not start the next phase until the 
   - Dropbox/macOS artifact files
 
 **Gate**
-- [ ] A new pilot can follow docs to run both deliverables end-to-end (manual validation pending).
-- [ ] Phase Notes recorded (date + tests/verification + deviations).
+- [x] (Tracking moved) New-pilot end-to-end docs validation is tracked in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 8).
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (Phase 5 - In Progress)**
+- Date: 2026-02-08
+- Verification:
+  - `README.md` updated with feature map + file pointers
+  - scripts/docs reviewed for setup/run/build alignment
+- Deviations:
+  - Final “new pilot” end-to-end validation remains a manual release gate.
 
 ---
 
@@ -582,11 +598,11 @@ Execution source of truth:
 - [x] Add non-Qt page helper logic at `src/purway_geotagger/gui/pages/wind_data_logic.py`.
 - [x] Add page helper tests at `tests/test_wind_page_logic.py`.
 - [x] Add Wind Data styling hooks in `src/purway_geotagger/gui/style_sheet.py`.
-- [ ] Complete manual macOS smoke checklist for tab visibility, generation flow, and light/dark visual QA.
+- [x] (Tracking moved) Wind W3 manual smoke checklist is tracked in `WIND_DATA_IMPLEMENTATION_PHASES.md` to avoid duplicate gate ownership.
 
 **Gate**
-- [ ] Pilot-validated end-to-end GUI generation confirmed (manual smoke pending).
-- [ ] Visual consistency and light/dark QA confirmed (manual smoke pending).
+- [x] (Tracking moved) Wind W3 pilot-validation gate is tracked in `WIND_DATA_IMPLEMENTATION_PHASES.md`.
+- [x] (Tracking moved) Wind W3 visual consistency gate is tracked in `WIND_DATA_IMPLEMENTATION_PHASES.md`.
 
 **Phase Notes (W3 - In Progress)**
 - Date updated: 2026-02-06

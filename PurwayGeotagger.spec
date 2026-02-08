@@ -5,11 +5,7 @@ a = Analysis(
     ['src/purway_geotagger/app.py'],
     pathex=['src'],
     binaries=[('/opt/homebrew/bin/exiftool', 'bin')],
-    datas=[
-        ('config/default_templates.json', 'config'),
-        ('config/wind_templates', 'config/wind_templates'),
-        ('assets', 'assets'),
-    ],
+    datas=[('config/default_templates.json', 'config'), ('config/wind_templates', 'config/wind_templates'), ('config/exiftool_config.txt', 'config'), ('assets', 'assets')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

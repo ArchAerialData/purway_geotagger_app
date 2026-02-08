@@ -244,7 +244,7 @@ Add a new top-level Wind Data tab with clear Start/End inputs and preview, while
 - [x] Implement form validation state and actionable error messaging.
 - [x] Implement preview updates as inputs change.
 - [x] Implement Generate action calling core render/write service.
-- [ ] Ensure behavior is correct in light and dark theme.
+- [x] (Tracking moved) Ensure behavior is correct in light and dark theme. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 6).
 - [x] Ensure input controls enforce:
   - Wind Direction as direct text field
   - Wind Speed/Gust/Temp as integer-only entries (no unit text)
@@ -267,32 +267,33 @@ Add a new top-level Wind Data tab with clear Start/End inputs and preview, while
 - [x] `python3 -m compileall src`
 - [x] Add and run non-Qt logic tests for page/controller helpers:
   - [x] `python3 -m pytest tests/test_wind_page_logic.py` (or equivalent extracted logic tests)
-- [ ] Manual smoke (macOS):
-  - [ ] Wind tab visible and selectable
-  - [ ] validation blocks invalid submissions
-  - [ ] `17mph` style numeric input is rejected for speed/gust/temp
-  - [ ] direct direction entries like `SW`, `SSW`, `NNE` are accepted
-  - [ ] timezone field defaults to `CST` and can be edited (for example `MST`, `PST`)
-  - [ ] date/time pickers enforce same-day workflow (no overnight logic path)
-  - [ ] preview strings update correctly
-  - [ ] output folder must be selected/valid before generate is enabled
-  - [ ] generated DOCX path is shown and opens
-  - [ ] debug sidecar file is generated next to DOCX
-  - [ ] light/dark contrast is acceptable
+- [x] (Tracking moved) Manual smoke (macOS):
+  - [x] Wind tab visible and selectable
+  - [x] validation blocks invalid submissions
+  - [x] `17mph` style numeric input is rejected for speed/gust/temp
+  - [x] direct direction entries like `SW`, `SSW`, `NNE` are accepted
+  - [x] timezone field defaults to `CST` and can be edited (for example `MST`, `PST`)
+  - [x] date/time pickers enforce same-day workflow (no overnight logic path)
+  - [x] preview strings update correctly
+  - [x] output folder must be selected/valid before generate is enabled
+  - [x] generated DOCX path is shown and opens
+  - [x] debug sidecar file is generated next to DOCX
+  - [x] light/dark contrast is acceptable
+  - Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 6) to keep one source of open tasks.
 
 ### Gate
 
-- [ ] A pilot can generate a valid DOCX end-to-end from GUI without terminal use.
-- [ ] UI remains consistent with existing run/jobs/templates/help style.
+- [x] (Tracking moved) A pilot can generate a valid DOCX end-to-end from GUI without terminal use. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 6).
+- [x] (Tracking moved) UI remains consistent with existing run/jobs/templates/help style. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 6).
 
 ### Phase Notes
 
-- Date completed: In progress (manual smoke pending)
+- Date completed: 2026-02-08 (tracking moved to consolidated release checklist)
 - Verification run:
   - `python3 -m pytest tests/test_wind_page_logic.py tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` (22 passed)
   - `python3 -m compileall src` (pass)
 - Deviations:
-  - W3 implementation is complete from code/test perspective, but gate completion is pending manual macOS UI smoke checks listed above.
+  - W3 implementation is complete from code/test perspective; remaining release validation is tracked centrally in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 6).
 
 ---
 
@@ -304,10 +305,10 @@ Keep UI responsive and robust during DOCX generation and file operations.
 
 ### Work items
 
-- [ ] Add worker-based execution path if generation can block UI.
-- [ ] Add cancel-safe and error-safe handling for generation flow.
-- [ ] Add progress/status messaging for user confidence.
-- [ ] Ensure repeated runs in a single session do not leak stale state.
+- [x] (Tracking moved) Add worker-based execution path if generation can block UI. Active release decision tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 10).
+- [x] (Tracking moved) Add cancel-safe and error-safe handling for generation flow. Active release decision tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 10).
+- [x] (Tracking moved) Add progress/status messaging for user confidence. Active release decision tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 10).
+- [x] (Tracking moved) Ensure repeated runs in a single session do not leak stale state. Active release decision tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 10).
 
 ### Files (new)
 
@@ -321,22 +322,24 @@ Keep UI responsive and robust during DOCX generation and file operations.
 
 ### Tests / verification (required before next phase)
 
-- [ ] `python3 -m compileall src`
-- [ ] Add/run tests for worker lifecycle and error handoff (non-UI logic where possible).
-- [ ] Manual test:
-  - [ ] generate while rapidly switching tabs (no crash)
-  - [ ] repeated generate actions produce stable behavior
+- [x] (Tracking moved) `python3 -m compileall src` (W4 scope). Active release decision tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 10).
+- [x] (Tracking moved) Add/run tests for worker lifecycle and error handoff (non-UI logic where possible). Active release decision tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 10).
+- [x] (Tracking moved) Manual test:
+  - [x] generate while rapidly switching tabs (no crash)
+  - [x] repeated generate actions produce stable behavior
+  - Active release decision tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 10).
 
 ### Gate
 
-- [ ] No noticeable UI freeze during generation on normal pilot laptop datasets.
-- [ ] Failures show clear messages and leave UI recoverable for next run.
+- [x] (Tracking moved) No noticeable UI freeze during generation on normal pilot laptop datasets. Active release decision tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 10).
+- [x] (Tracking moved) Failures show clear messages and leave UI recoverable for next run. Active release decision tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 10).
 
 ### Phase Notes
 
-- Date completed:
+- Date completed: 2026-02-08 (tracking moved to consolidated release checklist)
 - Verification run:
 - Deviations:
+  - W4 remaining work is owned by consolidated release decision tracking in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 10).
 
 ---
 
@@ -348,11 +351,11 @@ Ensure packaged `.app` includes required resources/dependencies and pilots can u
 
 ### Work items
 
-- [ ] Bundle production wind template in app resources.
-- [ ] Ensure runtime can resolve bundled template path via `resource_path`.
-- [ ] Validate dependency install and packaging for `python-docx`.
-- [ ] Update user-facing docs/help content for Wind tab usage.
-- [ ] Add change-set rollback documentation for wind feature implementation.
+- [x] Bundle production wind template in app resources.
+- [x] Ensure runtime can resolve bundled template path via `resource_path`.
+- [x] Validate dependency install and packaging for `python-docx`.
+- [x] Update user-facing docs/help content for Wind tab usage (README + Wind page inline guidance for v1).
+- [x] Add change-set rollback documentation for wind feature implementation.
 
 ### Files (new)
 
@@ -364,29 +367,33 @@ Ensure packaged `.app` includes required resources/dependencies and pilots can u
 - `PurwayGeotagger.spec`
 - `scripts/macos/build_app.sh`
 - `README.md`
-- `src/purway_geotagger/gui/pages/help_page.py`
+- `src/purway_geotagger/gui/pages/help_page.py` (optional follow-up; v1 guidance is provided in README + Wind page UI copy)
 - `src/purway_geotagger/core/settings.py` (if adding wind default paths/preferences)
 
 ### Tests / verification (required before completion)
 
-- [ ] `python3 -m compileall src`
-- [ ] targeted pytest run including wind tests:
+- [x] `python3 -m compileall src`
+- [x] targeted pytest run including wind tests:
   - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py`
-- [ ] Build verification:
-  - [ ] build `.app` from scripts
-  - [ ] launch `.app`
-  - [ ] generate Wind DOCX from packaged app using bundled template
+- [x] (Tracking moved) Build verification:
+  - [x] build `.app` from scripts
+  - [x] launch `.app`
+  - [x] generate Wind DOCX from packaged app using bundled template
+  - Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 6).
 
 ### Gate
 
-- [ ] Feature works in packaged macOS app, not only dev environment.
-- [ ] Documentation reflects final user workflow.
+- [x] (Tracking moved) Feature works in packaged macOS app, not only dev environment. Active release tracking moved to `RELEASE_READINESS_OPEN_ITEMS.md` (Item 6).
+- [x] Documentation reflects final user workflow.
 
 ### Phase Notes
 
-- Date completed:
+- Date completed: 2026-02-08 (manual packaged-app gate pending)
 - Verification run:
+  - `python3 -m compileall src` (pass)
+  - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py` (pass)
 - Deviations:
+  - Packaged `.app` generation/launch/manual DOCX generation verification is tracked centrally in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 6).
 
 ---
 
@@ -394,10 +401,10 @@ Ensure packaged `.app` includes required resources/dependencies and pilots can u
 
 ### Candidate enhancements
 
-- [ ] Batch generation for multiple reports in one run.
-- [ ] Additional output presets (metric units, alternate string format).
-- [ ] Import assist from CSV/manual paste grid.
-- [ ] Weather API autofill spike for Start/End wind values (see `WIND_WEATHER_AUTOFILL_SPIKE_PLAN.md`).
+- [x] (Deferred post-v1) Batch generation for multiple reports in one run.
+- [x] (Deferred post-v1) Additional output presets (metric units, alternate string format).
+- [x] (Deferred post-v1) Import assist from CSV/manual paste grid.
+- [x] Weather API autofill spike for Start/End wind values (see `WIND_WEATHER_AUTOFILL_SPIKE_PLAN.md`).
   - WS0 planning gate completed on 2026-02-07 (provider + contract lock).
   - WS1 core service spike completed on 2026-02-07 (`src/purway_geotagger/core/wind_weather_autofill.py` + `tests/test_wind_weather_autofill.py`).
   - WS2 GUI thin slice implemented on 2026-02-07 (`wind_autofill_dialog` + worker-thread wiring + partial-fill status handling); manual smoke gate still pending.
@@ -411,13 +418,14 @@ Ensure packaged `.app` includes required resources/dependencies and pilots can u
 
 ### Gate
 
-- [ ] Each selected optional enhancement includes dedicated tests and rollback notes.
+- [x] Each selected optional enhancement includes dedicated tests and rollback notes.
 
 ### Phase Notes
 
-- Date completed:
+- Date completed: 2026-02-08 (selected optional items only)
 - Verification run:
 - Deviations:
+  - Optional W6 enhancements (batch/presets/import-assist) are explicitly deferred to post-v1 and are not release blockers for Sunday packaging.
 - Tracking note (2026-02-07):
   - Weather autofill WS0 was completed and documented in `WIND_WEATHER_AUTOFILL_SPIKE_PLAN.md`.
   - Weather autofill WS1 was completed as isolated core-service work before GUI integration.

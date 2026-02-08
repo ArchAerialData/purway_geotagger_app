@@ -262,9 +262,14 @@ def _resolve_exiftool_path() -> str:
 
     if getattr(sys, "frozen", False):
         exe_dir = Path(sys.executable).resolve().parent
-        bundled = exe_dir / "bin" / "exiftool"
-        if bundled.exists():
-            return str(bundled)
+        bundled_candidates = (
+            resource_path("bin/exiftool"),
+            exe_dir / "bin" / "exiftool",
+            exe_dir.parent / "Resources" / "bin" / "exiftool",
+        )
+        for bundled in bundled_candidates:
+            if bundled.exists():
+                return str(bundled)
 
     which = shutil.which("exiftool")
     if which:
