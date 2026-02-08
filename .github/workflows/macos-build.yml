@@ -76,7 +76,7 @@ jobs:
           path: |
             dist/PurwayGeotagger.dmg
             dist/notarization_submission_id.txt
-            dist/notarization_submit.json
+            dist/notarization_submit.txt
             dist/notarization_info.json
             dist/notarization_wait.json
             dist/notarization_log.json
