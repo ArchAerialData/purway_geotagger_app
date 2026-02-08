@@ -74,7 +74,11 @@ if ! "${BREW_BIN}" list python@3.11 >/dev/null 2>&1; then
 fi
 
 # ExifTool
-if ! "${BREW_BIN}" list exiftool >/dev/null 2>&1; then
+VENDORED_EXIFTOOL="$(find "${REPO_DIR}/scripts/macos/vendor" -maxdepth 2 -type f -name exiftool | sort | tail -n 1)"
+if [[ -n "${VENDORED_EXIFTOOL}" ]]; then
+  echo "Using vendored ExifTool from ${VENDORED_EXIFTOOL}"
+  chmod +x "${VENDORED_EXIFTOOL}" || true
+elif ! "${BREW_BIN}" list exiftool >/dev/null 2>&1; then
   echo "Installing exiftool..."
   "${BREW_BIN}" install exiftool
 fi
@@ -105,9 +109,15 @@ fi
 
 echo "Verifying installs..."
 python --version
-EXIFTOOL_BIN="$(command -v exiftool || true)"
-if [[ -z "${EXIFTOOL_BIN}" && -x "${BREW_PREFIX}/bin/exiftool" ]]; then
-  EXIFTOOL_BIN="${BREW_PREFIX}/bin/exiftool"
+EXIFTOOL_BIN=""
+if [[ -n "${VENDORED_EXIFTOOL}" && -x "${VENDORED_EXIFTOOL}" ]]; then
+  EXIFTOOL_BIN="${VENDORED_EXIFTOOL}"
+  export PURWAY_EXIFTOOL_PATH="${VENDORED_EXIFTOOL}"
+else
+  EXIFTOOL_BIN="$(command -v exiftool || true)"
+  if [[ -z "${EXIFTOOL_BIN}" && -x "${BREW_PREFIX}/bin/exiftool" ]]; then
+    EXIFTOOL_BIN="${BREW_PREFIX}/bin/exiftool"
+  fi
 fi
 if [[ -z "${EXIFTOOL_BIN}" ]]; then
   echo "ExifTool not found on PATH after installation."

@@ -18,6 +18,17 @@ python -m pip install -r requirements.txt -r requirements-dev.txt
 
 export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-13.0}"
 
+# Prefer vendored ExifTool for deterministic tests/builds and portable app bundling.
+VENDORED_EXIFTOOL="$(find "${REPO_DIR}/scripts/macos/vendor" -maxdepth 2 -type f -name exiftool | sort | tail -n 1)"
+if [[ -n "${VENDORED_EXIFTOOL}" ]]; then
+  chmod +x "${VENDORED_EXIFTOOL}" || true
+  export PURWAY_EXIFTOOL_PATH="${VENDORED_EXIFTOOL}"
+  export EXIFTOOL_PATH="${VENDORED_EXIFTOOL}"
+  echo "Using vendored ExifTool: ${VENDORED_EXIFTOOL}"
+else
+  echo "WARNING: Vendored ExifTool not found under scripts/macos/vendor."
+fi
+
 python -m pytest
 
 bash scripts/macos/build_app.sh

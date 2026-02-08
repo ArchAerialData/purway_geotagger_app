@@ -29,6 +29,7 @@ Build the `.app` (developer machine):
 - `build_app.sh` will auto-detect this and bundle:
   - `bin/exiftool`
   - `bin/lib/*` (so the script can find its Perl libs)
+  - Build now fails fast if ExifTool is missing, if `lib/` is missing, or if a Homebrew Cellar-bound ExifTool wrapper is detected (non-portable).
 
 Notes:
 - If ExifTool is not bundled, the app must provide a clear pilot-facing message and a simple “Install/Locate ExifTool” flow.
