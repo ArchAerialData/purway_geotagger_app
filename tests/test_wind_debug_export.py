@@ -8,12 +8,15 @@ from purway_geotagger.core.wind_docx_writer import generate_wind_docx_report
 
 
 def _production_template_path() -> Path:
-    return (
-        Path(__file__).resolve().parents[1]
-        / "wind_data_generator"
-        / "Example of Template Structure"
-        / "PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx"
+    root = Path(__file__).resolve().parents[1]
+    candidates = (
+        root / "config" / "wind_templates" / "PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx",
+        root / "wind_data_generator" / "Example of Template Structure" / "PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx",
     )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def test_debug_sidecar_contains_required_sections(tmp_path: Path) -> None:

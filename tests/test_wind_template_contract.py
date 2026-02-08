@@ -15,12 +15,15 @@ from purway_geotagger.core.wind_template_contract import (
 
 
 def _production_template_path() -> Path:
-    return (
-        Path(__file__).resolve().parents[1]
-        / "wind_data_generator"
-        / "Example of Template Structure"
-        / "PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx"
+    root = Path(__file__).resolve().parents[1]
+    candidates = (
+        root / "config" / "wind_templates" / "PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx",
+        root / "wind_data_generator" / "Example of Template Structure" / "PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx",
     )
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def _rewrite_document_xml(src: Path, dst: Path, mutator) -> None:
