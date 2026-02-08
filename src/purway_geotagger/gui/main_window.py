@@ -503,7 +503,14 @@ class MainWindow(QMainWindow):
                 self._open_settings()
             return
         if self.overwrite_chk.isChecked():
-            msg = "You are about to overwrite original JPG files in place. This cannot be undone."
+            msg = "You are about to overwrite original JPG files in place."
+            if self.settings.create_backup_on_overwrite:
+                msg += (
+                    "\n\nBackup behavior: enabled; originals are copied to BACKUPS/ as *.jpg.bak "
+                    "before overwrite."
+                )
+            else:
+                msg += "\n\nBackup behavior: disabled in Settings; no .bak copy will be created."
             if self.cleanup_chk.isChecked():
                 msg += "\n\nCleanup of empty source folders is enabled and may remove empty directories under your selected input roots."
             msg += "\n\nContinue?"

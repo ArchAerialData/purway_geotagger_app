@@ -336,10 +336,14 @@ Keep UI responsive and robust during DOCX generation and file operations.
 
 ### Phase Notes
 
-- Date completed: 2026-02-08 (tracking moved to consolidated release checklist)
+- Date completed: 2026-02-08 (v1 defer decision recorded)
 - Verification run:
+- `python3 -m compileall src` (pass)
+- `python3 -m pytest tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_wind_autofill_dialog.py` (pass)
 - Deviations:
-  - W4 remaining work is owned by consolidated release decision tracking in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 10).
+  - Release decision: **defer W4 worker/cancel/progress hardening to post-v1** (Option B), documented in `RELEASE_READINESS_OPEN_ITEMS.md` (Item 10).
+  - Accepted v1 risk: Wind DOCX generation remains synchronous and may briefly block UI on unusually slow storage/IO.
+  - Post-v1 backlog scope: dedicated generation worker path, cancel-safe flow, explicit progress updates, and repeated-run stress validation.
 
 ---
 

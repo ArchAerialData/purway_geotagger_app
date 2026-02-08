@@ -160,9 +160,18 @@ class MethanePage(QWidget):
         self.kmz_preview = QLabel()
         self.kmz_preview.setProperty("cssClass", "subtitle")
         self.kmz_preview.setWordWrap(True)
+
+        self.exif_note = QLabel(
+            "EXIF note: Methane runs write metadata directly into source JPGs. "
+            "If 'Create .bak before overwrite' is enabled in Settings, backups are saved under "
+            "the run folder in BACKUPS/ as *.jpg.bak."
+        )
+        self.exif_note.setProperty("cssClass", "subtitle")
+        self.exif_note.setWordWrap(True)
         
         options_layout.addWidget(self.cleaned_preview)
         options_layout.addWidget(self.kmz_preview)
+        options_layout.addWidget(self.exif_note)
         
         self.content_layout.addWidget(options_card)
 
@@ -231,6 +240,14 @@ class MethanePage(QWidget):
         actions_row.addWidget(self.run_btn)
 
         self.content_layout.addLayout(actions_row)
+
+        self.run_help = QLabel(
+            "What happens when I click Run? Cleaned methane outputs are generated, EXIF metadata "
+            "is written in-place on source JPGs, and run artifacts (log, manifest, summary) are saved."
+        )
+        self.run_help.setProperty("cssClass", "subtitle")
+        self.run_help.setWordWrap(True)
+        self.content_layout.addWidget(self.run_help)
 
         
         self.status_label = QLabel("")
@@ -322,7 +339,10 @@ class MethanePage(QWidget):
 
     def _update_naming_preview(self) -> None:
         threshold = max(1, int(self.state.methane_threshold))
-        self.cleaned_preview.setText(f"Cleaned CSV name: *_Cleaned_{threshold}-PPM.csv")
+        self.cleaned_preview.setText(
+            f"Cleaned CSV name: *_Cleaned_{threshold}-PPM.csv "
+            "(saved next to each source methane CSV)"
+        )
         self.kmz_preview.setVisible(self.kmz_chk.isChecked())
         if self.kmz_chk.isChecked():
             self.kmz_preview.setText(f"KMZ name: *_Cleaned_{threshold}-PPM.kmz")
@@ -365,8 +385,13 @@ class MethanePage(QWidget):
                 dlg.exec()
             return
 
+        confirm_message = (
+            "Methane mode writes EXIF metadata in-place on source JPGs.\n"
+            f"{self._backup_behavior_text()}\n\n"
+            "Continue?"
+        )
         if not self._confirm_run(
-            "Methane mode writes EXIF metadata in-place.\n\nContinue?",
+            confirm_message,
             "confirm_methane",
             "Confirm in-place EXIF write",
         ):
@@ -459,6 +484,14 @@ class MethanePage(QWidget):
         msg.exec()
         if msg.clickedButton() == view_btn:
             self._view_log()
+
+    def _backup_behavior_text(self) -> str:
+        if self.controller.settings.create_backup_on_overwrite:
+            return (
+                "Backup behavior: enabled; original JPGs are copied to BACKUPS/ as *.jpg.bak "
+                "before overwrite."
+            )
+        return "Backup behavior: disabled in Settings; no .bak copy is created before overwrite."
 
     def _confirm_run(self, message: str, setting_attr: str, title: str) -> bool:
         settings = self.controller.settings
