@@ -4,6 +4,9 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_PATH="${1:-${REPO_DIR}/dist/PurwayGeotagger.app}"
 
+ts() { date -u '+%Y-%m-%dT%H:%M:%SZ'; }
+log() { printf '[%s] %s\n' "$(ts)" "$*"; }
+
 if [[ ! -d "${APP_PATH}" ]]; then
   echo "Missing app bundle: ${APP_PATH}"
   exit 1
@@ -38,65 +41,82 @@ decode_base64() {
   fi
 }
 
+log "Preparing signing materials..."
 decode_base64 "${MACOS_CERT_P12}" "${CERT_P12}"
 decode_base64 "${APPLE_API_KEY_P8}" "${API_KEY}"
+chmod 600 "${API_KEY}"
 
+log "Creating + unlocking temporary keychain..."
 security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN}"
 security set-keychain-settings -lut 21600 "${KEYCHAIN}"
 security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN}"
-security import "${CERT_P12}" -k "${KEYCHAIN}" -P "${MACOS_CERT_PASSWORD}" -T /usr/bin/codesign -T /usr/bin/security
+security default-keychain -s "${KEYCHAIN}"
+log "Importing Developer ID certificate into keychain..."
+# -A avoids GUI access prompts (headless CI); we still keep a minimal tool allowlist.
+security import "${CERT_P12}" -k "${KEYCHAIN}" -P "${MACOS_CERT_PASSWORD}" -A -T /usr/bin/codesign -T /usr/bin/security
 security list-keychain -d user -s "${KEYCHAIN}"
+log "Granting codesign key access (partition list)..."
 security set-key-partition-list -S apple-tool:,apple: -s -k "${KEYCHAIN_PASSWORD}" "${KEYCHAIN}" >/dev/null
 
+log "Locating Developer ID identity..."
 IDENTITY="$(security find-identity -v -p codesigning "${KEYCHAIN}" | awk -F\" '/Developer ID Application/ {print $2; exit}')"
 if [[ -z "${IDENTITY}" ]]; then
   echo "Developer ID Application identity not found in keychain."
   exit 1
 fi
 
-echo "Signing app with identity: ${IDENTITY}"
-codesign --force --options runtime --timestamp --sign "${IDENTITY}" --deep "${APP_PATH}"
+log "Signing app with identity: ${IDENTITY}"
+codesign --force --options runtime --timestamp --sign "${IDENTITY}" --keychain "${KEYCHAIN}" --deep "${APP_PATH}"
 codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
 
+log "Packaging DMG..."
 bash "${REPO_DIR}/scripts/ci/macos_package.sh" "${APP_PATH}"
 DMG_PATH="${REPO_DIR}/dist/PurwayGeotagger.dmg"
 
-echo "Submitting for notarization (async)..."
+log "Submitting for notarization (async)..."
 
-SUBMIT_JSON_PATH="${REPO_DIR}/dist/notarization_submit.json"
+SUBMIT_TXT_PATH="${REPO_DIR}/dist/notarization_submit.txt"
 SUBMIT_ID_PATH="${REPO_DIR}/dist/notarization_submission_id.txt"
 INFO_JSON_PATH="${REPO_DIR}/dist/notarization_info.json"
 WAIT_JSON_PATH="${REPO_DIR}/dist/notarization_wait.json"
 LOG_JSON_PATH="${REPO_DIR}/dist/notarization_log.json"
 
-SUBMIT_JSON="$(
-  xcrun notarytool submit "${DMG_PATH}" \
-    --key "${API_KEY}" \
-    --key-id "${APPLE_KEY_ID}" \
-    --issuer "${APPLE_ISSUER_ID}" \
-    --output-format json
-)"
-printf '%s\n' "${SUBMIT_JSON}" > "${SUBMIT_JSON_PATH}"
+# Keep normal output so CI shows upload progress; parse the submission id from output.
+set +o pipefail
+xcrun notarytool submit "${DMG_PATH}" \
+  --key "${API_KEY}" \
+  --key-id "${APPLE_KEY_ID}" \
+  --issuer "${APPLE_ISSUER_ID}" \
+  --no-wait \
+  --verbose \
+  --output-format normal \
+  --progress \
+  --no-s3-acceleration \
+  2>&1 | tee "${SUBMIT_TXT_PATH}"
+SUBMIT_RC=${PIPESTATUS[0]}
+set -o pipefail
+if [[ "${SUBMIT_RC}" -ne 0 ]]; then
+  echo "notarytool submit failed with exit code: ${SUBMIT_RC}"
+  exit "${SUBMIT_RC}"
+fi
 
 SUBMISSION_ID="$(
-  python3 - <<'PY' <<<"${SUBMIT_JSON}"
-import json
+  python3 - <<'PY' <"${SUBMIT_TXT_PATH}"
+import re
 import sys
 
-data = json.load(sys.stdin)
-for key in ("id", "uuid", "submissionId", "submission_id", "requestUUID", "request_uuid"):
-    value = data.get(key)
-    if isinstance(value, str) and value.strip():
-        print(value.strip())
-        raise SystemExit(0)
-raise SystemExit("Unable to locate notarization submission id in JSON output.")
+text = sys.stdin.read()
+m = re.search(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b", text)
+if not m:
+    raise SystemExit("Unable to locate notarization submission id in notarytool output.")
+print(m.group(0))
 PY
 )"
 printf '%s\n' "${SUBMISSION_ID}" > "${SUBMIT_ID_PATH}"
-echo "Notarization submission id: ${SUBMISSION_ID}"
+log "Notarization submission id: ${SUBMISSION_ID}"
 
 if [[ -n "${NOTARY_WAIT_TIMEOUT}" ]]; then
-  echo "Waiting up to ${NOTARY_WAIT_TIMEOUT} for notarization to complete..."
+  log "Waiting up to ${NOTARY_WAIT_TIMEOUT} for notarization to complete..."
   set +e
   WAIT_JSON="$(
     xcrun notarytool wait "${SUBMISSION_ID}" \
@@ -109,9 +129,10 @@ if [[ -n "${NOTARY_WAIT_TIMEOUT}" ]]; then
   WAIT_RC=$?
   set -e
   printf '%s\n' "${WAIT_JSON}" > "${WAIT_JSON_PATH}"
-  echo "notarytool wait exit code: ${WAIT_RC}"
+  log "notarytool wait exit code: ${WAIT_RC}"
 fi
 
+log "Fetching notarization status..."
 INFO_JSON="$(
   xcrun notarytool info "${SUBMISSION_ID}" \
     --key "${API_KEY}" \
@@ -132,11 +153,11 @@ print(str(status).strip())
 PY
   <<<"${INFO_JSON}"
 )"
-echo "Notarization status: ${STATUS:-<unknown>}"
+log "Notarization status: ${STATUS:-<unknown>}"
 
 STATUS_LC="$(printf '%s' "${STATUS}" | tr '[:upper:]' '[:lower:]')"
 if [[ "${STATUS_LC}" == "accepted" ]]; then
-  echo "Stapling notarization ticket..."
+  log "Stapling notarization ticket..."
   xcrun stapler staple "${APP_PATH}" || true
   xcrun stapler staple "${DMG_PATH}"
 elif [[ "${STATUS_LC}" == "rejected" || "${STATUS_LC}" == "invalid" ]]; then
@@ -154,8 +175,8 @@ else
 fi
 
 if [[ "${STATUS_LC}" == "accepted" ]]; then
-  echo "Running Gatekeeper assessments..."
+  log "Running Gatekeeper assessments..."
   spctl --assess --type open -vv "${DMG_PATH}"
 fi
 
-echo "Distribution artifact ready: ${DMG_PATH}"
+log "Distribution artifact ready: ${DMG_PATH}"
