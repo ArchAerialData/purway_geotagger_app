@@ -20,6 +20,7 @@ KEYCHAIN="${WORK_DIR}/ci-signing.keychain-db"
 KEYCHAIN_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
 CERT_P12="${WORK_DIR}/cert.p12"
 API_KEY="${WORK_DIR}/AuthKey_${APPLE_KEY_ID}.p8"
+NOTARY_WAIT_TIMEOUT="${NOTARY_WAIT_TIMEOUT:-}"
 
 cleanup() {
   security delete-keychain "${KEYCHAIN}" >/dev/null 2>&1 || true
@@ -60,13 +61,101 @@ codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
 bash "${REPO_DIR}/scripts/ci/macos_package.sh" "${APP_PATH}"
 DMG_PATH="${REPO_DIR}/dist/PurwayGeotagger.dmg"
 
-echo "Submitting for notarization..."
-xcrun notarytool submit "${DMG_PATH}" --key "${API_KEY}" --key-id "${APPLE_KEY_ID}" --issuer "${APPLE_ISSUER_ID}" --wait
-xcrun stapler staple "${APP_PATH}"
-xcrun stapler staple "${DMG_PATH}"
+echo "Submitting for notarization (async)..."
 
-echo "Running Gatekeeper assessments..."
-spctl --assess --type execute -vv "${APP_PATH}"
-spctl --assess --type open -vv "${DMG_PATH}"
+SUBMIT_JSON_PATH="${REPO_DIR}/dist/notarization_submit.json"
+SUBMIT_ID_PATH="${REPO_DIR}/dist/notarization_submission_id.txt"
+INFO_JSON_PATH="${REPO_DIR}/dist/notarization_info.json"
+WAIT_JSON_PATH="${REPO_DIR}/dist/notarization_wait.json"
+LOG_JSON_PATH="${REPO_DIR}/dist/notarization_log.json"
 
-echo "Notarization complete: ${DMG_PATH}"
+SUBMIT_JSON="$(
+  xcrun notarytool submit "${DMG_PATH}" \
+    --key "${API_KEY}" \
+    --key-id "${APPLE_KEY_ID}" \
+    --issuer "${APPLE_ISSUER_ID}" \
+    --output-format json
+)"
+printf '%s\n' "${SUBMIT_JSON}" > "${SUBMIT_JSON_PATH}"
+
+SUBMISSION_ID="$(
+  python3 - <<'PY' <<<"${SUBMIT_JSON}"
+import json
+import sys
+
+data = json.load(sys.stdin)
+for key in ("id", "uuid", "submissionId", "submission_id", "requestUUID", "request_uuid"):
+    value = data.get(key)
+    if isinstance(value, str) and value.strip():
+        print(value.strip())
+        raise SystemExit(0)
+raise SystemExit("Unable to locate notarization submission id in JSON output.")
+PY
+)"
+printf '%s\n' "${SUBMISSION_ID}" > "${SUBMIT_ID_PATH}"
+echo "Notarization submission id: ${SUBMISSION_ID}"
+
+if [[ -n "${NOTARY_WAIT_TIMEOUT}" ]]; then
+  echo "Waiting up to ${NOTARY_WAIT_TIMEOUT} for notarization to complete..."
+  set +e
+  WAIT_JSON="$(
+    xcrun notarytool wait "${SUBMISSION_ID}" \
+      --key "${API_KEY}" \
+      --key-id "${APPLE_KEY_ID}" \
+      --issuer "${APPLE_ISSUER_ID}" \
+      --timeout "${NOTARY_WAIT_TIMEOUT}" \
+      --output-format json 2>&1
+  )"
+  WAIT_RC=$?
+  set -e
+  printf '%s\n' "${WAIT_JSON}" > "${WAIT_JSON_PATH}"
+  echo "notarytool wait exit code: ${WAIT_RC}"
+fi
+
+INFO_JSON="$(
+  xcrun notarytool info "${SUBMISSION_ID}" \
+    --key "${API_KEY}" \
+    --key-id "${APPLE_KEY_ID}" \
+    --issuer "${APPLE_ISSUER_ID}" \
+    --output-format json
+)"
+printf '%s\n' "${INFO_JSON}" > "${INFO_JSON_PATH}"
+
+STATUS="$(
+  python3 - <<'PY'
+import json
+import sys
+
+data = json.load(sys.stdin)
+status = data.get("status") or data.get("Status") or ""
+print(str(status).strip())
+PY
+  <<<"${INFO_JSON}"
+)"
+echo "Notarization status: ${STATUS:-<unknown>}"
+
+STATUS_LC="$(printf '%s' "${STATUS}" | tr '[:upper:]' '[:lower:]')"
+if [[ "${STATUS_LC}" == "accepted" ]]; then
+  echo "Stapling notarization ticket..."
+  xcrun stapler staple "${APP_PATH}" || true
+  xcrun stapler staple "${DMG_PATH}"
+elif [[ "${STATUS_LC}" == "rejected" || "${STATUS_LC}" == "invalid" ]]; then
+  echo "Notarization failed with status: ${STATUS}. Fetching log..."
+  set +e
+  xcrun notarytool log "${SUBMISSION_ID}" \
+    --key "${API_KEY}" \
+    --key-id "${APPLE_KEY_ID}" \
+    --issuer "${APPLE_ISSUER_ID}" \
+    "${LOG_JSON_PATH}"
+  set -e
+  exit 1
+else
+  echo "Not notarized yet (status: ${STATUS:-unknown}). Skipping stapling in this run."
+fi
+
+if [[ "${STATUS_LC}" == "accepted" ]]; then
+  echo "Running Gatekeeper assessments..."
+  spctl --assess --type open -vv "${DMG_PATH}"
+fi
+
+echo "Distribution artifact ready: ${DMG_PATH}"

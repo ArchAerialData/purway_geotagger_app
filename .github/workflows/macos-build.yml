@@ -9,6 +9,7 @@ jobs:
   build:
     # Pin a specific runner to avoid surprises when `macos-latest` advances.
     runs-on: macos-14
+    timeout-minutes: 90
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
       BUNDLE_ID: "com.archaerial.purwaygeotagger"
@@ -59,14 +60,24 @@ jobs:
           APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
           APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          # Avoid any GitHub idle time waiting on Apple notarization.
+          # The DMG + submission id are uploaded and can be finalized later.
+          NOTARY_WAIT_TIMEOUT: ""
 
       - name: Package DMG (unsigned)
         if: ${{ steps.signing_ready.outputs.enabled != 'true' && github.ref != 'refs/heads/main' }}
         run: bash scripts/ci/macos_package.sh
 
       - name: Upload DMG
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: PurwayGeotagger-macos
-          path: dist/PurwayGeotagger.dmg
+          path: |
+            dist/PurwayGeotagger.dmg
+            dist/notarization_submission_id.txt
+            dist/notarization_submit.json
+            dist/notarization_info.json
+            dist/notarization_wait.json
+            dist/notarization_log.json
           if-no-files-found: error
