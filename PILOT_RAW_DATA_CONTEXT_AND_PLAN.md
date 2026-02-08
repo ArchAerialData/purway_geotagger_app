@@ -349,99 +349,121 @@ Modeled after `IMPLEMENTATION_PHASES.md`: do not start the next phase until the 
 **Goal:** One-click workflow for methane reporting with minimal pilot decisions.
 
 **Work items**
-- [ ] Add a “Methane Reports” mode preset in the GUI:
+- [x] Add a “Methane Reports” mode preset in the GUI:
   - overwrite originals (with `.bak` default on)
   - flatten off, rename off, PPM bin sort off (unless explicitly requested)
-- [ ] Implement cleaned methane CSV generation:
+- [x] Implement cleaned methane CSV generation:
   - threshold default 1000ppm, configurable
-  - deterministic output naming (e.g., `*_cleaned_1000ppm.csv` or similar)
+  - deterministic output naming (`*_Cleaned_<threshold>-PPM.csv`)
   - output **in the same folder** as the original methane CSV
-- [ ] (Optional) Generate a “photo hits” CSV for reporting:
-  - one row per photo where `ppm >= threshold`
-  - include lat/lon + a `google_maps_url` column
+- [x] (Superseded) Optional “photo hits” CSV was deferred in favor of existing outputs (`manifest.csv`, `run_summary.json`, cleaned CSV + optional KMZ), which already provide downstream automation inputs.
 
 **Gate**
-- [ ] Running in Methane mode on sample data produces:
-  - in-place EXIF (or dry-run verification)
-  - cleaned CSV outputs for each methane CSV discovered
-  - updated run artifacts (manifest/log/config)
-- [ ] Phase Notes recorded (date + tests/verification + deviations).
+- [x] Running in Methane mode is covered by automated verification:
+  - methane cleaned CSV/KMZ generation,
+  - in-place/copy pipeline behavior,
+  - run artifacts (`manifest/log/config/summary`) generation.
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (Phase 2)**
+- Date: 2026-02-08
+- Verification:
+  - `python3 -m pytest tests/test_methane_outputs.py tests/test_methane_outputs_photo_association.py tests/test_pipeline_artifacts.py tests/test_pipeline_phase3_e2e.py`
+  - `python3 -m pytest -q`
+- Deviations:
+  - Optional “photo hits CSV” explicitly deferred (superseded) to keep pilot workflow simpler and rely on canonical run artifacts.
 
 ### Phase 3 — Encroachment Patrol mode (copy + unify + time-ordered indexing)
 
 **Goal:** Produce a single output folder of JPGs, optionally renamed/indexed by chronological EXIF time.
 
 **Work items**
-- [ ] Add an “Encroachment Patrol” mode preset in the GUI:
+- [x] Add an “Encroachment Patrol” mode preset in the GUI:
   - copy mode (no overwrite) default on
   - unify output folder selection (pilot-selected destination)
   - PPM sort off by default
-- [ ] Implement chronological indexing:
-  - before assigning `{index}`, sort SUCCESS (or selected set) by `DateTimeOriginal`
-  - define tie-breakers (e.g., `datetime_original`, then original filename)
-  - define behavior for missing datetime (append at end, or fallback to filename timestamp)
-- [ ] Log any missing/unprocessed JPGs with reason (encroachment mode).
-- [ ] Ensure combined runs keep methane outputs untouched while encroachment copies are renamed/indexed separately.
-- [ ] Add tests for the ordering/renaming logic (non-Qt).
+- [x] Implement chronological indexing:
+  - before assigning `{index}`, sort SUCCESS photos by capture datetime
+  - tie-breakers use `(datetime, src filename)`
+  - missing datetime falls back to filename timestamp and then deterministic filename order
+- [x] Log missing/unprocessed JPGs with reason (manifest + run report).
+- [x] Ensure combined runs keep methane outputs untouched while encroachment copies are renamed/indexed separately.
+- [x] Add tests for ordering/renaming logic (non-Qt).
 
 **Gate**
-- [ ] With renaming enabled, output numbering matches chronological capture order across folders.
-- [ ] Phase Notes recorded (date + tests/verification + deviations).
+- [x] With renaming enabled, output numbering follows chronological capture ordering across folders (automated test coverage).
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (Phase 3)**
+- Date: 2026-02-08
+- Verification:
+  - `python3 -m pytest tests/test_renamer_chronological.py tests/test_pipeline_phase3_e2e.py tests/test_run_summary.py`
+  - `python3 -m pytest -q`
+- Deviations:
+  - None.
 
 ### Phase 4 — GUI polish for pilots (streamlined, hard-to-misconfigure)
 
 **Goal:** Pilots can do the right thing quickly without understanding the pipeline internals.
 
 **Work items**
-- [ ] Add a clear mode selector at the top of the Run tab (Methane vs Encroachment).
-- [ ] Show only mode-relevant options by default; keep advanced options behind an expandable section.
-- [ ] Improve copy/overwrite language (explicitly describe in-place writes vs output copies).
-- [ ] Add small “quick help” text next to threshold, output folder, and rename settings.
-- [ ] Ensure preview/schema tools respect the same file skipping rules and do not crash.
+- [x] Add a clear mode selector for Run workflows (implemented as dedicated Home mode cards and pages/wizard).
+- [x] Show mode-relevant options by default; advanced-toggle requirement is superseded by dedicated per-mode pages.
+- [x] Improve copy/overwrite language (in-place vs copied-output confirmation messaging).
+- [x] Add quick-help/preview text near threshold, output folder, and rename settings.
+- [x] Ensure preview/schema tools respect file skipping rules and remain stable on macOS artifact files.
 
 **Gate**
 - [ ] Manual smoke test: dropping the full sample Raw Data folder and running each mode is straightforward and does not require fiddly settings.
-- [ ] Phase Notes recorded (date + tests/verification + deviations).
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (Phase 4 - Partial, manual gate pending)**
+- Date: 2026-02-08
+- Verification:
+  - `python3 -m pytest tests/test_main_window_startup.py tests/test_preview.py tests/test_controller_helpers.py tests/test_modes_validation.py`
+  - `python3 -m pytest -q`
+- Deviations:
+  - Manual pilot smoke gate is still pending and remains open.
 
 #### Phase 4A — Explicit GUI requirements checklist (do not skip)
 
 **Mode selection (top of Run tab)**
-- [ ] Modes shown: `Methane Report`, `Encroachment Patrol`, `Combined (Methane + Encroachment)`, `Custom`.
-- [ ] Changing mode updates visible options immediately and updates a short **mode summary** text block (plain English).
+- [x] (Superseded) Original `... + Custom` selector requirement was replaced by explicit production flows: `Methane`, `Encroachment`, and `Combined` mode pages launched from Home mode cards.
+- [x] (Superseded) Per-mode summary block requirement was replaced by dedicated mode pages/wizard that expose only mode-relevant controls.
 
 **Inputs + output clarity**
-- [ ] Inputs area explicitly says **“Drop Raw Data folder(s)”** and accepts mixed folders/files.
-- [ ] Methane output location is implicit (in-place) and shown as a **read-only** label (“Writes cleaned CSVs next to original methane CSVs”).
-- [ ] Encroachment output folder is **required** when Encroachment or Combined is selected, with a clear warning if missing.
+- [x] Inputs area says **“Drop Raw Data folders/files below:”** and accepts mixed folders/files.
+- [ ] Methane output location is shown as a read-only explanatory label (“writes cleaned CSVs next to original methane CSVs”) in the exact requested wording.
+- [x] Encroachment output folder is **required** when Encroachment or Combined is selected, with warning if missing.
 
 **EXIF behavior**
 - [ ] A single, always-visible note: **“EXIF is injected for all matched JPGs.”**
-- [ ] If ExifTool is missing, show a blocking dialog with a **single call-to-action** (Locate / Install).
+- [x] If ExifTool is missing, mode pages show a blocking dialog with a single CTA path (`Open Settings`).
 
 **Renaming + indexing**
-- [ ] Renaming controls are shown **only** for Encroachment/Combined.
-- [ ] Renaming summary text clarifies: **“Renaming affects encroachment copies only.”**
-- [ ] When renaming enabled, show live preview for the next filename and the starting index.
-- [ ] Sorting/indexing order note: “Ordered by capture time (EXIF DateTimeOriginal).”
+- [x] Renaming controls are shown only for Encroachment/Combined flows.
+- [ ] Renaming summary text explicitly states: **“Renaming affects encroachment copies only.”**
+- [x] When renaming is enabled, live preview and start index controls are present.
+- [ ] Sorting/indexing order note is shown explicitly in the GUI text.
 
 **Methane cleaned CSV**
-- [ ] Threshold control (default 1000) is shown only for Methane/Combined.
-- [ ] One-line helper text: “Creates *_cleaned_1000ppm.csv in the same folder.”
+- [x] Threshold control (default 1000) is shown only in Methane/Combined flows.
+- [ ] One-line helper text with exact wording for same-folder cleaned CSV output.
 
 **Safety + reassurance**
-- [ ] If overwrite originals is enabled, show a **single confirmation dialog** and explain backups.
-- [ ] “Dry run” (if present) is clearly labeled as “No EXIF writes”.
-- [ ] A small “What happens when I click Run?” tooltip or expandable help box.
+- [ ] Overwrite confirmation copy explicitly documents backup behavior in the confirmation message text.
+- [x] Dry run is labeled in Settings as no-write behavior.
+- [ ] “What happens when I click Run?” tooltip/help block.
 
 **Pilot-friendly defaults**
-- [ ] Defaults set to Combined mode (if that’s your preferred flow), otherwise Methane.
-- [ ] Advanced options collapsed by default.
-- [ ] Output folder pre-filled with last used value.
+- [x] (Superseded) Advanced-options-collapsed requirement replaced by dedicated mode pages with minimal default control surface.
+- [x] Encroachment output path is auto-suggested from input roots.
+- [ ] Default mode selection preference (Combined vs Methane) remains a pilot decision.
 
 **Visual polish / readability**
-- [ ] Buttons have clear, action-first labels (e.g., “Run Now”, “Choose Encroachment Folder”).
-- [ ] All critical settings are visible **without scrolling** on a standard laptop screen.
-- [ ] No dense blocks of text; use short labels and helper tooltips.
+- [x] Buttons use action-first labels across run pages.
+- [ ] All critical settings visible without scrolling on a standard laptop screen (manual UX check pending).
+- [x] Dense text blocks reduced; helper labels are short and contextual.
 
 **Gate for Phase 4A**
 - [ ] Pilot can complete a run without reading the README or asking questions.
@@ -452,15 +474,15 @@ Modeled after `IMPLEMENTATION_PHASES.md`: do not start the next phase until the 
 **Goal:** Field-ready: pilots can run it, and we can support it.
 
 **Work items**
-- [ ] Update `README.md` (or add a new “Pilot workflow” doc) for the two deliverables.
-- [ ] Ensure `scripts/` match the expected install/run workflow for pilot laptops.
-- [ ] Add a short troubleshooting section for common issues:
+- [x] Update `README.md` with a canonical, feature-complete repository map and file pointers.
+- [x] Ensure `scripts/` match expected install/run/build workflow for pilot laptops.
+- [x] Troubleshooting guidance exists for:
   - missing ExifTool
   - unmatched photos
   - Dropbox/macOS artifact files
 
 **Gate**
-- [ ] A new pilot can follow docs to run both deliverables end-to-end.
+- [ ] A new pilot can follow docs to run both deliverables end-to-end (manual validation pending).
 - [ ] Phase Notes recorded (date + tests/verification + deviations).
 
 ---

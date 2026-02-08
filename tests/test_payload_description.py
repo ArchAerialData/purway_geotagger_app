@@ -14,12 +14,11 @@ def test_payload_is_appended_to_description(tmp_path: Path, monkeypatch) -> None
     jpg.write_text("x", encoding="utf-8")
 
     csv_path = input_dir / "data.csv"
-    csv_path.write_text(
-        "Latitude,Longitude,PPM,Photo\n"
-        "1.0,2.0,10,IMG_0001.jpg\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    with csv_path.open("w", encoding="utf-8", newline="\n") as f:
+        f.write(
+            "Latitude,Longitude,PPM,Photo\n"
+            "1.0,2.0,10,IMG_0001.jpg\n",
+        )
 
     run_folder = tmp_path / "PurwayGeotagger_TEST"
     opts = JobOptions(
