@@ -1,6 +1,8 @@
-# GitHub Actions Release Checklist (macOS Signed + Notarized)
+# GitHub Actions Release Checklist (macOS Signed DMG, No Notarization)
 
-This checklist is for producing a macOS distribution artifact from GitHub Actions and validating that it is usable on pilot Macs (Gatekeeper-friendly).
+This checklist is for producing a **code-signed** macOS distribution artifact from GitHub Actions.
+
+Important: This repo currently does **not** notarize the app/DMG. Expect Gatekeeper prompts on first launch for apps distributed outside the Mac App Store.
 
 Assumptions:
 - You are in the repo root: `/Users/archaerialtesting/Documents/purway_geotagger_app`
@@ -8,8 +10,8 @@ Assumptions:
 - GitHub repo secrets are already configured (see below)
 
 Notes on cost:
-- The `macos-build` workflow runs on a macOS runner (billable). This is why we avoid waiting on Apple notarization inside the build job.
-- Notarization is handled asynchronously: the build job will submit the DMG, record a submission id, and upload artifacts. A separate “finalize” step can wait/staple later (or you can do it locally).
+- The `macos-build` workflow runs on a macOS runner (billable).
+- Removing notarization avoids long, unpredictable waits on Apple during CI.
 
 ## 0) Local preflight (recommended before triggering CI)
 
@@ -46,15 +48,11 @@ gh secret list -R ArchAerialData/purway_geotagger_app
 Required secret names (case-sensitive):
 - `MACOS_CERT_P12`: base64-encoded Developer ID Application `.p12`
 - `MACOS_CERT_PASSWORD`: password for the `.p12`
-- `APPLE_KEY_ID`: App Store Connect API key id
-- `APPLE_ISSUER_ID`: App Store Connect issuer id (UUID)
-- `APPLE_API_KEY_P8`: base64-encoded `.p8` private key
 
 What they’re used for:
 - Code signing: `MACOS_CERT_P12` + `MACOS_CERT_PASSWORD`
-- Notarization: `APPLE_KEY_ID` + `APPLE_ISSUER_ID` + `APPLE_API_KEY_P8`
 
-## 3) Trigger signed/notarized workflow on `main`
+## 3) Trigger signed workflow on `main`
 
 ```bash
 gh workflow run macos-build -R ArchAerialData/purway_geotagger_app --ref main
@@ -62,8 +60,7 @@ gh workflow run macos-build -R ArchAerialData/purway_geotagger_app --ref main
 
 What it does:
 - Starts the workflow `.github/workflows/macos-build.yml` on the `main` branch
-- That workflow builds/tests, then (if secrets exist) signs + submits for notarization
-- The job does **not** wait for Apple to finish notarization (to control macOS runner cost)
+- That workflow builds/tests, then (if signing secrets exist) signs and packages a DMG
 
 ## 4) Watch the latest run
 
@@ -95,25 +92,22 @@ ls -la /tmp/purway-release
 ```
 
 What it does:
-- Downloads the artifact produced by Actions (should include `PurwayGeotagger.dmg` plus notarization metadata files)
+- Downloads the artifact produced by Actions (should include `PurwayGeotagger.dmg`)
 
-## 6) Gatekeeper checks (on the downloaded artifact)
+## 6) Signature checks (on the downloaded artifact)
 
 ```bash
-spctl --assess --type open -vv /tmp/purway-release/PurwayGeotagger.dmg
-
-# Mount DMG so we can assess the app bundle itself.
 hdiutil attach /tmp/purway-release/PurwayGeotagger.dmg
 cp -R /Volumes/PurwayGeotagger/PurwayGeotagger.app /tmp/PurwayGeotagger.app
 hdiutil detach /Volumes/PurwayGeotagger
 
-spctl --assess --type execute -vv /tmp/PurwayGeotagger.app
+codesign --verify --deep --strict --verbose=2 /tmp/PurwayGeotagger.app
+codesign -dv --verbose=4 /tmp/PurwayGeotagger.app 2>&1 | sed -n '1,80p'
 ```
 
 What it does:
-- `spctl` simulates Gatekeeper assessment
-- If the build has been notarized + stapled, this should pass cleanly
-- If the build is signed but not notarized/stapled yet, assessment may fail even though it might still be runnable via manual override (not ideal for internal distribution)
+- Verifies the app bundle is correctly signed (without involving notarization/Gatekeeper)
+- Prints the signing identity and signature metadata
 
 ## 7) Verify bundled ExifTool exists in the `.app`
 
@@ -126,33 +120,11 @@ What it does:
 - Confirms the vendored ExifTool payload is inside the app bundle
 - This is critical because pilot Macs must not depend on Homebrew/Terminal PATH
 
-## Optional: Finalize notarization later (without holding a macOS runner open)
+## Pilot Launch Expectations (No Notarization)
 
-If the build workflow submitted notarization but didn’t wait, the artifact should include `notarization_submission_id.txt`.
-
-### Option A: Finalize via GitHub Actions (short “finalize” workflow)
-
-Run the `macos-notarize-finalize` workflow and provide:
-- `build_run_id`: the `macos-build` run id that produced the DMG artifact
-- `wait_timeout`: how long this finalize run should wait (example: `20m`)
-
-Result:
-- A new artifact `PurwayGeotagger-macos-notarized` containing a stapled DMG (if accepted).
-
-### Option B: Finalize locally (no GitHub runner time)
-
-```bash
-cd /Users/archaerialtesting/Documents/purway_geotagger_app
-
-# Put the DMG + notarization_submission_id.txt in the same folder (or export NOTARY_SUBMISSION_ID)
-export APPLE_KEY_ID="..."
-export APPLE_ISSUER_ID="..."
-export APPLE_API_KEY_P8="..."   # base64
-
-bash scripts/ci/macos_finalize_notarization.sh /tmp/purway-release/PurwayGeotagger.dmg
-```
-
-What it does:
-- Polls Apple for the submission id until accepted/rejected (bounded by `NOTARY_WAIT_TIMEOUT`, default `20m`)
-- Staples the DMG on acceptance and runs `spctl --assess`
-
+Because the DMG/app is signed but not notarized, pilots will typically need to do a one-time manual override on first launch:
+- Copy `PurwayGeotagger.app` into `/Applications`.
+- Try opening it.
+- If macOS blocks it, use either:
+  - Finder: right-click the app, choose **Open**, then confirm.
+  - System Settings: Privacy & Security -> **Open Anyway** (after the block).

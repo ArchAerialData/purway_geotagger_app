@@ -231,7 +231,7 @@ Build and packaging:
 Signing/notarization docs/scripts:
 - Setup guide: `scripts/macos/APPLE_SIGNING_NOTARIZATION_SETUP.md`
 - Sign/notarize script: `scripts/macos/sign_and_notarize.sh`
-- CI pipeline docs/scripts: `scripts/ci/README.md`, `scripts/ci/macos_build.sh`, `scripts/ci/macos_package.sh`, `scripts/ci/macos_sign_and_notarize.sh`
+- CI pipeline docs/scripts: `scripts/ci/README.md`, `scripts/ci/macos_build.sh`, `scripts/ci/macos_package.sh`, `scripts/ci/macos_sign_and_package.sh`
 - Workflow: `.github/workflows/macos-build.yml`
 
 ## Canonical Planning and Tracking Docs
