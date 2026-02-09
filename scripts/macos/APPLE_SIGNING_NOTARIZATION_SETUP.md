@@ -46,13 +46,15 @@ This guide lists the exact credentials needed for macOS code signing and notariz
 ## Step 7 — Provide secrets to GitHub Actions
 - `MACOS_CERT_P12` (base64 of `.p12`)
 - `MACOS_CERT_PASSWORD`
+
+Optional (only if you later re-enable notarization):
 - `APPLE_KEY_ID`
 - `APPLE_ISSUER_ID`
 - `APPLE_API_KEY_P8` (base64 of `.p8`)
 
 ## Notes
-- This repo's CI notarization flow uses `xcrun notarytool` with an App Store Connect API **Team** key and passes `--issuer`.
-- The app must be **Developer ID signed** before notarization will succeed.
+- This repo's CI currently produces **signed but not notarized** DMGs (to avoid long/not-cost-predictable notarization waits in GitHub Actions).
+- The app must be **Developer ID signed** before notarization will succeed (if you choose to add notarization back later).
 
 ## References (Apple docs)
 - Team ID: `https://developer.apple.com/help/glossary/team-id/`

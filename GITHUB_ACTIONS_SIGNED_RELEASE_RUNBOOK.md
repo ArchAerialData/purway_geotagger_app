@@ -1,6 +1,8 @@
-# GitHub Actions Signed Release Runbook (macOS)
+# GitHub Actions Signed Release Runbook (macOS, No Notarization)
 
-This runbook is for producing a signed + notarized `PurwayGeotagger.dmg` from GitHub Actions and validating Gatekeeper acceptance before pilot distribution.
+This runbook is for producing a **code-signed** `PurwayGeotagger.dmg` from GitHub Actions and validating the signature before pilot distribution.
+
+Important: This repo currently does **not** notarize the app/DMG. Expect Gatekeeper prompts on first launch for apps distributed outside the Mac App Store.
 
 Repo:
 - `https://github.com/ArchAerialData/purway_geotagger_app`
@@ -10,15 +12,14 @@ Workflow:
 
 Related CI scripts:
 - `scripts/ci/macos_build.sh`
-- `scripts/ci/macos_sign_and_notarize.sh`
+- `scripts/ci/macos_sign_and_package.sh`
 - `scripts/ci/macos_package.sh`
 
 ## What this runbook verifies
 
 1. The code builds and tests pass on macOS (`macos-14`, Python 3.11).
-2. The app is signed with Developer ID and notarized by Apple.
-3. The DMG and app pass `spctl` Gatekeeper checks.
-4. ExifTool is bundled inside the app so pilots do not need Homebrew.
+2. The app is signed with Developer ID (valid `codesign` verification).
+3. ExifTool is bundled inside the app so pilots do not need Homebrew.
 
 ## Prerequisites
 
@@ -29,20 +30,14 @@ Related CI scripts:
 
 ## Required GitHub Secrets
 
-All five must exist for signed/notarized `main` builds:
+Both must exist for signed `main` builds:
 
-- `MACOS_CERT_P12`
-- `MACOS_CERT_PASSWORD`
-- `APPLE_KEY_ID`
-- `APPLE_ISSUER_ID`
-- `APPLE_API_KEY_P8`
+- `MACOS_CERT_P12` (base64-encoded Developer ID Application certificate export, `.p12`)
+- `MACOS_CERT_PASSWORD` (password used when exporting that `.p12`)
 
 What they are:
 - `MACOS_CERT_P12`: base64-encoded Developer ID Application certificate export (`.p12`).
 - `MACOS_CERT_PASSWORD`: password used when exporting that `.p12`.
-- `APPLE_KEY_ID`: App Store Connect API key ID.
-- `APPLE_ISSUER_ID`: App Store Connect issuer UUID for your Team API key.
-- `APPLE_API_KEY_P8`: base64-encoded App Store Connect API key file (`.p8`).
 
 ## Step-by-step Commands
 
@@ -63,11 +58,8 @@ gh secret list -R ArchAerialData/purway_geotagger_app
 # Required names:
 # MACOS_CERT_P12
 # MACOS_CERT_PASSWORD
-# APPLE_KEY_ID
-# APPLE_ISSUER_ID
-# APPLE_API_KEY_P8
 
-# 3) Trigger signed/notarized workflow on main
+# 3) Trigger signed workflow on main
 gh workflow run macos-build -R ArchAerialData/purway_geotagger_app --ref main
 
 # 4) Watch latest run
@@ -78,15 +70,13 @@ gh run view "$RUN_ID" -R ArchAerialData/purway_geotagger_app --log
 # 5) Download artifact after success
 gh run download "$RUN_ID" -R ArchAerialData/purway_geotagger_app -n PurwayGeotagger-macos -D /tmp/purway-release
 
-# 6) Gatekeeper checks on downloaded artifact
-spctl --assess --type open -vv /tmp/purway-release/PurwayGeotagger.dmg
-
-# Mount DMG and copy app out for execute-assess
+# 6) Signature checks on downloaded artifact
+# Mount DMG and copy app out for codesign verification
 hdiutil attach /tmp/purway-release/PurwayGeotagger.dmg
 cp -R /Volumes/PurwayGeotagger/PurwayGeotagger.app /tmp/PurwayGeotagger.app
 hdiutil detach /Volumes/PurwayGeotagger
 
-spctl --assess --type execute -vv /tmp/PurwayGeotagger.app
+codesign --verify --deep --strict --verbose=2 /tmp/PurwayGeotagger.app
 
 # 7) Verify bundled ExifTool exists in app payload
 ls -la /tmp/PurwayGeotagger.app/Contents/Resources/bin/exiftool
@@ -136,10 +126,10 @@ What it does:
 - Lists secret names configured in repository settings.
 
 Why it matters:
-- `main` workflow is configured to fail if signing/notarization secrets are missing.
+- `main` workflow is configured to fail if signing secrets are missing.
 
 Pass signal:
-- All 5 required secret names are present.
+ - Both required secret names are present.
 
 Fail signal:
 - Missing any secret name; CI will fail at signing readiness gate.
@@ -152,7 +142,7 @@ What it does:
 - Starts the macOS build workflow on the `main` branch.
 
 Why it matters:
-- Signed/notarized artifacts for pilot distribution should come from `main`.
+- Signed artifacts for pilot distribution should come from `main`.
 
 Pass signal:
 - Workflow run appears in Actions list.
@@ -169,15 +159,11 @@ What it does:
 - Prints full logs for post-check.
 
 Why it matters:
-- You can confirm notarization + Gatekeeper checks actually happened in CI.
+- You can confirm signing + DMG packaging happened in CI.
 
 Pass signals to find in logs:
-- `Signing + notarization enabled.`
+- `Code signing enabled.`
 - `Signing app with identity:`
-- `Submitting for notarization...`
-- `Notarization complete:`
-- `spctl --assess --type execute` success
-- `spctl --assess --type open` success
 
 ### Step 5 - Download artifact
 Command:
@@ -192,23 +178,23 @@ Why it matters:
 Pass signal:
 - `/tmp/purway-release/PurwayGeotagger.dmg` exists.
 
-### Step 6 - Run local Gatekeeper checks
+### Step 6 - Run local signature checks
 Commands:
 - `spctl --assess --type open -vv ...dmg`
 - mount/copy/detach via `hdiutil`
 - `spctl --assess --type execute -vv ...app`
 
 What it does:
-- Validates macOS policy acceptance for opening DMG and launching app.
+ - Validates the app signature without involving notarization/Gatekeeper.
 
 Why it matters:
-- Confirms smooth internal distribution behavior and fewer “unidentified developer” problems.
+ - Confirms the DMG contains a correctly signed app bundle.
 
 Pass signal:
-- `spctl` exits `0` for both checks.
+ - `codesign --verify` exits `0`.
 
 Fail signal:
-- Rejection text indicating signature/notarization/stapling problem.
+ - `codesign` errors indicating signature problems or missing signing identity.
 
 ### Step 7 - Confirm ExifTool is bundled
 Commands:
@@ -226,19 +212,12 @@ Pass signal:
 
 ## Common Failure Cases and Meaning
 
-1. `Signing/notarization secrets are required for main-branch distribution artifacts.`
-- At least one required secret is missing.
+1. `Code signing secrets are required for main-branch distribution artifacts.`
+- Signing secrets are missing or incorrectly configured.
 
 2. `Developer ID Application identity not found in keychain.`
 - Bad or mismatched `.p12`/password secret values.
-
-3. Notary submission auth errors (`401`/`403`).
-- Wrong `APPLE_KEY_ID`, `APPLE_ISSUER_ID`, or `.p8` content.
-
-4. `spctl` rejects DMG or app.
-- Notarization or stapling did not complete correctly, or signature mismatch.
-
-5. Missing `bin/exiftool` or `bin/lib`.
+3. Missing `bin/exiftool` or `bin/lib`.
 - Packaging regression; app may fail EXIF workflows on pilot machines.
 
 ## Optional Quick Re-check Commands
@@ -258,4 +237,4 @@ spctl --assess --type execute -vv /tmp/PurwayGeotagger.app
 ## Notes
 
 - Keep this as a repeatable release checklist before each pilot distribution.
-- If this runbook passes end-to-end, you have high confidence the build is signed, notarized, Gatekeeper-acceptable, and self-contained for ExifTool.
+- If this runbook passes end-to-end, you have high confidence the build is signed, packaged, and self-contained for ExifTool. (Gatekeeper prompts are still expected without notarization.)

@@ -9,7 +9,7 @@ jobs:
   build:
     # Pin a specific runner to avoid surprises when `macos-latest` advances.
     runs-on: macos-14
-    # Cap total macOS runner time to limit cost if signing/notarization stalls.
+    # Cap total macOS runner time to limit cost if signing stalls.
     timeout-minutes: 60
     env:
       MACOSX_DEPLOYMENT_TARGET: "13.0"
@@ -33,37 +33,28 @@ jobs:
         env:
           MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
-          APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
-          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
         run: |
-          if [[ -n "${MACOS_CERT_P12}" && -n "${MACOS_CERT_PASSWORD}" && -n "${APPLE_KEY_ID}" && -n "${APPLE_ISSUER_ID}" && -n "${APPLE_API_KEY_P8}" ]]; then
+          if [[ -n "${MACOS_CERT_P12}" && -n "${MACOS_CERT_PASSWORD}" ]]; then
             echo "enabled=true" >> "${GITHUB_OUTPUT}"
-            echo "Signing + notarization enabled."
+            echo "Code signing enabled."
           else
             echo "enabled=false" >> "${GITHUB_OUTPUT}"
-            echo "Signing + notarization disabled: one or more secrets missing."
+            echo "Code signing disabled: one or more secrets missing."
           fi
 
-      - name: Enforce signing/notarization on main
+      - name: Enforce code signing on main
         if: ${{ github.ref == 'refs/heads/main' && steps.signing_ready.outputs.enabled != 'true' }}
         run: |
-          echo "::error::Signing/notarization secrets are required for main-branch distribution artifacts."
-          echo "::error::Provide MACOS_CERT_P12, MACOS_CERT_PASSWORD, APPLE_KEY_ID, APPLE_ISSUER_ID, and APPLE_API_KEY_P8."
+          echo "::error::Code signing secrets are required for main-branch distribution artifacts."
+          echo "::error::Provide MACOS_CERT_P12 and MACOS_CERT_PASSWORD."
           exit 1
 
-      - name: Sign + notarize (optional)
+      - name: Sign + package DMG (optional)
         if: ${{ steps.signing_ready.outputs.enabled == 'true' }}
-        run: bash scripts/ci/macos_sign_and_notarize.sh
+        run: bash scripts/ci/macos_sign_and_package.sh
         env:
           MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-          APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
-          APPLE_ISSUER_ID: ${{ secrets.APPLE_ISSUER_ID }}
-          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-          # Avoid any GitHub idle time waiting on Apple notarization.
-          # The DMG + submission id are uploaded and can be finalized later.
-          NOTARY_WAIT_TIMEOUT: ""
 
       - name: Package DMG (unsigned)
         if: ${{ steps.signing_ready.outputs.enabled != 'true' && github.ref != 'refs/heads/main' }}
@@ -76,9 +67,4 @@ jobs:
           name: PurwayGeotagger-macos
           path: |
             dist/PurwayGeotagger.dmg
-            dist/notarization_submission_id.txt
-            dist/notarization_submit.txt
-            dist/notarization_info.json
-            dist/notarization_wait.json
-            dist/notarization_log.json
           if-no-files-found: error

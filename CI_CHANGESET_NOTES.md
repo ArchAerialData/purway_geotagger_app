@@ -59,3 +59,48 @@ This file documents CI/workflow updates as isolated change sets so each can be r
 
 - `git restore .github/workflows/macos-build.yml scripts/ci/macos_sign_and_notarize.sh scripts/ci/README.md`
 
+## CHG-CI-002: Disable CI notarization (signed DMG only)
+
+### Purpose
+
+- Avoid long/unpredictable `notarytool` waits in GitHub Actions (macOS runner cost control).
+- Produce a **code-signed** DMG artifact only.
+
+### Files changed
+
+- `.github/workflows/macos-build.yml`
+- `scripts/ci/macos_sign_and_package.sh`
+- `scripts/ci/README.md`
+- `GITHUB_ACTIONS_RELEASE_CHECKLIST.md`
+- `GITHUB_ACTIONS_SIGNED_RELEASE_RUNBOOK.md`
+- `scripts/macos/APPLE_SIGNING_NOTARIZATION_SETUP.md`
+- `scripts/macos/README.md`
+- Removed: `.github/workflows/macos-notarize-finalize.yml`
+- Removed: `scripts/ci/macos_finalize_notarization.sh`
+
+### What changed
+
+1. Workflow behavior (`.github/workflows/macos-build.yml`)
+- Readiness check now requires only:
+  - `MACOS_CERT_P12`
+  - `MACOS_CERT_PASSWORD`
+- Main branch enforces code signing secrets (no notarization requirement).
+- Artifact upload only includes `dist/PurwayGeotagger.dmg`.
+
+2. CI signing script (`scripts/ci/macos_sign_and_package.sh`)
+- Still signs the `.app` with Developer ID and packages a DMG.
+- No longer calls:
+  - `xcrun notarytool ...`
+  - `xcrun stapler ...`
+  - `spctl --assess ...`
+
+3. Docs updated to match “signed, not notarized” distribution.
+
+### Expected behavior after this change
+
+- On `main`, CI builds/tests and then produces a **signed** `PurwayGeotagger.dmg`.
+- No notarization is attempted; Gatekeeper prompts are expected on pilot Macs.
+
+### Rollback only this change set
+
+- `git restore .github/workflows/macos-build.yml scripts/ci/macos_sign_and_package.sh scripts/ci/macos_sign_and_notarize.sh scripts/ci/README.md GITHUB_ACTIONS_RELEASE_CHECKLIST.md GITHUB_ACTIONS_SIGNED_RELEASE_RUNBOOK.md scripts/macos/APPLE_SIGNING_NOTARIZATION_SETUP.md scripts/macos/README.md`

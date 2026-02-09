@@ -18,7 +18,7 @@ Recommended packaging strategy:
 1) Build a self-contained `.app` with PyInstaller (bundles Python + Python deps; no venv needed on pilot machines).
 2) Bundle **ExifTool** with the app (or install it via a standard macOS installer), and have the app call it via an explicit path.
    - Do **not** rely on `PATH` inside a Finder-launched GUI app.
-3) Code-sign + notarize the app (and any bundled executables) to avoid Gatekeeper prompts.
+3) Code-sign the app (and any bundled executables). Notarization is optional but recommended if you need to avoid Gatekeeper prompts.
 
 Build the `.app` (developer machine):
 - `bash scripts/macos/build_app.sh`
