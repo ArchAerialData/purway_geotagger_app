@@ -1,4 +1,5 @@
 PySide6==6.7.2
 python-dateutil==2.9.0.post0
 appdirs==1.4.4
+certifi==2026.1.4
 pyinstaller==6.10.0

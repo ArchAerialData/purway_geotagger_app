@@ -9,6 +9,7 @@ from math import isnan
 from math import radians
 from math import sin
 from math import sqrt
+import ssl
 from typing import Any, Mapping, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -101,6 +102,9 @@ class UrlLibJsonHttpClient(JsonHttpClient):
     def __init__(self, *, timeout_seconds: float = 10.0, user_agent: str = "purway-geotagger/1.0") -> None:
         self.timeout_seconds = timeout_seconds
         self.user_agent = user_agent
+        # Packaged macOS builds may not have an OpenSSL CA bundle available by default.
+        # Prefer certifi's bundled CA store when present so HTTPS calls work on pilot machines.
+        self._ssl_context = _build_https_ssl_context()
 
     def get_json(self, url: str, params: Mapping[str, str] | None = None) -> Any:
         target = url
@@ -114,7 +118,7 @@ class UrlLibJsonHttpClient(JsonHttpClient):
             },
         )
         try:
-            with urlopen(request, timeout=self.timeout_seconds) as response:
+            with urlopen(request, timeout=self.timeout_seconds, context=self._ssl_context) as response:
                 payload = response.read()
         except (HTTPError, URLError, TimeoutError) as exc:
             raise WindAutofillProviderError(f"Weather API request failed: {exc}") from exc
@@ -126,6 +130,16 @@ class UrlLibJsonHttpClient(JsonHttpClient):
         if not isinstance(parsed, (dict, list)):
             raise WindAutofillProviderError("Weather API returned an unexpected response shape.")
         return parsed
+
+
+def _build_https_ssl_context() -> ssl.SSLContext:
+    try:
+        import certifi  # type: ignore
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        # Fall back to OpenSSL defaults (works on developer machines where the CA bundle is configured).
+        return ssl.create_default_context()
 
 
 class OpenMeteoGeocoder:
