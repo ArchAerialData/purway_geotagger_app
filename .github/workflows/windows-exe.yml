@@ -1,0 +1,130 @@
+name: windows-exe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PYTHON_VERSION: "3.11"
+      # Pin ExifTool so Windows builds are deterministic and don't depend on PATH.
+      EXIFTOOL_VERSION: "13.50"
+      QT_QPA_PLATFORM: "offscreen"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install deps (including tzdata for Windows ZoneInfo)
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt tzdata
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          python -m pytest -q
+
+      - name: Download + stage ExifTool (Windows)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $ver = "${env:EXIFTOOL_VERSION}"
+          $url = "https://exiftool.org/exiftool-$ver" + "_64.zip"
+
+          $zipPath = "build/exiftool_windows.zip"
+          New-Item -ItemType Directory -Force -Path "build" | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile $zipPath
+
+          $extractRoot = "build/exiftool_windows"
+          if (Test-Path $extractRoot) { Remove-Item -Recurse -Force $extractRoot }
+          Expand-Archive -Path $zipPath -DestinationPath $extractRoot -Force
+
+          $stage = "build/windows_exiftool"
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+          $exeItem = Get-ChildItem -Path $extractRoot -Recurse -File -Filter "exiftool.exe" | Select-Object -First 1
+          if (-not $exeItem) { throw "Missing exiftool.exe in extracted archive under: $extractRoot" }
+
+          $srcExe = $exeItem.FullName
+          $srcFiles = Join-Path $exeItem.Directory.FullName "exiftool_files"
+          if (-not (Test-Path $srcFiles)) {
+            $filesItem = Get-ChildItem -Path $extractRoot -Recurse -Directory -Filter "exiftool_files" | Select-Object -First 1
+            if (-not $filesItem) { throw "Missing exiftool_files in extracted archive under: $extractRoot" }
+            $srcFiles = $filesItem.FullName
+          }
+
+          # Rename to `exiftool` (no extension) so the app's existing resolver
+          # (`resource_path('bin/exiftool')`) works unchanged on Windows.
+          Copy-Item -Force $srcExe (Join-Path $stage "exiftool")
+          Copy-Item -Recurse -Force $srcFiles (Join-Path $stage "exiftool_files")
+
+      - name: Build Windows exe (PyInstaller onedir)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $repo = (Get-Location).Path
+          $srcRoot = Join-Path $repo "src"
+
+          $defaultTemplates = Join-Path $repo "config/default_templates.json"
+          $windTemplates = Join-Path $repo "config/wind_templates"
+          $exiftoolConfig = Join-Path $repo "config/exiftool_config.txt"
+          $assetsDir = Join-Path $repo "assets"
+
+          $bundledExiftool = Join-Path $repo "build/windows_exiftool/exiftool"
+          $bundledExiftoolFiles = Join-Path $repo "build/windows_exiftool/exiftool_files"
+
+          $entry = Join-Path $repo "src/purway_geotagger/app.py"
+
+          $args = @(
+            "--noconfirm",
+            "--clean",
+            "--name", "PurwayGeotagger",
+            "--windowed",
+            "--onedir",
+            "--specpath", "build/pyinstaller/windows",
+            "--workpath", "build/pyinstaller/windows/work",
+            "--distpath", "dist/windows",
+            "--paths", $srcRoot,
+            "--add-data", "$defaultTemplates;config",
+            "--add-data", "$windTemplates;config/wind_templates",
+            "--add-data", "$exiftoolConfig;config",
+            "--add-data", "$assetsDir;assets",
+            "--add-binary", "$bundledExiftool;bin",
+            "--add-data", "$bundledExiftoolFiles;bin/exiftool_files",
+            "--collect-all", "tzdata"
+          )
+
+          python -m PyInstaller @args $entry
+
+          $outDir = "dist/windows/PurwayGeotagger"
+          if (-not (Test-Path $outDir)) { throw "Build failed: $outDir not found." }
+          $internal = Join-Path $outDir "_internal"
+          if (-not (Test-Path $internal)) { throw "Build output missing _internal/ folder (PyInstaller onedir contents)." }
+
+          if (-not (Test-Path "$internal/config/default_templates.json")) { throw "Missing bundled resource: _internal/config/default_templates.json" }
+          if (-not (Test-Path "$internal/config/exiftool_config.txt")) { throw "Missing bundled resource: _internal/config/exiftool_config.txt" }
+          if (-not (Test-Path "$internal/assets")) { throw "Missing bundled resource: _internal/assets/" }
+          if (-not (Test-Path "$internal/bin/exiftool")) { throw "Missing bundled ExifTool: _internal/bin/exiftool" }
+          if (-not (Test-Path "$internal/bin/exiftool_files")) { throw "Missing bundled ExifTool payload: _internal/bin/exiftool_files/" }
+
+          & "$internal/bin/exiftool" "-ver"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PurwayGeotagger-windows
+          path: dist/windows/PurwayGeotagger/**
+          if-no-files-found: error
