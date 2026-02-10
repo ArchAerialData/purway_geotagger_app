@@ -138,7 +138,7 @@ jobs:
           choco install innosetup --no-progress -y
           $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\\ISCC.exe"
           if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at expected path: $iscc" }
-          & $iscc /?
+          Write-Host "Found ISCC.exe at: $iscc"
 
       - name: Build installer (Inno Setup)
         shell: pwsh
