@@ -29,7 +29,9 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $ver = python -c "import re, pathlib; txt=pathlib.Path('src/purway_geotagger/__init__.py').read_text(encoding='utf-8'); m=re.search(r'__version__\\s*=\\s*\\\"([^\\\"]+)\\\"', txt); print((m.group(1) if m else '0.0.0').strip())"
+          $txt = Get-Content -Raw "src/purway_geotagger/__init__.py"
+          $ver = "0.0.0"
+          if ($txt -match '__version__\s*=\s*"([^"]+)"') { $ver = $Matches[1] }
           Add-Content -Path $env:GITHUB_ENV -Value ("APP_VERSION=" + $ver)
           Write-Host ("APP_VERSION=" + $ver)
 
