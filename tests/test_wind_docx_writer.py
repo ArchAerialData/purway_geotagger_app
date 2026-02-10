@@ -176,3 +176,32 @@ def test_template_contract_failure_blocks_write(tmp_path: Path) -> None:
             output_dir=tmp_path / "output",
             report=_build_valid_report(),
         )
+
+
+def test_generate_wind_docx_escapes_xml_special_characters_in_placeholders(tmp_path: Path) -> None:
+    template = _production_template_path()
+    assert template.exists(), f"Missing production template: {template}"
+
+    # These characters must be escaped in XML, otherwise Word can't open the resulting DOCX.
+    metadata = WindReportMetadataRaw(
+        client_name="TargaResources",
+        system_name="Katy ROW & Facility <Test>",
+        report_date="2026-02-06",
+        timezone="CST",
+    )
+    start = WindRowRaw("10:00", "SW", "0", "1", "51")
+    end = WindRowRaw("13:00", "SW", "0", "1", "51")
+    report = build_wind_template_payload(metadata, start, end)
+
+    result = generate_wind_docx_report(
+        template_path=template,
+        output_dir=tmp_path,
+        report=report,
+    )
+
+    xml = _read_document_xml(result.output_docx_path)
+    # Must be well-formed XML.
+    ET.fromstring(xml)
+
+    assert "Katy ROW & Facility <Test>" not in xml
+    assert "Katy ROW &amp; Facility &lt;Test&gt;" in xml

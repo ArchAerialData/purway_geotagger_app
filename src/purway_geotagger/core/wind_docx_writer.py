@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
+from xml.sax.saxutils import escape as xml_escape
 import xml.etree.ElementTree as ET
 from zipfile import BadZipFile, ZipFile
 
@@ -92,7 +93,11 @@ def _render_document_xml(template_path: Path, placeholder_map: dict[str, str]) -
 
     for key, value in placeholder_map.items():
         pattern = _placeholder_pattern(key)
-        rendered, count = pattern.subn(str(value), rendered)
+        # These placeholder values are rendered into `word/document.xml` (WordprocessingML),
+        # so the replacement text must be XML-safe. Otherwise, characters like `&` will
+        # corrupt the DOCX and Word will refuse to open it.
+        replacement_text = xml_escape(str(value), entities={'"': "&quot;", "'": "&apos;"})
+        rendered, count = pattern.subn(lambda _m, rep=replacement_text: rep, rendered)
         replacement_counts[key] = count
 
     missing_replacements = sorted(
@@ -112,6 +117,16 @@ def _render_document_xml(template_path: Path, placeholder_map: dict[str, str]) -
             "Unresolved required placeholders remain after render: "
             + ", ".join(unresolved)
         )
+
+    # Validate that the rendered XML is still well-formed. This catches cases where
+    # user input contains characters that would otherwise corrupt the DOCX.
+    try:
+        ET.fromstring(rendered)
+    except ET.ParseError as exc:
+        raise WindDocxWriterError(
+            "Rendered wind DOCX XML is invalid (likely due to special characters in input). "
+            "Try removing characters like &, <, or > from the Wind Data fields."
+        ) from exc
 
     return rendered
 
