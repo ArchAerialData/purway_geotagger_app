@@ -54,8 +54,11 @@ jobs:
           if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
+          # Newer ExifTool Windows archives ship `exiftool(-k).exe` instead of `exiftool.exe`.
           $exeItem = Get-ChildItem -Path $extractRoot -Recurse -File -Filter "exiftool.exe" | Select-Object -First 1
-          if (-not $exeItem) { throw "Missing exiftool.exe in extracted archive under: $extractRoot" }
+          if (-not $exeItem) { $exeItem = Get-ChildItem -Path $extractRoot -Recurse -File -Filter "exiftool(-k).exe" | Select-Object -First 1 }
+          if (-not $exeItem) { $exeItem = Get-ChildItem -Path $extractRoot -Recurse -File -Filter "exiftool*.exe" | Select-Object -First 1 }
+          if (-not $exeItem) { throw "Missing ExifTool executable in extracted archive under: $extractRoot" }
 
           $srcExe = $exeItem.FullName
           $srcFiles = Join-Path $exeItem.Directory.FullName "exiftool_files"
