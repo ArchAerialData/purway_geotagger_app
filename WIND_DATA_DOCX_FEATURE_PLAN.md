@@ -13,6 +13,8 @@ Decision update (approved in-thread):
   - `{{ E_STRING }}`
 - Use timezone placeholder in final table header:
   - `{{ TZ }}`
+- Add optional region placeholder support:
+  - `{{ REGION_ID }}`
 - Do not require a template table containing raw component placeholders (`S_WIND`, `S_SPEED`, etc.) for v1 output.
 - Date placeholder output format is locked to `YYYY_MM_DD`.
 - Output filename format is locked to:
@@ -75,9 +77,10 @@ Approved production contract for v1:
 
 Production template verification snapshot (2026-02-06):
 - File checked: `wind_data_generator/Example of Template Structure/PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx`
-- Found placeholders (exactly 8):
+- Found placeholders (required set + optional region token):
   - `{{ CLIENT_NAME }}`
   - `{{ SYSTEM_NAME }}`
+  - `{{ REGION_ID }}` (optional)
   - `{{ DATE }}`
   - `{{ S_TIME }}`
   - `{{ E_TIME }}`
@@ -283,6 +286,9 @@ Create a dedicated production template file (separate from example/mockup) with 
 - `{{ E_STRING }}`
 - `{{ TZ }}`
 
+Optional placeholder:
+- `{{ REGION_ID }}`
+
 Template guidance:
 1. Keep only final report content needed by pilots.
 2. Remove reference-only raw mapping table from production output unless explicitly needed.
@@ -418,6 +424,7 @@ WindReportRender:
 Metadata mapping:
 - `{{ CLIENT_NAME }}` -> client name input
 - `{{ SYSTEM_NAME }}` -> system name input
+- `{{ REGION_ID }}` -> optional Region input (blank-safe)
 - `{{ DATE }}` -> normalized report date text in `YYYY_MM_DD`
 - `{{ TZ }}` -> timezone input text (default `CST`)
 

@@ -32,6 +32,7 @@ class WindReportMetadataRaw:
     system_name: str
     report_date: date | datetime | str
     timezone: str = DEFAULT_TIMEZONE
+    region_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -57,6 +58,7 @@ class WindRowNormalized:
 class WindTemplatePayload:
     client_name: str
     system_name: str
+    region_id: str
     date: str
     tz: str
     s_time: str
@@ -68,6 +70,7 @@ class WindTemplatePayload:
         return {
             "CLIENT_NAME": self.client_name,
             "SYSTEM_NAME": self.system_name,
+            "REGION_ID": self.region_id,
             "DATE": self.date,
             "TZ": self.tz,
             "S_TIME": self.s_time,
@@ -172,6 +175,7 @@ def build_wind_template_payload(
 ) -> WindReportBuildResult:
     client_name = _normalize_text(metadata_raw.client_name, field_name="Client Name")
     system_name = _normalize_text(metadata_raw.system_name, field_name="System Name")
+    region_id = _normalize_optional_text(metadata_raw.region_id, field_name="Region")
     tz = _normalize_timezone(metadata_raw.timezone)
     normalized_date = normalize_report_date(metadata_raw.report_date)
 
@@ -188,6 +192,7 @@ def build_wind_template_payload(
     payload = WindTemplatePayload(
         client_name=client_name,
         system_name=system_name,
+        region_id=region_id,
         date=normalized_date,
         tz=tz,
         s_time=start.time_text,
@@ -201,6 +206,7 @@ def build_wind_template_payload(
         raw_metadata={
             "client_name": _stringify_raw(metadata_raw.client_name),
             "system_name": _stringify_raw(metadata_raw.system_name),
+            "region_id": _stringify_raw(metadata_raw.region_id),
             "report_date": _stringify_raw(metadata_raw.report_date),
             "timezone": _stringify_raw(metadata_raw.timezone),
         },
@@ -221,6 +227,7 @@ def build_wind_template_payload(
         normalized_metadata={
             "client_name": client_name,
             "system_name": system_name,
+            "region_id": region_id,
             "date": normalized_date,
             "timezone": tz,
         },
@@ -296,6 +303,21 @@ def _normalize_text(value: str, *, field_name: str, max_len: int = 120) -> str:
 def _normalize_timezone(value: str) -> str:
     timezone_text = _normalize_text(value, field_name="Time Zone", max_len=24)
     return timezone_text.upper()
+
+
+def _normalize_optional_text(value: str | None, *, field_name: str, max_len: int = 120) -> str:
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise WindInputValidationError(f"{field_name} must be text.")
+    text = value.strip()
+    if not text:
+        return ""
+    if _PLACEHOLDER_SAFE_RE.search(text):
+        raise WindInputValidationError(f"{field_name} cannot contain template braces.")
+    if len(text) > max_len:
+        raise WindInputValidationError(f"{field_name} must be at most {max_len} characters.")
+    return text
 
 
 def _normalize_direction(value: str, *, field_name: str) -> str:

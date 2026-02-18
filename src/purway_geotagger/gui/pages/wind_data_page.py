@@ -227,6 +227,9 @@ class WindDataPage(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setHorizontalSpacing(12)
         layout.setVerticalSpacing(12)
+        layout.setColumnStretch(1, 1)
+        layout.setColumnStretch(3, 1)
+        layout.setColumnStretch(5, 1)
         root.addWidget(body)
 
         client_lbl = QLabel("Client Name")
@@ -236,12 +239,19 @@ class WindDataPage(QWidget):
         self.client_edit.setPlaceholderText("TargaResources")
         layout.addWidget(self.client_edit, 0, 1)
 
-        system_lbl = QLabel("System Name")
+        system_lbl = QLabel("System ID")
         system_lbl.setProperty("cssClass", "subtitle")
         layout.addWidget(system_lbl, 0, 2)
         self.system_edit = QLineEdit()
         self.system_edit.setPlaceholderText("KDB 20-IN")
         layout.addWidget(self.system_edit, 0, 3)
+
+        region_lbl = QLabel("Region")
+        region_lbl.setProperty("cssClass", "subtitle")
+        layout.addWidget(region_lbl, 0, 4)
+        self.region_edit = QLineEdit()
+        self.region_edit.setPlaceholderText("Optional")
+        layout.addWidget(self.region_edit, 0, 5)
 
         date_lbl = QLabel("Date")
         date_lbl.setProperty("cssClass", "subtitle")
@@ -478,6 +488,7 @@ class WindDataPage(QWidget):
     def _wire_signals(self) -> None:
         self.client_edit.textChanged.connect(self._refresh_preview)
         self.system_edit.textChanged.connect(self._refresh_preview)
+        self.region_edit.textChanged.connect(self._refresh_preview)
         self.date_edit.dateChanged.connect(self._refresh_preview)
         self.timezone_edit.textChanged.connect(self._refresh_preview)
         self.entry_grid.changed.connect(self._refresh_preview)
@@ -488,6 +499,7 @@ class WindDataPage(QWidget):
             system_name=self.system_edit.text(),
             report_date=self.date_edit.date().toString("yyyy_MM_dd"),
             timezone=self.timezone_edit.text(),
+            region_id=self.region_edit.text(),
         )
 
     def _refresh_preview(self) -> None:

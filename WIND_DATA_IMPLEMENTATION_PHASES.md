@@ -19,6 +19,7 @@ It follows the same hard-gate style used by this repo's existing implementation 
 - Use the approved placeholder contract for production template output:
   - `{{ CLIENT_NAME }}`
   - `{{ SYSTEM_NAME }}`
+  - `{{ REGION_ID }}` (optional)
   - `{{ DATE }}`
   - `{{ S_TIME }}`
   - `{{ E_TIME }}`

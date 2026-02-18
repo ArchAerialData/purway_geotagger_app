@@ -1,0 +1,63 @@
+{
+  "computed_strings": {
+    "E_STRING": "WSW 10 mph / Gusts 15 mph / 70\u00b0F",
+    "S_STRING": "SW 8 mph / Gusts 14 mph / 68\u00b0F",
+    "output_filename": "WindData_Enstor_2026_02_09.docx"
+  },
+  "generation": {
+    "generated_at_utc": "2026-02-10T23:24:04.185264+00:00",
+    "output_docx_name": "WindData_Enstor_2026_02_09.docx",
+    "output_docx_path": "A:\\_MethaneReports\\__METHANE REPORTS__\\TEST\\Injected DOCX\\WindData_Enstor_2026_02_09.docx",
+    "template_path": "C:\\Users\\rbake\\AppData\\Local\\Programs\\PurwayGeotagger\\_internal\\config\\wind_templates\\PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx"
+  },
+  "normalized_end": {
+    "gust_mph": "15",
+    "temp_f": "70",
+    "time": "10:00am",
+    "wind_direction": "WSW",
+    "wind_speed_mph": "10"
+  },
+  "normalized_metadata": {
+    "client_name": "Enstor",
+    "date": "2026_02_09",
+    "system_name": "Katy ROW & Facility",
+    "timezone": "CST"
+  },
+  "normalized_start": {
+    "gust_mph": "14",
+    "temp_f": "68",
+    "time": "9:30am",
+    "wind_direction": "SW",
+    "wind_speed_mph": "8"
+  },
+  "placeholder_map": {
+    "CLIENT_NAME": "Enstor",
+    "DATE": "2026_02_09",
+    "E_STRING": "WSW 10 mph / Gusts 15 mph / 70\u00b0F",
+    "E_TIME": "10:00am",
+    "SYSTEM_NAME": "Katy ROW & Facility",
+    "S_STRING": "SW 8 mph / Gusts 14 mph / 68\u00b0F",
+    "S_TIME": "9:30am",
+    "TZ": "CST"
+  },
+  "raw_end": {
+    "gust_mph": "15",
+    "temp_f": "70",
+    "time_value": "10:00",
+    "wind_direction": "WSW",
+    "wind_speed_mph": "10"
+  },
+  "raw_metadata": {
+    "client_name": "Enstor",
+    "report_date": "2026_02_09",
+    "system_name": "Katy ROW & Facility",
+    "timezone": "CST"
+  },
+  "raw_start": {
+    "gust_mph": "14",
+    "temp_f": "68",
+    "time_value": "09:30",
+    "wind_direction": "SW",
+    "wind_speed_mph": "8"
+  }
+}

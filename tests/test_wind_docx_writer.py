@@ -32,6 +32,7 @@ def _build_valid_report():
         system_name="KDB-20",
         report_date="2026-02-06",
         timezone="CST",
+        region_id="Region7",
     )
     start = WindRowRaw("10:00", "SW", "0", "1", "51")
     end = WindRowRaw("13:00", "SW", "0", "1", "51")
@@ -45,7 +46,9 @@ def _read_document_xml(docx_path: Path) -> str:
 
 def _read_visible_text(docx_path: Path) -> str:
     xml = _read_document_xml(docx_path)
-    chunks = re.findall(r"<w:t[^>]*>(.*?)</w:t>", xml)
+    root = ET.fromstring(xml)
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    chunks = [(node.text or "") for node in root.findall(".//w:t", ns)]
     return "".join(chunks)
 
 
@@ -87,6 +90,7 @@ def test_generate_wind_docx_replaces_placeholders(tmp_path: Path) -> None:
     assert "{{ S_STRING }}" not in xml
     assert "{{ E_STRING }}" not in xml
     assert "{{ TZ }}" not in xml
+    assert "{{ REGION_ID }}" not in xml
 
 
 def test_generate_wind_docx_embeds_metadata_part_with_placeholder_and_component_values(tmp_path: Path) -> None:
@@ -116,6 +120,7 @@ def test_generate_wind_docx_embeds_metadata_part_with_placeholder_and_component_
     }
     assert template_values["CLIENT_NAME"] == "TargaResources"
     assert template_values["DATE"] == "2026_02_06"
+    assert template_values["REGION_ID"] == "Region7"
     assert template_values["S_TIME"] == "10:00am"
     assert template_values["E_TIME"] == "1:00pm"
     assert template_values["S_STRING"] == "SW 0 mph / Gusts 1 mph / 51\u00B0F"

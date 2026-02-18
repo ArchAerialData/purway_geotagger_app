@@ -43,7 +43,7 @@ def test_production_template_contract_passes_strict() -> None:
 
     report = validate_wind_template_contract(template, allow_extra_placeholders=False)
 
-    assert set(report.found_placeholders) == set(REQUIRED_PLACEHOLDERS)
+    assert set(REQUIRED_PLACEHOLDERS).issubset(set(report.found_placeholders))
     assert report.missing_placeholders == ()
     assert report.unexpected_placeholders == ()
     assert report.tz_header_present is True

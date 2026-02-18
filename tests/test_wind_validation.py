@@ -48,12 +48,15 @@ def test_build_payload_success_and_debug_shape() -> None:
     assert result.payload.s_string == "SW 7 mph / Gusts 11 mph / 51\u00B0F"
     assert result.payload.e_string == "NNE 9 mph / Gusts 15 mph / 54\u00B0F"
     assert result.payload.as_placeholder_map()["TZ"] == "CST"
+    assert result.payload.as_placeholder_map()["REGION_ID"] == ""
 
     debug = result.debug_payload.to_dict()
     assert "raw_metadata" in debug
     assert "normalized_start" in debug
     assert "computed_strings" in debug
     assert debug["computed_strings"]["output_filename"] == "WindData_TargaResources_2026_02_06.docx"
+    assert debug["raw_metadata"]["region_id"] == ""
+    assert debug["normalized_metadata"]["region_id"] == ""
 
 
 def test_integer_only_enforcement_rejects_units() -> None:
@@ -108,6 +111,35 @@ def test_direction_must_be_letter_based() -> None:
     )
     with pytest.raises(WindInputValidationError, match="letters only"):
         build_wind_template_payload(_valid_metadata(), _valid_start(), bad_end)
+
+
+def test_region_is_optional_and_mapped_when_present() -> None:
+    metadata = WindReportMetadataRaw(
+        client_name="TargaResources",
+        system_name="KDB-20",
+        report_date="2026-02-06",
+        timezone="cst",
+        region_id="Permian Basin North",
+    )
+    result = build_wind_template_payload(metadata, _valid_start(), _valid_end())
+    debug = result.debug_payload.to_dict()
+
+    assert result.payload.region_id == "Permian Basin North"
+    assert result.payload.as_placeholder_map()["REGION_ID"] == "Permian Basin North"
+    assert debug["raw_metadata"]["region_id"] == "Permian Basin North"
+    assert debug["normalized_metadata"]["region_id"] == "Permian Basin North"
+
+
+def test_region_rejects_template_braces() -> None:
+    metadata = WindReportMetadataRaw(
+        client_name="TargaResources",
+        system_name="KDB-20",
+        report_date="2026-02-06",
+        timezone="cst",
+        region_id="{{ BAD }}",
+    )
+    with pytest.raises(WindInputValidationError, match="Region cannot contain template braces"):
+        build_wind_template_payload(metadata, _valid_start(), _valid_end())
 
 
 def test_debug_payload_filename_uses_whitespace_stripped_client_name() -> None:

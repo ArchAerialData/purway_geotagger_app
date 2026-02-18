@@ -77,6 +77,7 @@ The Wind tab produces a rendered report docx from production template placeholde
 
 Core contract:
 - Required placeholders: `CLIENT_NAME`, `SYSTEM_NAME`, `DATE`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`, `TZ`
+- Optional placeholder: `REGION_ID` (blank-safe; replaced when present in template)
 - Contract validation: `src/purway_geotagger/core/wind_template_contract.py`
 - Payload builder and input validation: `src/purway_geotagger/core/wind_docx.py`
 - DOCX render + write + debug sidecar: `src/purway_geotagger/core/wind_docx_writer.py`

@@ -19,6 +19,8 @@ REQUIRED_PLACEHOLDERS: frozenset[str] = frozenset(
         "TZ",
     }
 )
+OPTIONAL_PLACEHOLDERS: frozenset[str] = frozenset({"REGION_ID"})
+ALLOWED_PLACEHOLDERS: frozenset[str] = frozenset(REQUIRED_PLACEHOLDERS | OPTIONAL_PLACEHOLDERS)
 
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z0-9_]+)\s*\}\}")
 _TZ_HEADER_RE = re.compile(r"\bTime\s*\(\s*\{\{\s*TZ\s*\}\}\s*\)")
@@ -75,7 +77,7 @@ def inspect_wind_template_contract(template_path: Path) -> WindTemplateContractR
     document_xml = _read_document_xml(template_path)
     placeholders = _extract_placeholders(document_xml)
     missing = tuple(sorted(REQUIRED_PLACEHOLDERS - placeholders))
-    unexpected = tuple(sorted(placeholders - REQUIRED_PLACEHOLDERS))
+    unexpected = tuple(sorted(placeholders - ALLOWED_PLACEHOLDERS))
 
     cells = _extract_table_cells(document_xml)
     tz_header_present = any(_TZ_HEADER_RE.search(cell) for cell in cells)

@@ -208,3 +208,37 @@ page.close()
     )
     assert completed.returncode == 0, completed.stderr or completed.stdout
     assert "times_synced 22:30 23:15" in completed.stdout
+
+
+def test_region_field_is_optional_and_wired_to_metadata() -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(repo_root / "src")
+    env["QT_QPA_PLATFORM"] = "offscreen"
+
+    script = """
+from PySide6.QtWidgets import QApplication
+from purway_geotagger.core.settings import AppSettings
+from purway_geotagger.gui.pages.wind_data_page import WindDataPage
+
+app = QApplication([])
+page = WindDataPage(AppSettings())
+page.client_edit.setText("ClientA")
+page.system_edit.setText("System1")
+page.region_edit.clear()
+empty_region = page._build_metadata().region_id
+page.region_edit.setText("North Sector")
+filled_region = page._build_metadata().region_id
+print("region_metadata", repr(empty_region), repr(filled_region))
+page.close()
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr or completed.stdout
+    assert "region_metadata '' 'North Sector'" in completed.stdout

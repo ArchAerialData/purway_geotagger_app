@@ -28,6 +28,7 @@ def test_debug_sidecar_contains_required_sections(tmp_path: Path) -> None:
         system_name="KDB-20",
         report_date="2026-02-06",
         timezone="cst",
+        region_id="North Sector",
     )
     start = WindRowRaw("10:00", "SW", "0", "1", "51")
     end = WindRowRaw("13:00", "SW", "0", "1", "51")
@@ -42,9 +43,12 @@ def test_debug_sidecar_contains_required_sections(tmp_path: Path) -> None:
     payload = json.loads(result.debug_json_path.read_text(encoding="utf-8"))
     assert payload["raw_metadata"]["client_name"] == "TargaResources"
     assert payload["normalized_metadata"]["timezone"] == "CST"
+    assert payload["raw_metadata"]["region_id"] == "North Sector"
+    assert payload["normalized_metadata"]["region_id"] == "North Sector"
     assert payload["normalized_start"]["time"] == "10:00am"
     assert payload["computed_strings"]["S_STRING"] == "SW 0 mph / Gusts 1 mph / 51\u00B0F"
     assert payload["placeholder_map"]["DATE"] == "2026_02_06"
+    assert payload["placeholder_map"]["REGION_ID"] == "North Sector"
     assert payload["generation"]["output_docx_name"] == result.output_docx_path.name
     assert payload["generation"]["template_path"].endswith(
         "PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx"
