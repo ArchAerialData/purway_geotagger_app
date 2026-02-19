@@ -174,8 +174,10 @@ def build_wind_template_payload(
     end_raw: WindRowRaw,
 ) -> WindReportBuildResult:
     client_name = _normalize_text(metadata_raw.client_name, field_name="Client Name")
-    system_name = _normalize_text(metadata_raw.system_name, field_name="System Name")
+    system_name = _normalize_optional_text(metadata_raw.system_name, field_name="System ID")
     region_id = _normalize_optional_text(metadata_raw.region_id, field_name="Region")
+    if not system_name and not region_id:
+        raise WindInputValidationError("System ID or Region is required.")
     tz = _normalize_timezone(metadata_raw.timezone)
     normalized_date = normalize_report_date(metadata_raw.report_date)
 

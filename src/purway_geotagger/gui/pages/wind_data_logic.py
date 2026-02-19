@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import os
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from purway_geotagger.core.wind_docx import (
     WindTemplatePayload,
     build_wind_template_payload,
 )
+from purway_geotagger.core.wind_template_contract import required_placeholders_for_profile
+from purway_geotagger.core.wind_template_selector import select_wind_template
 from purway_geotagger.core.utils import resource_path
 
 
@@ -23,6 +26,12 @@ _PREVIEW_METADATA = WindReportMetadataRaw(
     report_date="2000_01_01",
     timezone="CST",
 )
+
+
+@dataclass(frozen=True)
+class WindTemplateRuntimeSelection:
+    template_path: Path
+    required_placeholders: frozenset[str]
 
 
 def resolve_default_wind_template_path() -> Path:
@@ -76,3 +85,15 @@ def to_24h_time_string(*, hour_12: int, minute: int, meridiem: str) -> str:
 def build_live_preview_payload(start_raw: WindRowRaw, end_raw: WindRowRaw) -> WindTemplatePayload:
     """Build preview strings from wind rows only, independent of report metadata fields."""
     return build_wind_template_payload(_PREVIEW_METADATA, start_raw, end_raw).payload
+
+
+def resolve_wind_template_for_inputs(
+    *,
+    system_name: str | None,
+    region_id: str | None,
+) -> WindTemplateRuntimeSelection:
+    selection = select_wind_template(system_name=system_name, region_id=region_id)
+    return WindTemplateRuntimeSelection(
+        template_path=selection.template_path,
+        required_placeholders=required_placeholders_for_profile(selection.profile),
+    )

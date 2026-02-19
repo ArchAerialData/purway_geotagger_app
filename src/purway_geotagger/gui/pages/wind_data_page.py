@@ -37,7 +37,7 @@ from purway_geotagger.core.wind_docx_writer import WindDocxWriterError, generate
 from purway_geotagger.gui.pages.wind_data_logic import (
     build_live_preview_payload,
     compute_generate_availability,
-    resolve_default_wind_template_path,
+    resolve_wind_template_for_inputs,
 )
 from purway_geotagger.gui.widgets.wind_entry_grid import WindEntryGrid
 from purway_geotagger.gui.widgets.wind_autofill_dialog import WindAutofillDialog
@@ -152,7 +152,8 @@ class WindDataPage(QWidget):
     def __init__(self, settings: AppSettings, parent=None) -> None:
         super().__init__(parent)
         self.settings = settings
-        self._template_path = resolve_default_wind_template_path()
+        self._template_path: Path | None = None
+        self._template_required_placeholders: frozenset[str] | None = None
         self._last_output_docx: Path | None = None
         self._last_debug_json: Path | None = None
         self._last_validation_error: str | None = None
@@ -182,7 +183,7 @@ class WindDataPage(QWidget):
         self.content_layout.addWidget(title)
 
         subtitle = QLabel(
-            "Enter Start/End wind observations, preview the final strings, then generate a DOCX from the production template."
+            "Enter Start/End wind observations, preview the final strings, then generate a DOCX from the matching template profile."
         )
         subtitle.setProperty("cssClass", "subtitle")
         subtitle.setWordWrap(True)
@@ -503,8 +504,22 @@ class WindDataPage(QWidget):
         )
 
     def _refresh_preview(self) -> None:
+        metadata = self._build_metadata()
         start_raw = self.entry_grid.start_row_raw()
         end_raw = self.entry_grid.end_row_raw()
+
+        selected_template_path: Path | None = None
+        selected_required_placeholders: frozenset[str] | None = None
+        template_error: str | None = None
+        try:
+            selection = resolve_wind_template_for_inputs(
+                system_name=metadata.system_name,
+                region_id=metadata.region_id,
+            )
+            selected_template_path = selection.template_path
+            selected_required_placeholders = selection.required_placeholders
+        except ValueError as exc:
+            template_error = str(exc)
 
         preview_payload = None
         try:
@@ -516,13 +531,17 @@ class WindDataPage(QWidget):
         validation_error = None
         try:
             report = build_wind_template_payload(
-                self._build_metadata(),
+                metadata,
                 start_raw,
                 end_raw,
             )
         except WindInputValidationError as exc:
             validation_error = str(exc)
+        if validation_error is None and template_error:
+            validation_error = template_error
 
+        self._template_path = selected_template_path
+        self._template_required_placeholders = selected_required_placeholders
         self._last_validation_error = validation_error
         if preview_payload is not None:
             self.start_time_preview.setText(preview_payload.s_time)
@@ -569,8 +588,9 @@ class WindDataPage(QWidget):
 
     def _generate_docx(self) -> None:
         try:
+            metadata = self._build_metadata()
             report = build_wind_template_payload(
-                self._build_metadata(),
+                metadata,
                 self.entry_grid.start_row_raw(),
                 self.entry_grid.end_row_raw(),
             )
@@ -579,18 +599,32 @@ class WindDataPage(QWidget):
             self._set_status(str(exc), css_class="status_error")
             return
 
+        try:
+            selection = resolve_wind_template_for_inputs(
+                system_name=metadata.system_name,
+                region_id=metadata.region_id,
+            )
+            required_placeholders = selection.required_placeholders
+        except ValueError as exc:
+            QMessageBox.warning(self, "Wind Data validation", str(exc))
+            self._set_status(str(exc), css_class="status_error")
+            return
+
         output_dir = Path(self.output_dir_edit.text().strip())
         try:
             render = generate_wind_docx_report(
-                template_path=self._template_path,
+                template_path=selection.template_path,
                 output_dir=output_dir,
                 report=report,
+                required_placeholders=required_placeholders,
             )
         except WindDocxWriterError as exc:
             QMessageBox.warning(self, "Wind DOCX generation failed", str(exc))
             self._set_status(str(exc), css_class="status_error")
             return
 
+        self._template_path = selection.template_path
+        self._template_required_placeholders = required_placeholders
         self._last_output_docx = render.output_docx_path
         self._last_debug_json = render.debug_json_path
         self.open_docx_btn.setEnabled(True)

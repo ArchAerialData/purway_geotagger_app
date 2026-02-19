@@ -142,6 +142,34 @@ def test_region_rejects_template_braces() -> None:
         build_wind_template_payload(metadata, _valid_start(), _valid_end())
 
 
+def test_system_id_is_optional_when_region_is_present() -> None:
+    metadata = WindReportMetadataRaw(
+        client_name="TargaResources",
+        system_name="   ",
+        report_date="2026-02-06",
+        timezone="cst",
+        region_id="North Sector",
+    )
+    result = build_wind_template_payload(metadata, _valid_start(), _valid_end())
+
+    assert result.payload.system_name == ""
+    assert result.payload.region_id == "North Sector"
+    assert result.payload.as_placeholder_map()["SYSTEM_NAME"] == ""
+    assert result.payload.as_placeholder_map()["REGION_ID"] == "North Sector"
+
+
+def test_system_id_and_region_cannot_both_be_blank() -> None:
+    metadata = WindReportMetadataRaw(
+        client_name="TargaResources",
+        system_name="   ",
+        report_date="2026-02-06",
+        timezone="cst",
+        region_id="  ",
+    )
+    with pytest.raises(WindInputValidationError, match="System ID or Region is required"):
+        build_wind_template_payload(metadata, _valid_start(), _valid_end())
+
+
 def test_debug_payload_filename_uses_whitespace_stripped_client_name() -> None:
     spaced_metadata = WindReportMetadataRaw(
         client_name="Targa Resources",

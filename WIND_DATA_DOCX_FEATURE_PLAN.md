@@ -26,6 +26,19 @@ Decision update (approved in-thread):
 - Debug export is enabled for rollout troubleshooting.
 - Timezone input is editable and defaults to `CST`.
 
+Decision update (approved in-thread, 2026-02-18):
+- Multi-template auto-selection is planned for WR3A:
+  - `config/wind_templates/System Only/WindData_ClientName_SYSTEM_YYYY_MM_DD.docx` when only System ID is provided.
+  - `config/wind_templates/Region Only/WindData_ClientName_Region_YYYY_MM_DD.docx` when only Region is provided.
+  - `config/wind_templates/System-Region/WindData_ClientName_REGION_SYSTEM_YYYY_MM_DD.docx` when both System ID and Region are provided.
+- System placeholder contract remains unchanged.
+- Region placeholder token for WR3A is `{{ REGION_ID }}`.
+- Filename token mapping for WR3A template names:
+  - `ClientName` -> filename-safe client value.
+  - `SYSTEM` -> filename-safe system value.
+  - `Region`/`REGION` -> filename-safe region value.
+  - `YYYY_MM_DD` -> normalized report date.
+
 ## 1) Objective
 
 Add a new GUI tab that lets pilots enter wind data once and generate a polished DOCX report from a master template, with strict formatting and reliable placeholder mapping.
@@ -446,6 +459,21 @@ Filename mapping:
 - Example:
   - `WindData_TargaResources_2026_02_06.docx`
 
+Template filename mapping for WR3A profiles:
+- System-only template: `config/wind_templates/System Only/WindData_ClientName_SYSTEM_YYYY_MM_DD.docx`
+  - `ClientName` -> client value
+  - `SYSTEM` -> system value
+  - `YYYY_MM_DD` -> date value
+- Region-only template: `config/wind_templates/Region Only/WindData_ClientName_Region_YYYY_MM_DD.docx`
+  - `ClientName` -> client value
+  - `Region` -> region value
+  - `YYYY_MM_DD` -> date value
+- System+Region template: `config/wind_templates/System-Region/WindData_ClientName_REGION_SYSTEM_YYYY_MM_DD.docx`
+  - `ClientName` -> client value
+  - `REGION` -> region value
+  - `SYSTEM` -> system value
+  - `YYYY_MM_DD` -> date value
+
 Header rendering note:
 - Replace only the `{{ TZ }}` token and preserve template punctuation.
 - `Time ({{ TZ }})` must become `Time (CST)` (or another pilot-provided timezone).
@@ -619,5 +647,5 @@ These are intentionally deferred discussion items to review before expanding sco
   - Implemented using a custom XML part in generated DOCX outputs:
     - `customXml/purway_wind_metadata.xml`
   - Embedded payload includes:
-    - resolved template placeholder map (`CLIENT_NAME`, `SYSTEM_NAME`, `DATE`, `TZ`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`)
+    - resolved template placeholder map (`CLIENT_NAME`, `SYSTEM_NAME`, `REGION_ID`, `DATE`, `TZ`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`)
     - component value map (`S_WIND`, `S_SPEED`, `S_GUST`, `S_TEMP`, `E_WIND`, `E_SPEED`, `E_GUST`, `E_TEMP`)

@@ -37,12 +37,14 @@ def generate_wind_docx_report(
     output_dir: Path,
     report: WindReportBuildResult,
     output_filename: str | None = None,
+    required_placeholders: frozenset[str] = REQUIRED_PLACEHOLDERS,
 ) -> WindDocxRenderResult:
     try:
         validate_wind_template_contract(
             template_path=template_path,
             allow_extra_placeholders=False,
             require_tz_header=True,
+            required_placeholders=required_placeholders,
         )
     except WindTemplateContractError as exc:
         raise WindDocxWriterError(f"Template contract validation failed: {exc}") from exc
@@ -61,7 +63,11 @@ def generate_wind_docx_report(
     output_docx_path = _next_collision_safe_path(output_dir / chosen_filename)
     placeholder_map = report.payload.as_placeholder_map()
 
-    rendered_xml = _render_document_xml(template_path, placeholder_map)
+    rendered_xml = _render_document_xml(
+        template_path,
+        placeholder_map,
+        required_placeholders=required_placeholders,
+    )
     embedded_metadata_xml = _build_embedded_metadata_xml(
         report=report,
         output_docx_path=output_docx_path,
@@ -86,7 +92,12 @@ def generate_wind_docx_report(
     )
 
 
-def _render_document_xml(template_path: Path, placeholder_map: dict[str, str]) -> str:
+def _render_document_xml(
+    template_path: Path,
+    placeholder_map: dict[str, str],
+    *,
+    required_placeholders: frozenset[str],
+) -> str:
     document_xml = _read_document_xml(template_path)
     replacement_counts: dict[str, int] = {}
     rendered = document_xml
@@ -101,7 +112,7 @@ def _render_document_xml(template_path: Path, placeholder_map: dict[str, str]) -
         replacement_counts[key] = count
 
     missing_replacements = sorted(
-        key for key in REQUIRED_PLACEHOLDERS if replacement_counts.get(key, 0) <= 0
+        key for key in required_placeholders if replacement_counts.get(key, 0) <= 0
     )
     if missing_replacements:
         raise WindDocxWriterError(
@@ -110,7 +121,7 @@ def _render_document_xml(template_path: Path, placeholder_map: dict[str, str]) -
         )
 
     unresolved = sorted(
-        key for key in REQUIRED_PLACEHOLDERS if _placeholder_pattern(key).search(rendered)
+        key for key in required_placeholders if _placeholder_pattern(key).search(rendered)
     )
     if unresolved:
         raise WindDocxWriterError(

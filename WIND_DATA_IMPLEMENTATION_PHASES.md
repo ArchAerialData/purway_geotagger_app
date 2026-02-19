@@ -441,6 +441,24 @@ Ensure packaged `.app` includes required resources/dependencies and pilots can u
   - WS2.5 data-completeness hardening added provider-level backfill: when NWS rows are partial (for example missing gust), missing fields are now backfilled from Open-Meteo archive while preserving resolved NWS fields.
   - WS2.6 source-chain hardening added AviationWeather METAR as the middle provider: `NWS -> METAR -> Open-Meteo`, with partial-row merge performed in that order for higher gust/data fill rates.
   - DOCX metadata spike landed via embedded custom XML part `customXml/purway_wind_metadata.xml` carrying template placeholder values and component values (`S_WIND`, `S_SPEED`, `S_GUST`, `S_TEMP`, `E_*`) for downstream extraction.
+  - Region/System template-variant planning track added on 2026-02-18:
+    - execution plan: `WIND_DATA_REGION_FIELD_IMPLEMENTATION_PHASES.md`
+    - WR0 completed on 2026-02-18 (contract lock + template inventory).
+    - added phase `WR3A` for 3-template auto-selection:
+      - `config/wind_templates/System Only/WindData_ClientName_SYSTEM_YYYY_MM_DD.docx`
+      - `config/wind_templates/Region Only/WindData_ClientName_Region_YYYY_MM_DD.docx`
+      - `config/wind_templates/System-Region/WindData_ClientName_REGION_SYSTEM_YYYY_MM_DD.docx`
+    - placeholder decision for WR3A: keep system token unchanged and use `{{ REGION_ID }}` for region mapping.
+    - filename token mapping for WR3A templates is documented (`ClientName`, `SYSTEM`, `Region`/`REGION`, `YYYY_MM_DD`).
+    - includes planned cross-field validation rule: at least one of `System ID` or `Region` is required before generation.
+  - WR implementation update on 2026-02-18:
+    - added `src/purway_geotagger/core/wind_template_selector.py` and wired page generation to auto-select profile template by System/Region inputs.
+    - made `System ID` optional in `src/purway_geotagger/core/wind_docx.py` with cross-field validation requiring at least one of `System ID` or `Region`.
+    - added profile-aware required placeholder enforcement in `src/purway_geotagger/core/wind_template_contract.py` and writer wiring in `src/purway_geotagger/core/wind_docx_writer.py`.
+    - verification:
+      - `python -m pytest tests/test_wind_template_selector.py tests/test_wind_validation.py tests/test_wind_template_contract.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py` (51 passed)
+      - `python -m compileall src` (pass)
+    - open gate items: manual GUI smoke for all 3 profile scenarios and macOS dev-run verification.
 
 ---
 

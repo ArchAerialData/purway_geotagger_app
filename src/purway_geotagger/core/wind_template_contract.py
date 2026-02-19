@@ -7,10 +7,9 @@ from xml.etree import ElementTree as ET
 from zipfile import BadZipFile, ZipFile
 
 
-REQUIRED_PLACEHOLDERS: frozenset[str] = frozenset(
+COMMON_REQUIRED_PLACEHOLDERS: frozenset[str] = frozenset(
     {
         "CLIENT_NAME",
-        "SYSTEM_NAME",
         "DATE",
         "S_TIME",
         "E_TIME",
@@ -19,8 +18,16 @@ REQUIRED_PLACEHOLDERS: frozenset[str] = frozenset(
         "TZ",
     }
 )
+REQUIRED_PLACEHOLDERS: frozenset[str] = frozenset(
+    COMMON_REQUIRED_PLACEHOLDERS | {"SYSTEM_NAME"}
+)
 OPTIONAL_PLACEHOLDERS: frozenset[str] = frozenset({"REGION_ID"})
 ALLOWED_PLACEHOLDERS: frozenset[str] = frozenset(REQUIRED_PLACEHOLDERS | OPTIONAL_PLACEHOLDERS)
+PROFILE_REQUIRED_PLACEHOLDERS: dict[str, frozenset[str]] = {
+    "system_only": frozenset(COMMON_REQUIRED_PLACEHOLDERS | {"SYSTEM_NAME"}),
+    "region_only": frozenset(COMMON_REQUIRED_PLACEHOLDERS | {"REGION_ID"}),
+    "system_and_region": frozenset(COMMON_REQUIRED_PLACEHOLDERS | {"SYSTEM_NAME", "REGION_ID"}),
+}
 
 _PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z0-9_]+)\s*\}\}")
 _TZ_HEADER_RE = re.compile(r"\bTime\s*\(\s*\{\{\s*TZ\s*\}\}\s*\)")
@@ -38,6 +45,13 @@ class WindTemplateContractReport:
     missing_placeholders: tuple[str, ...]
     unexpected_placeholders: tuple[str, ...]
     tz_header_present: bool
+
+
+def required_placeholders_for_profile(profile: str) -> frozenset[str]:
+    try:
+        return PROFILE_REQUIRED_PLACEHOLDERS[profile]
+    except KeyError as exc:
+        raise WindTemplateContractError(f"Unknown wind template profile: {profile}") from exc
 
 
 def _read_document_xml(template_path: Path) -> str:
@@ -73,10 +87,14 @@ def _extract_table_cells(document_xml: str) -> list[str]:
     return cells
 
 
-def inspect_wind_template_contract(template_path: Path) -> WindTemplateContractReport:
+def inspect_wind_template_contract(
+    template_path: Path,
+    *,
+    required_placeholders: frozenset[str] = REQUIRED_PLACEHOLDERS,
+) -> WindTemplateContractReport:
     document_xml = _read_document_xml(template_path)
     placeholders = _extract_placeholders(document_xml)
-    missing = tuple(sorted(REQUIRED_PLACEHOLDERS - placeholders))
+    missing = tuple(sorted(required_placeholders - placeholders))
     unexpected = tuple(sorted(placeholders - ALLOWED_PLACEHOLDERS))
 
     cells = _extract_table_cells(document_xml)
@@ -100,8 +118,12 @@ def validate_wind_template_contract(
     *,
     allow_extra_placeholders: bool = True,
     require_tz_header: bool = True,
+    required_placeholders: frozenset[str] = REQUIRED_PLACEHOLDERS,
 ) -> WindTemplateContractReport:
-    report = inspect_wind_template_contract(template_path)
+    report = inspect_wind_template_contract(
+        template_path,
+        required_placeholders=required_placeholders,
+    )
     errors: list[str] = []
 
     if report.missing_placeholders:

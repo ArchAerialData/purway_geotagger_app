@@ -78,14 +78,25 @@ The Wind tab produces a rendered report docx from production template placeholde
 Core contract:
 - Required placeholders: `CLIENT_NAME`, `SYSTEM_NAME`, `DATE`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`, `TZ`
 - Optional placeholder: `REGION_ID` (blank-safe; replaced when present in template)
+- WR3A contract lock: keep system placeholder unchanged and use `REGION_ID` for region in auto-selected templates.
 - Contract validation: `src/purway_geotagger/core/wind_template_contract.py`
+- Template profile auto-selector: `src/purway_geotagger/core/wind_template_selector.py`
 - Payload builder and input validation: `src/purway_geotagger/core/wind_docx.py`
 - DOCX render + write + debug sidecar: `src/purway_geotagger/core/wind_docx_writer.py`
 
 Template paths:
 - Bundled production template: `config/wind_templates/PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx`
+- WR3A system-only template: `config/wind_templates/System Only/WindData_ClientName_SYSTEM_YYYY_MM_DD.docx`
+- WR3A region-only template: `config/wind_templates/Region Only/WindData_ClientName_Region_YYYY_MM_DD.docx`
+- WR3A system+region template: `config/wind_templates/System-Region/WindData_ClientName_REGION_SYSTEM_YYYY_MM_DD.docx`
 - Dev fallback template path candidate: `wind_data_generator/Example of Template Structure/PRODUCTION_WindData_ClientName_YYYY_MM_DD.docx`
 - Resolution logic: `src/purway_geotagger/gui/pages/wind_data_logic.py`
+
+WR3A template filename token mapping:
+- `ClientName` -> filename-safe client value from GUI.
+- `SYSTEM` -> filename-safe system value from GUI.
+- `Region`/`REGION` -> filename-safe region value from GUI.
+- `YYYY_MM_DD` -> normalized report date.
 
 Generated artifacts:
 - DOCX output: `WindData_<ClientName>_<YYYY_MM_DD>.docx` (collision-safe suffixes `_01`, `_02`, ...)
@@ -241,6 +252,7 @@ Use these as source-of-truth planning artifacts:
 - Global phase gates: `IMPLEMENTATION_PHASES.md`
 - Pilot workflow context + phased gaps: `PILOT_RAW_DATA_CONTEXT_AND_PLAN.md`
 - Wind feature phased gates: `WIND_DATA_IMPLEMENTATION_PHASES.md`
+- Wind Region/System variant track: `WIND_DATA_REGION_FIELD_IMPLEMENTATION_PHASES.md`
 - Wind autofill spike tracker: `WIND_WEATHER_AUTOFILL_SPIKE_PLAN.md`
 - Wind feature/change logs: `WIND_DATA_DOCX_FEATURE_PLAN.md`, `WIND_DATA_CHANGESET_NOTES.md`
 

@@ -8,6 +8,12 @@ from zipfile import ZipFile
 import pytest
 
 from purway_geotagger.core.wind_docx import WindReportMetadataRaw, WindRowRaw, build_wind_template_payload
+from purway_geotagger.core.wind_template_contract import required_placeholders_for_profile
+from purway_geotagger.core.wind_template_selector import (
+    REGION_ONLY_TEMPLATE_REL_PATH,
+    SYSTEM_ONLY_TEMPLATE_REL_PATH,
+    SYSTEM_REGION_TEMPLATE_REL_PATH,
+)
 from purway_geotagger.core.wind_docx_writer import (
     WindDocxWriterError,
     generate_wind_docx_report,
@@ -24,6 +30,14 @@ def _production_template_path() -> Path:
         if candidate.exists():
             return candidate
     return candidates[0]
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _template_by_relative_path(relative_path: str) -> Path:
+    return _repo_root() / Path(relative_path)
 
 
 def _build_valid_report():
@@ -210,3 +224,50 @@ def test_generate_wind_docx_escapes_xml_special_characters_in_placeholders(tmp_p
 
     assert "Katy ROW & Facility <Test>" not in xml
     assert "Katy ROW &amp; Facility &lt;Test&gt;" in xml
+
+
+@pytest.mark.parametrize(
+    ("profile", "relative_template_path", "system_name", "region_id"),
+    (
+        ("system_only", SYSTEM_ONLY_TEMPLATE_REL_PATH, "KDB-20", ""),
+        ("region_only", REGION_ONLY_TEMPLATE_REL_PATH, "", "Region-7"),
+        ("system_and_region", SYSTEM_REGION_TEMPLATE_REL_PATH, "KDB-20", "Region-7"),
+    ),
+)
+def test_generate_wind_docx_for_wr3a_profile_template(
+    tmp_path: Path,
+    profile: str,
+    relative_template_path: str,
+    system_name: str,
+    region_id: str,
+) -> None:
+    template = _template_by_relative_path(relative_template_path)
+    assert template.exists(), f"Missing WR3A template: {template}"
+
+    metadata = WindReportMetadataRaw(
+        client_name="TargaResources",
+        system_name=system_name,
+        report_date="2026-02-06",
+        timezone="CST",
+        region_id=region_id,
+    )
+    start = WindRowRaw("10:00", "SW", "0", "1", "51")
+    end = WindRowRaw("13:00", "SW", "0", "1", "51")
+    report = build_wind_template_payload(metadata, start, end)
+
+    result = generate_wind_docx_report(
+        template_path=template,
+        output_dir=tmp_path,
+        report=report,
+        required_placeholders=required_placeholders_for_profile(profile),
+    )
+    xml = _read_document_xml(result.output_docx_path)
+    visible_text = _read_visible_text(result.output_docx_path)
+
+    assert "{{ SYSTEM_NAME }}" not in xml
+    assert "{{ REGION_ID }}" not in xml
+    assert "Time (CST)" in visible_text
+    if system_name:
+        assert system_name in visible_text
+    if region_id:
+        assert region_id in visible_text

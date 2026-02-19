@@ -9,6 +9,7 @@ from purway_geotagger.gui.pages.wind_data_logic import (
     build_live_preview_payload,
     compute_generate_availability,
     resolve_default_wind_template_path,
+    resolve_wind_template_for_inputs,
     to_24h_time_string,
 )
 
@@ -120,3 +121,23 @@ def test_build_live_preview_payload_raises_for_invalid_wind_rows() -> None:
                 temp_f=55,
             ),
         )
+
+
+@pytest.mark.parametrize(
+    ("system_name", "region_id", "expected_stem"),
+    (
+        ("System-1", "", "WindData_ClientName_SYSTEM_YYYY_MM_DD.docx"),
+        ("", "Region-7", "WindData_ClientName_Region_YYYY_MM_DD.docx"),
+        ("System-1", "Region-7", "WindData_ClientName_REGION_SYSTEM_YYYY_MM_DD.docx"),
+    ),
+)
+def test_resolve_wind_template_for_inputs(system_name: str, region_id: str, expected_stem: str) -> None:
+    selection = resolve_wind_template_for_inputs(system_name=system_name, region_id=region_id)
+    assert selection.template_path.exists()
+    assert selection.template_path.name == expected_stem
+    assert selection.required_placeholders
+
+
+def test_resolve_wind_template_for_inputs_rejects_blank_blank() -> None:
+    with pytest.raises(ValueError, match="System ID or Region is required"):
+        resolve_wind_template_for_inputs(system_name="  ", region_id=" ")

@@ -629,9 +629,47 @@ Execution source of truth:
 - Embedded custom XML metadata part added to generated DOCX files for downstream automation parsing:
   - `customXml/purway_wind_metadata.xml`
 - Embedded payload includes:
-  - resolved template placeholders (`CLIENT_NAME`, `SYSTEM_NAME`, `DATE`, `TZ`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`)
+  - resolved template placeholders (`CLIENT_NAME`, `SYSTEM_NAME`, `REGION_ID`, `DATE`, `TZ`, `S_TIME`, `E_TIME`, `S_STRING`, `E_STRING`)
   - component values (`S_WIND`, `S_SPEED`, `S_GUST`, `S_TEMP`, `E_WIND`, `E_SPEED`, `E_GUST`, `E_TEMP`)
 - Verification:
   - `python3 -m pytest tests/test_wind_docx_writer.py tests/test_wind_debug_export.py` (5 passed)
   - `python3 -m pytest tests/test_wind_template_contract.py tests/test_wind_formatting.py tests/test_wind_validation.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py tests/test_wind_weather_autofill.py tests/test_wind_autofill_dialog.py` (49 passed)
   - `python3 -m compileall src` (pass)
+
+### Wind Region/System Template Variant Tracking (WR)
+
+- Date updated: 2026-02-18
+- Added dedicated planning track for optional `System ID` + optional `Region` workflows:
+  - `WIND_DATA_REGION_FIELD_IMPLEMENTATION_PHASES.md`
+- WR0 completed on 2026-02-18 (contract lock + template inventory).
+- Added phase `WR3A` to support three template variants and auto-selection:
+  - `config/wind_templates/System Only/WindData_ClientName_SYSTEM_YYYY_MM_DD.docx`
+  - `config/wind_templates/Region Only/WindData_ClientName_Region_YYYY_MM_DD.docx`
+  - `config/wind_templates/System-Region/WindData_ClientName_REGION_SYSTEM_YYYY_MM_DD.docx`
+- Planned generation rule for WR3A:
+  - require at least one populated identifier (`System ID` or `Region`) before DOCX generation.
+- Placeholder decision for WR3A:
+  - keep existing system placeholder contract unchanged
+  - use `{{ REGION_ID }}` for Region placeholder mapping and embedded DOCX metadata/XMP-facing payload.
+- Filename-token mapping decision for WR3A template names:
+  - `ClientName` -> filename-safe client value from GUI
+  - `SYSTEM` -> filename-safe system value from GUI
+  - `Region`/`REGION` -> filename-safe region value from GUI
+  - `YYYY_MM_DD` -> normalized report date
+- WR implementation update completed on 2026-02-18 (code + automated tests):
+  - added `src/purway_geotagger/core/wind_template_selector.py` for deterministic profile selection from System/Region inputs.
+  - implemented optional `System ID` + cross-field requirement in `src/purway_geotagger/core/wind_docx.py` (`System ID` or `Region` required).
+  - added profile-aware template contract/writer enforcement in:
+    - `src/purway_geotagger/core/wind_template_contract.py`
+    - `src/purway_geotagger/core/wind_docx_writer.py`
+  - wired GUI runtime selection in:
+    - `src/purway_geotagger/gui/pages/wind_data_logic.py`
+    - `src/purway_geotagger/gui/pages/wind_data_page.py`
+  - verification:
+    - `python -m pytest tests/test_wind_template_selector.py tests/test_wind_validation.py tests/test_wind_template_contract.py tests/test_wind_docx_writer.py tests/test_wind_debug_export.py tests/test_wind_page_logic.py tests/test_wind_page_preview_behavior.py` (51 passed)
+    - `python -m compileall src` (pass)
+  - remaining open checks:
+    - manual UI smoke for system-only, region-only, and system+region generation paths
+    - macOS dev-run verification
+- Cross-doc tracking update completed:
+  - `WIND_DATA_IMPLEMENTATION_PHASES.md` updated with WR planning note.

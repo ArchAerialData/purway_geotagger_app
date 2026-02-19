@@ -10,7 +10,13 @@ from purway_geotagger.core.wind_template_contract import (
     REQUIRED_PLACEHOLDERS,
     WindTemplateContractError,
     inspect_wind_template_contract,
+    required_placeholders_for_profile,
     validate_wind_template_contract,
+)
+from purway_geotagger.core.wind_template_selector import (
+    REGION_ONLY_TEMPLATE_REL_PATH,
+    SYSTEM_ONLY_TEMPLATE_REL_PATH,
+    SYSTEM_REGION_TEMPLATE_REL_PATH,
 )
 
 
@@ -24,6 +30,14 @@ def _production_template_path() -> Path:
         if candidate.exists():
             return candidate
     return candidates[0]
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+def _template_by_relative_path(relative_path: str) -> Path:
+    return _repo_root() / Path(relative_path)
 
 
 def _rewrite_document_xml(src: Path, dst: Path, mutator) -> None:
@@ -44,6 +58,30 @@ def test_production_template_contract_passes_strict() -> None:
     report = validate_wind_template_contract(template, allow_extra_placeholders=False)
 
     assert set(REQUIRED_PLACEHOLDERS).issubset(set(report.found_placeholders))
+    assert report.missing_placeholders == ()
+    assert report.unexpected_placeholders == ()
+    assert report.tz_header_present is True
+
+
+@pytest.mark.parametrize(
+    ("profile", "relative_path"),
+    (
+        ("system_only", SYSTEM_ONLY_TEMPLATE_REL_PATH),
+        ("region_only", REGION_ONLY_TEMPLATE_REL_PATH),
+        ("system_and_region", SYSTEM_REGION_TEMPLATE_REL_PATH),
+    ),
+)
+def test_wr3a_template_contract_passes_for_each_profile(profile: str, relative_path: str) -> None:
+    template = _template_by_relative_path(relative_path)
+    assert template.exists(), f"Missing WR3A template: {template}"
+
+    required = required_placeholders_for_profile(profile)
+    report = validate_wind_template_contract(
+        template,
+        allow_extra_placeholders=False,
+        required_placeholders=required,
+    )
+    assert set(required).issubset(set(report.found_placeholders))
     assert report.missing_placeholders == ()
     assert report.unexpected_placeholders == ()
     assert report.tz_header_present is True
