@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 
 from PySide6.QtGui import QIcon, QPixmap
+from purway_geotagger import __version__
 from purway_geotagger.core.settings import AppSettings
 from purway_geotagger.core.utils import resource_path
 
@@ -124,7 +125,7 @@ class MainWindow(QMainWindow):
         header_layout.addStretch(1)
         
         # 4. Version / Status
-        self.version_label = QLabel("v1.0.0")
+        self.version_label = QLabel(f"v{__version__}")
         self.version_label.setProperty("cssClass", "subtitle")
         header_layout.addWidget(self.version_label, alignment=Qt.AlignmentFlag.AlignVCenter)
 

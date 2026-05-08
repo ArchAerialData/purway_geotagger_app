@@ -5,6 +5,8 @@ from pathlib import Path
 import json
 from typing import Any
 
+from purway_geotagger.core.methane_metadata_contract import MethaneMetadataSummary
+
 
 @dataclass
 class ExifSummary:
@@ -37,6 +39,7 @@ class RunSummary:
     settings: dict[str, Any]
     exif: ExifSummary
     methane_outputs: list[MethaneOutputSummary]
+    methane_metadata: MethaneMetadataSummary = field(default_factory=MethaneMetadataSummary)
 
 
 def write_run_summary(path: Path, summary: RunSummary) -> None:

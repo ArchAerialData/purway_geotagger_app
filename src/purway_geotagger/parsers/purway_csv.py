@@ -28,19 +28,33 @@ GIMBAL_ROLL_CANDIDATES = ["gimbal_roll", "cam_roll"]
 GIMBAL_YAW_CANDIDATES = ["gimbal_yaw", "cam_yaw"]
 FOCAL_LENGTH_CANDIDATES = ["camera_focal_length", "focal_length", "focal", "lens_focal"]
 ZOOM_CANDIDATES = ["camera_zoom", "zoom", "digital_zoom", "zoom_ratio"]
+TARGET_LAT_COL_CANDIDATES = ["dest_latitude", "target_latitude", "target_lat", "destination_latitude", "destination_lat"]
+TARGET_LON_COL_CANDIDATES = ["dest_longitude", "target_longitude", "target_lon", "destination_longitude", "destination_lon"]
+DISTANCE_COL_CANDIDATES = ["distance", "target_distance", "methane_distance"]
+STATUS_COL_CANDIDATES = ["status"]
+ERR_CODE_COL_CANDIDATES = ["err_code", "error_code"]
+SNR_COL_CANDIDATES = ["snr"]
+RELIABILITY_COL_CANDIDATES = ["reliability"]
+FLIGHT_STATUS_COL_CANDIDATES = ["flight_status"]
+DIS_CODE_COL_CANDIDATES = ["dis_code"]
+HOME_DISTANCE_COL_CANDIDATES = ["home_distance"]
+SPEED_COL_CANDIDATES = ["speed"]
 
 REASON_NO_PHOTO_OR_TIMESTAMP = "no explicit Photo column correlation and no timestamped CSV rows available"
 REASON_NO_FILENAME_TIMESTAMP = "no filename timestamp and no explicit Photo column correlation"
 REASON_AMBIGUOUS_TIMESTAMP = "ambiguous timestamp join"
 
-def _pick_col(cols: list[str], candidates: list[str]) -> Optional[str]:
+def _pick_col(cols: list[str], candidates: list[str], exclude_substrings: list[str] | None = None) -> Optional[str]:
     cols_l = {c.lower().strip(): c for c in cols}
     for cand in candidates:
         if cand in cols_l:
             return cols_l[cand]
     # substring fallback
+    exclude_substrings = exclude_substrings or []
     for c in cols:
         cl = c.lower()
+        if any(excluded in cl for excluded in exclude_substrings):
+            continue
         if any(cand in cl for cand in candidates):
             return c
     return None
@@ -66,16 +80,31 @@ class PurwayRecord:
     camera_focal_length: float | None = None
     camera_zoom: float | None = None
     timestamp_raw: str | None = None
+    target_lat: float | None = None
+    target_lon: float | None = None
+    distance: float | None = None
+    source_file_name: str | None = None
+    payload_model: str | None = None
+    csv_status: str | None = None
+    err_code: str | None = None
+    snr: float | None = None
+    reliability: float | None = None
+    flight_status: str | None = None
+    dis_code: str | None = None
+    home_distance: float | None = None
+    speed: float | None = None
 
 @dataclass(frozen=True)
 class PhotoMatch:
     csv_path: str
+    source_csv: str
     lat: float
     lon: float
     ppm: float
     datetime_original: str | None
     image_description: str
     join_method: str  # FILENAME|TIMESTAMP
+    join_delta_seconds: float | None = None
     # Extended fields
     altitude: float | None = None
     relative_altitude: float | None = None
@@ -90,6 +119,19 @@ class PhotoMatch:
     camera_zoom: float | None = None
     timestamp_raw: str | None = None
     pac: float | None = None  # Derived: ppm / relative_altitude
+    target_lat: float | None = None
+    target_lon: float | None = None
+    distance: float | None = None
+    source_file_name: str | None = None
+    payload_model: str | None = None
+    csv_status: str | None = None
+    err_code: str | None = None
+    snr: float | None = None
+    reliability: float | None = None
+    flight_status: str | None = None
+    dis_code: str | None = None
+    home_distance: float | None = None
+    speed: float | None = None
 
 class PurwayCSVIndex:
     def __init__(self, records: list[PurwayRecord]) -> None:
@@ -117,7 +159,12 @@ class PurwayCSVIndex:
         if self.by_photo:
             r = self.by_photo.get(photo_path.name)
             if r:
-                return _to_match(r, join_method="FILENAME")
+                return _to_match(
+                    r,
+                    join_method="FILENAME",
+                    join_delta_seconds=0.0,
+                    matched_photo_name=photo_path.name,
+                )
 
         # Step B: timestamp join
         if not self.by_time:
@@ -152,21 +199,34 @@ class PurwayCSVIndex:
         if ties > 1:
             raise CorrelationError(REASON_AMBIGUOUS_TIMESTAMP)
 
-        return _to_match(best, join_method="TIMESTAMP")
+        return _to_match(
+            best,
+            join_method="TIMESTAMP",
+            join_delta_seconds=best_delta,
+            matched_photo_name=photo_path.name,
+        )
 
-def _to_match(r: PurwayRecord, join_method: str) -> PhotoMatch:
+def _to_match(
+    r: PurwayRecord,
+    join_method: str,
+    join_delta_seconds: float | None,
+    matched_photo_name: str | None,
+) -> PhotoMatch:
     dto = format_exif_datetime(r.timestamp) if r.timestamp else None
     ppm_int = int(round(r.ppm))
     desc = f"ppm={ppm_int}; source_csv={r.csv_path.name}"
     pac = calculate_pac(r.ppm, r.relative_altitude)
+    source_file_name = r.source_file_name or r.photo_ref or matched_photo_name
     return PhotoMatch(
         csv_path=str(r.csv_path),
+        source_csv=r.csv_path.name,
         lat=r.lat,
         lon=r.lon,
         ppm=r.ppm,
         datetime_original=dto,
         image_description=desc,
         join_method=join_method,
+        join_delta_seconds=join_delta_seconds,
         altitude=r.altitude,
         relative_altitude=r.relative_altitude,
         light_intensity=r.light_intensity,
@@ -180,6 +240,19 @@ def _to_match(r: PurwayRecord, join_method: str) -> PhotoMatch:
         camera_zoom=r.camera_zoom,
         timestamp_raw=r.timestamp_raw,
         pac=pac,
+        target_lat=r.target_lat,
+        target_lon=r.target_lon,
+        distance=r.distance,
+        source_file_name=source_file_name,
+        payload_model=r.payload_model,
+        csv_status=r.csv_status,
+        err_code=r.err_code,
+        snr=r.snr,
+        reliability=r.reliability,
+        flight_status=r.flight_status,
+        dis_code=r.dis_code,
+        home_distance=r.home_distance,
+        speed=r.speed,
     )
 
 def _parse_single_csv(path: Path) -> list[PurwayRecord]:
@@ -197,8 +270,8 @@ def _parse_single_csv(path: Path) -> list[PurwayRecord]:
         return []
 
     photo_col = _pick_col(cols, PHOTO_COL_CANDIDATES)
-    lat_col = _pick_col(cols, LAT_COL_CANDIDATES)
-    lon_col = _pick_col(cols, LON_COL_CANDIDATES)
+    lat_col = _pick_col(cols, LAT_COL_CANDIDATES, exclude_substrings=["dest_lat", "target_lat", "destination_lat"])
+    lon_col = _pick_col(cols, LON_COL_CANDIDATES, exclude_substrings=["dest_lon", "target_lon", "destination_lon"])
     time_col = _pick_col(cols, TIME_COL_CANDIDATES)
     ppm_col = _pick_col(cols, PPM_COL_CANDIDATES)
     
@@ -214,6 +287,24 @@ def _parse_single_csv(path: Path) -> list[PurwayRecord]:
     gimbal_yaw_col = _pick_col(cols, GIMBAL_YAW_CANDIDATES)
     focal_col = _pick_col(cols, FOCAL_LENGTH_CANDIDATES)
     zoom_col = _pick_col(cols, ZOOM_CANDIDATES)
+    target_lat_col = _pick_col(cols, TARGET_LAT_COL_CANDIDATES)
+    target_lon_col = _pick_col(cols, TARGET_LON_COL_CANDIDATES)
+    distance_col = _pick_col(cols, DISTANCE_COL_CANDIDATES)
+    status_col = _pick_col(cols, STATUS_COL_CANDIDATES)
+    err_code_col = _pick_col(cols, ERR_CODE_COL_CANDIDATES)
+    snr_col = _pick_col(cols, SNR_COL_CANDIDATES)
+    reliability_col = _pick_col(cols, RELIABILITY_COL_CANDIDATES)
+    flight_status_col = _pick_col(cols, FLIGHT_STATUS_COL_CANDIDATES)
+    dis_code_col = _pick_col(cols, DIS_CODE_COL_CANDIDATES)
+    home_distance_col = _pick_col(cols, HOME_DISTANCE_COL_CANDIDATES)
+    speed_col = _pick_col(cols, SPEED_COL_CANDIDATES)
+    payload_model = _detect_payload_model(
+        reliability_col=reliability_col,
+        flight_status_col=flight_status_col,
+        dis_code_col=dis_code_col,
+        home_distance_col=home_distance_col,
+        speed_col=speed_col,
+    )
 
     if not lat_col or not lon_col:
         return []  # ignore CSVs without coordinate columns
@@ -225,6 +316,12 @@ def _parse_single_csv(path: Path) -> list[PurwayRecord]:
             return float(str(row.get(col)).strip())
         except ValueError:
             return None
+
+    def _safe_str(row: dict, col: str | None) -> str | None:
+        if not col or row.get(col) in (None, ""):
+            return None
+        value = str(row.get(col)).strip()
+        return value or None
 
     out: list[PurwayRecord] = []
     for r in rows:
@@ -271,8 +368,35 @@ def _parse_single_csv(path: Path) -> list[PurwayRecord]:
             camera_focal_length=_safe_float(r, focal_col),
             camera_zoom=_safe_float(r, zoom_col),
             timestamp_raw=ts_raw,
+            target_lat=_safe_float(r, target_lat_col),
+            target_lon=_safe_float(r, target_lon_col),
+            distance=_safe_float(r, distance_col),
+            source_file_name=photo_ref,
+            payload_model=payload_model,
+            csv_status=_safe_str(r, status_col),
+            err_code=_safe_str(r, err_code_col),
+            snr=_safe_float(r, snr_col),
+            reliability=_safe_float(r, reliability_col),
+            flight_status=_safe_str(r, flight_status_col),
+            dis_code=_safe_str(r, dis_code_col),
+            home_distance=_safe_float(r, home_distance_col),
+            speed=_safe_float(r, speed_col),
         ))
     return out
+
+
+def _detect_payload_model(
+    reliability_col: str | None,
+    flight_status_col: str | None,
+    dis_code_col: str | None,
+    home_distance_col: str | None,
+    speed_col: str | None,
+) -> str | None:
+    if reliability_col:
+        return "Purway Model II"
+    if any((flight_status_col, dis_code_col, home_distance_col, speed_col)):
+        return "Purway Model III"
+    return None
 
 
 @dataclass(frozen=True)
@@ -308,8 +432,8 @@ def inspect_csv_schema(path: Path) -> CSVSchema:
         )
 
     photo_col = _pick_col(cols, PHOTO_COL_CANDIDATES)
-    lat_col = _pick_col(cols, LAT_COL_CANDIDATES)
-    lon_col = _pick_col(cols, LON_COL_CANDIDATES)
+    lat_col = _pick_col(cols, LAT_COL_CANDIDATES, exclude_substrings=["dest_lat", "target_lat", "destination_lat"])
+    lon_col = _pick_col(cols, LON_COL_CANDIDATES, exclude_substrings=["dest_lon", "target_lon", "destination_lon"])
     time_col = _pick_col(cols, TIME_COL_CANDIDATES)
     ppm_col = _pick_col(cols, PPM_COL_CANDIDATES)
 

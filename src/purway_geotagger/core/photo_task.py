@@ -38,6 +38,23 @@ class PhotoTask:
     camera_focal_length: float | None = None
     camera_zoom: float | None = None
     timestamp_raw: str | None = None
+    target_lat: float | None = None
+    target_lon: float | None = None
+    distance: float | None = None
+    source_file_name: str = ""
+    source_csv: str = ""
+    join_delta_seconds: float | None = None
+    payload_model: str = ""
+    geotagger_version: str = ""
+    geotagger_run_id: str = ""
+    csv_status: str = ""
+    err_code: str = ""
+    snr: float | None = None
+    reliability: float | None = None
+    flight_status: str = ""
+    dis_code: str = ""
+    home_distance: float | None = None
+    speed: float | None = None
 
     # Derived fields
     pac: float | None = None  # Path Average Concentration: ppm / relative_altitude

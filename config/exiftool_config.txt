@@ -22,8 +22,27 @@
     MethaneConcentration => { Writable => 'real', Description => 'Methane concentration in PPM' },
     PAC => { Writable => 'real', Description => 'Path Average Concentration (PPM / Altitude)' },
     LightIntensity => { Writable => 'real', Description => 'Ambient light intensity' },
+    TargetLongitude => { Writable => 'real', Description => 'Methane target longitude in decimal degrees' },
+    TargetLatitude => { Writable => 'real', Description => 'Methane target latitude in decimal degrees' },
+    Distance => { Writable => 'real', Description => 'Methane target distance from CSV' },
+    SourceFileName => { Writable => 'string', Description => 'Source filename from CSV or matched JPG basename' },
+    SourceCSV => { Writable => 'string', Description => 'Source methane CSV basename' },
+    JoinMethod => { Writable => 'string', Description => 'CSV-to-photo join method' },
+    JoinDeltaSeconds => { Writable => 'real', Description => 'CSV-to-photo timestamp join delta in seconds' },
+    PayloadModel => { Writable => 'string', Description => 'Detected Purway payload model' },
+    GeotaggerVersion => { Writable => 'string', Description => 'Purway Geotagger app version' },
+    GeotaggerRunId => { Writable => 'string', Description => 'Purway Geotagger run identifier' },
+    Status => { Writable => 'string', Description => 'Source CSV status value' },
+    ErrCode => { Writable => 'string', Description => 'Source CSV error code value' },
+    SNR => { Writable => 'real', Description => 'Source CSV signal-to-noise ratio' },
+    Reliability => { Writable => 'real', Description => 'Purway Model II reliability value' },
+    FlightStatus => { Writable => 'string', Description => 'Purway Model III flight status value' },
+    DisCode => { Writable => 'string', Description => 'Purway Model III dis_code value' },
+    HomeDistance => { Writable => 'real', Description => 'Purway Model III home distance value' },
+    Speed => { Writable => 'real', Description => 'Purway Model III speed value' },
     
     # Altitude
+    Altitude => { Writable => 'real', Description => 'Altitude from source CSV' },
     RelativeAltitude => { Writable => 'real', Description => 'Altitude above ground level (AGL) in meters' },
     
     # UAV Orientation

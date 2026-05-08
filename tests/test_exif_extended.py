@@ -46,6 +46,25 @@ def test_write_import_csv_extended_fields(writer, tmp_path):
     task.lon = -90.0
     task.ppm = 1234.5
     task.pac = 49.38
+    task.target_lat = 28.2
+    task.target_lon = -97.3
+    task.distance = 12.5
+    task.altitude = 40.0
+    task.source_file_name = "source.jpg"
+    task.source_csv = "methane.csv"
+    task.join_method = "FILENAME"
+    task.join_delta_seconds = 0.0
+    task.payload_model = "Purway Model II"
+    task.geotagger_version = "0.1.0"
+    task.geotagger_run_id = "run-1"
+    task.csv_status = "SUCCESS"
+    task.err_code = "0"
+    task.snr = 18.5
+    task.reliability = 0.97
+    task.flight_status = "IN_AIR"
+    task.dis_code = "D7"
+    task.home_distance = 120.0
+    task.speed = 8.2
     task.relative_altitude = 25.0
     task.uav_yaw = 180.5
     task.timestamp_raw = "2023-01-01 12:00:00"
@@ -62,6 +81,25 @@ def test_write_import_csv_extended_fields(writer, tmp_path):
     assert row["GPSLongitude"] == "-90.0"
     assert row["XMP-ArchAerial:MethaneConcentration"] == "1234.5"
     assert row["XMP-ArchAerial:PAC"] == "49.38"
+    assert row["XMP-ArchAerial:TargetLatitude"] == "28.2"
+    assert row["XMP-ArchAerial:TargetLongitude"] == "-97.3"
+    assert row["XMP-ArchAerial:Distance"] == "12.5"
+    assert row["XMP-ArchAerial:Altitude"] == "40.0"
+    assert row["XMP-ArchAerial:SourceFileName"] == "source.jpg"
+    assert row["XMP-ArchAerial:SourceCSV"] == "methane.csv"
+    assert row["XMP-ArchAerial:JoinMethod"] == "FILENAME"
+    assert row["XMP-ArchAerial:JoinDeltaSeconds"] == "0.0"
+    assert row["XMP-ArchAerial:PayloadModel"] == "Purway Model II"
+    assert row["XMP-ArchAerial:GeotaggerVersion"] == "0.1.0"
+    assert row["XMP-ArchAerial:GeotaggerRunId"] == "run-1"
+    assert row["XMP-ArchAerial:Status"] == "SUCCESS"
+    assert row["XMP-ArchAerial:ErrCode"] == "0"
+    assert row["XMP-ArchAerial:SNR"] == "18.5"
+    assert row["XMP-ArchAerial:Reliability"] == "0.97"
+    assert row["XMP-ArchAerial:FlightStatus"] == "IN_AIR"
+    assert row["XMP-ArchAerial:DisCode"] == "D7"
+    assert row["XMP-ArchAerial:HomeDistance"] == "120.0"
+    assert row["XMP-ArchAerial:Speed"] == "8.2"
     assert row["XMP-ArchAerial:RelativeAltitude"] == "25.0"
     assert row["XMP-ArchAerial:UAVYaw"] == "180.5"
     assert row["XMP-ArchAerial:CaptureTime"] == "2023-01-01 12:00:00"

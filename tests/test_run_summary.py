@@ -35,3 +35,4 @@ def test_write_run_summary(tmp_path: Path) -> None:
     assert data["run_id"] == "abc"
     assert data["exif"]["success"] == 2
     assert data["methane_outputs"][0]["cleaned_status"] == "success"
+    assert data["methane_metadata"]["schema_version"] == "wwm-methane-xmp-v1"

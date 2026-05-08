@@ -6,7 +6,13 @@ import json
 import time
 from dataclasses import asdict, is_dataclass
 
+from purway_geotagger import __version__
 from purway_geotagger.core.job import Job, JobOptions
+from purway_geotagger.core.methane_metadata_contract import (
+    requires_target_distance,
+    summarize_methane_metadata,
+    validate_target_distance,
+)
 from purway_geotagger.core.modes import RunMode, common_parent
 from purway_geotagger.core.run_summary import RunSummary, ExifSummary, MethaneOutputSummary, write_run_summary
 from purway_geotagger.core.scanner import scan_inputs, ScanResult
@@ -158,12 +164,36 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
                 t.camera_zoom = match.camera_zoom
                 t.timestamp_raw = match.timestamp_raw
                 t.pac = match.pac
+                t.target_lat = match.target_lat
+                t.target_lon = match.target_lon
+                t.distance = match.distance
+                t.source_file_name = match.source_file_name or t.src_path.name
+                t.source_csv = match.source_csv
+                t.join_delta_seconds = match.join_delta_seconds
+                t.payload_model = match.payload_model or ""
+                t.geotagger_version = __version__
+                t.geotagger_run_id = job.id
+                t.csv_status = match.csv_status or ""
+                t.err_code = match.err_code or ""
+                t.snr = match.snr
+                t.reliability = match.reliability
+                t.flight_status = match.flight_status or ""
+                t.dis_code = match.dis_code or ""
+                t.home_distance = match.home_distance
+                t.speed = match.speed
 
                 if opts.purway_payload:
                     if t.image_description:
                         t.image_description = f"{t.image_description}; purway_payload={opts.purway_payload}"
                     else:
                         t.image_description = f"purway_payload={opts.purway_payload}"
+                if requires_target_distance(opts.run_mode):
+                    validation = validate_target_distance(t)
+                    if not validation.valid:
+                        t.status = "FAILED"
+                        t.reason = validation.reason
+                        job.state.failed += 1
+                        logger.log(f"{t.src_path.name}: {validation.reason}")
                 job.state.matched += 1
             except CorrelationError as e:
                 t.status = "FAILED"
@@ -292,7 +322,7 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
             error_message if (cancelled or error_message) else "",
         )
         try:
-            summary = _build_run_summary(job, exif_summary, methane_results)
+            summary = _build_run_summary(job, exif_summary, methane_results, manifest_tasks)
             write_run_summary(run_folder / "run_summary.json", summary)
         except Exception as exc:  # pragma: no cover - do not crash on summary failures
             logger.log(f"Run summary failed: {exc}")
@@ -403,6 +433,23 @@ def _clone_tasks_for_copy(
             clone.camera_zoom = base.camera_zoom
             clone.timestamp_raw = base.timestamp_raw
             clone.pac = base.pac
+            clone.target_lat = base.target_lat
+            clone.target_lon = base.target_lon
+            clone.distance = base.distance
+            clone.source_file_name = base.source_file_name
+            clone.source_csv = base.source_csv
+            clone.join_delta_seconds = base.join_delta_seconds
+            clone.payload_model = base.payload_model
+            clone.geotagger_version = base.geotagger_version
+            clone.geotagger_run_id = base.geotagger_run_id
+            clone.csv_status = base.csv_status
+            clone.err_code = base.err_code
+            clone.snr = base.snr
+            clone.reliability = base.reliability
+            clone.flight_status = base.flight_status
+            clone.dis_code = base.dis_code
+            clone.home_distance = base.home_distance
+            clone.speed = base.speed
         clones.append(clone)
     return clones
 
@@ -411,6 +458,7 @@ def _build_run_summary(
     job: Job,
     exif_summary: ExifSummary,
     methane_results: list[MethaneCsvResult],
+    tasks: list[PhotoTask],
 ) -> RunSummary:
     outputs: list[MethaneOutputSummary] = []
     for r in methane_results:
@@ -449,6 +497,7 @@ def _build_run_summary(
         settings=settings,
         exif=exif_summary,
         methane_outputs=outputs,
+        methane_metadata=summarize_methane_metadata(tasks),
     )
 
 def _write_run_config(job: Job, run_folder: Path) -> None:
@@ -502,6 +551,23 @@ def _write_manifest(
                 csv_path=t.csv_path,
                 join_method=t.join_method,
                 exif_written="YES" if t.exif_written else "NO",
+                target_lat="" if t.target_lat is None else str(t.target_lat),
+                target_lon="" if t.target_lon is None else str(t.target_lon),
+                distance="" if t.distance is None else str(t.distance),
+                source_file_name=t.source_file_name,
+                source_csv=t.source_csv,
+                join_delta_seconds="" if t.join_delta_seconds is None else str(t.join_delta_seconds),
+                payload_model=t.payload_model,
+                geotagger_version=t.geotagger_version,
+                geotagger_run_id=t.geotagger_run_id,
+                csv_status=t.csv_status,
+                err_code=t.err_code,
+                snr="" if t.snr is None else str(t.snr),
+                reliability="" if t.reliability is None else str(t.reliability),
+                flight_status=t.flight_status,
+                dis_code=t.dis_code,
+                home_distance="" if t.home_distance is None else str(t.home_distance),
+                speed="" if t.speed is None else str(t.speed),
                 # Extended fields
                 altitude="" if t.altitude is None else str(t.altitude),
                 relative_altitude="" if t.relative_altitude is None else str(t.relative_altitude),

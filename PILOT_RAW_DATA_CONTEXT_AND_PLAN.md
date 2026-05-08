@@ -673,3 +673,30 @@ Execution source of truth:
     - macOS dev-run verification
 - Cross-doc tracking update completed:
   - `WIND_DATA_IMPLEMENTATION_PHASES.md` updated with WR planning note.
+
+### Methane Metadata Extension Tracking (MME)
+
+Execution source of truth:
+- `docs/methane-geotagger-extension-request/planning/METHANE_GEOTAGGER_EXTENSION_PREPLAN.md`
+- `docs/methane-geotagger-extension-request/planning/METHANE_GEOTAGGER_APP_HANDOFF.md`
+
+**Work items**
+- [x] Extend CSV parsing and photo task state for WWM target/distance/provenance metadata.
+- [x] Add methane target/distance validation with Methane/Combined strictness and Encroachment-only legacy compatibility.
+- [x] Extend ExifTool custom XMP config and `_exiftool_import.csv` columns.
+- [x] Extend `manifest.csv` and `run_summary.json` with metadata proof fields and counts.
+- [x] Add focused tests for parser mapping, validation, ExifTool import CSV fields, pipeline artifacts, and summary payloads.
+
+**Gate**
+- [x] Processed JPG metadata can be produced from parsed CSV fields without changing standard GPS semantics.
+- [x] Methane/Combined rows with invalid target/distance metadata fail before EXIF writing; Encroachment-only rows continue legacy behavior.
+- [x] Phase Notes recorded (date + tests/verification + deviations).
+
+**Phase Notes (MME)**
+- Date: 2026-05-08
+- Verification:
+  - `python -m pytest tests/test_purway_csv_parse.py tests/test_exif_extended.py tests/test_exiftool_writer.py tests/test_methane_metadata_contract.py tests/test_pipeline_artifacts.py tests/test_pipeline_phase3_e2e.py tests/test_run_summary.py` (24 passed)
+  - `python -m pytest -q` (157 passed)
+  - `python -m compileall src` (pass)
+- Deviations:
+  - Downstream `pyweb-local` WWM ingestion files referenced by the handoff are not present in this repository, so downstream parsing remains externally verified.

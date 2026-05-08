@@ -16,6 +16,23 @@ class ManifestRow:
     csv_path: str
     join_method: str  # FILENAME|TIMESTAMP|NONE
     exif_written: str  # YES|NO
+    target_lat: str = ""
+    target_lon: str = ""
+    distance: str = ""
+    source_file_name: str = ""
+    source_csv: str = ""
+    join_delta_seconds: str = ""
+    payload_model: str = ""
+    geotagger_version: str = ""
+    geotagger_run_id: str = ""
+    csv_status: str = ""
+    err_code: str = ""
+    snr: str = ""
+    reliability: str = ""
+    flight_status: str = ""
+    dis_code: str = ""
+    home_distance: str = ""
+    speed: str = ""
     # Extended fields
     altitude: str = ""
     relative_altitude: str = ""
@@ -44,6 +61,9 @@ class ManifestWriter:
         with self.path.open("w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(asdict(self._rows[0]).keys()) if self._rows else [
                 "source_path","output_path","status","reason","lat","lon","ppm","csv_path","join_method","exif_written",
+                "target_lat", "target_lon", "distance", "source_file_name", "source_csv", "join_delta_seconds",
+                "payload_model", "geotagger_version", "geotagger_run_id", "csv_status", "err_code", "snr",
+                "reliability", "flight_status", "dis_code", "home_distance", "speed",
                 "altitude", "relative_altitude", "light_intensity", "pac", 
                 "uav_pitch", "uav_roll", "uav_yaw", "gimbal_pitch", "gimbal_roll", "gimbal_yaw",
                 "camera_focal_length", "camera_zoom", "capture_time"
