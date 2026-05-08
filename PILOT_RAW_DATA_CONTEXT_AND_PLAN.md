@@ -679,6 +679,23 @@ Execution source of truth:
     - `python -m pytest tests/test_wind_docx_writer.py::test_generate_wind_docx_for_wr3a_profile_template tests/test_wind_page_logic.py::test_resolve_wind_template_for_inputs tests/test_wind_template_contract.py::test_wr3a_template_contract_passes_for_each_profile tests/test_wind_template_selector.py::test_select_wind_template_resolves_existing_profile_path -q` (12 passed)
     - `python -m pytest -q` (157 passed)
 
+### Windows CI ExifTool Download Tracking
+
+- Date updated: 2026-05-08
+- Replaced duplicated Windows workflow download blocks with `scripts/windows/stage_exiftool.ps1`.
+- The staging script keeps the pinned ExifTool version, downloads the Windows ZIP from SourceForge with fallbacks, validates ZIP magic before extraction, and stages `exiftool.exe` plus `exiftool_files` for PyInstaller.
+- Windows runtime resolution now checks `bin/exiftool.exe` before the extensionless macOS/Linux `bin/exiftool` path.
+- Verification:
+  - `.\scripts\windows\stage_exiftool.ps1 -Version "13.50" -BuildDir "build/exiftool_probe" -StageDir "build/exiftool_probe_stage"` (pass)
+  - `python -c "import subprocess; p=subprocess.run(['build/exiftool_probe_stage/exiftool.exe','-ver'], capture_output=True, text=True, timeout=10); print(p.stdout)"` (reported `13.50`)
+  - local Windows PyInstaller workflow step with `build/windows_exiftool/exiftool.exe` staged and resource assertions (pass; bundled ExifTool reported `13.50`)
+  - CI-shaped local Windows pass using Python 3.11 and pinned PyInstaller 6.10.0 from `requirements.txt` (pass; bundled ExifTool reported `13.50`)
+  - `build/ci-venv311/Scripts/python.exe -m pytest -q` (158 passed)
+  - Inno Setup local compile was not run because `ISCC.exe` is not installed on this workstation; installer source/output paths were checked against the generated `dist/windows/PurwayGeotagger` folder and Inno relative path rules.
+  - `python -m pytest tests/test_exiftool_writer.py -q` (7 passed)
+  - `python -m pytest -q` (158 passed)
+  - `python -m compileall src` (pass)
+
 ### Methane Metadata Extension Tracking (MME)
 
 Execution source of truth:

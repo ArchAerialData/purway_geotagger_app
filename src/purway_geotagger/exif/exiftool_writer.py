@@ -282,6 +282,12 @@ def _gps_lon_ref(lon: float | None) -> str:
     return "E" if lon >= 0 else "W"
 
 
+def _exiftool_executable_names() -> tuple[str, ...]:
+    if os.name == "nt":
+        return ("exiftool.exe", "exiftool")
+    return ("exiftool",)
+
+
 def _resolve_exiftool_path() -> str:
     """Resolve an ExifTool executable path.
 
@@ -297,27 +303,34 @@ def _resolve_exiftool_path() -> str:
         p = Path(env_path)
         if p.exists():
             return str(p)
+        if os.name == "nt" and not p.suffix:
+            exe_path = p.with_suffix(".exe")
+            if exe_path.exists():
+                return str(exe_path)
 
     if getattr(sys, "frozen", False):
         exe_dir = Path(sys.executable).resolve().parent
-        bundled_candidates = (
-            resource_path("bin/exiftool"),
-            exe_dir / "bin" / "exiftool",
-            exe_dir.parent / "Resources" / "bin" / "exiftool",
+        bundled_roots = (
+            resource_path("bin"),
+            exe_dir / "bin",
+            exe_dir.parent / "Resources" / "bin",
         )
-        for bundled in bundled_candidates:
-            if bundled.exists():
-                return str(bundled)
+        for root in bundled_roots:
+            for name in _exiftool_executable_names():
+                bundled = root / name
+                if bundled.exists():
+                    return str(bundled)
 
-    which = shutil.which("exiftool")
-    if which:
-        return which
+    for name in _exiftool_executable_names():
+        which = shutil.which(name)
+        if which:
+            return which
 
     for cand in ("/opt/homebrew/bin/exiftool", "/usr/local/bin/exiftool", "/usr/bin/exiftool"):
         if Path(cand).exists():
             return cand
 
-    return "exiftool"
+    return _exiftool_executable_names()[0]
 
 
 def _exiftool_missing_message() -> str:
@@ -329,6 +342,6 @@ def _exiftool_missing_message() -> str:
 
 def is_exiftool_available() -> bool:
     path = _resolve_exiftool_path()
-    if path == "exiftool":
-        return shutil.which("exiftool") is not None
+    if path in _exiftool_executable_names():
+        return any(shutil.which(name) is not None for name in _exiftool_executable_names())
     return Path(path).exists()

@@ -171,3 +171,30 @@ def test_resolve_exiftool_path_prefers_pyinstaller_resource_bin(
 
     resolved = _resolve_exiftool_path()
     assert resolved == str(bundled)
+
+
+def test_resolve_exiftool_path_prefers_windows_pyinstaller_exe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundled_exe = tmp_path / "bin" / "exiftool.exe"
+    bundled_no_ext = tmp_path / "bin" / "exiftool"
+    bundled_exe.parent.mkdir(parents=True, exist_ok=True)
+    bundled_exe.write_text("", encoding="utf-8")
+    bundled_no_ext.write_text("", encoding="utf-8")
+
+    monkeypatch.delenv("PURWAY_EXIFTOOL_PATH", raising=False)
+    monkeypatch.setattr("purway_geotagger.exif.exiftool_writer.os.name", "nt")
+    monkeypatch.setattr("purway_geotagger.exif.exiftool_writer.sys.frozen", True, raising=False)
+    monkeypatch.setattr(
+        "purway_geotagger.exif.exiftool_writer.sys.executable",
+        str(tmp_path / "PurwayGeotagger.exe"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "purway_geotagger.exif.exiftool_writer.resource_path",
+        lambda rel: tmp_path / rel,
+    )
+    monkeypatch.setattr("purway_geotagger.exif.exiftool_writer.shutil.which", lambda _name: None)
+
+    resolved = _resolve_exiftool_path()
+    assert resolved == str(bundled_exe)
