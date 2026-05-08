@@ -673,6 +673,11 @@ Execution source of truth:
     - macOS dev-run verification
 - Cross-doc tracking update completed:
   - `WIND_DATA_IMPLEMENTATION_PHASES.md` updated with WR planning note.
+- WR CI asset inclusion fix completed on 2026-05-08:
+  - updated `.gitignore` so nested WR3A DOCX templates under `config/wind_templates/` are tracked and available in CI.
+  - verification:
+    - `python -m pytest tests/test_wind_docx_writer.py::test_generate_wind_docx_for_wr3a_profile_template tests/test_wind_page_logic.py::test_resolve_wind_template_for_inputs tests/test_wind_template_contract.py::test_wr3a_template_contract_passes_for_each_profile tests/test_wind_template_selector.py::test_select_wind_template_resolves_existing_profile_path -q` (12 passed)
+    - `python -m pytest -q` (157 passed)
 
 ### Methane Metadata Extension Tracking (MME)
 
