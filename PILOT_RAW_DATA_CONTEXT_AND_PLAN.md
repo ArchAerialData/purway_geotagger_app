@@ -696,6 +696,17 @@ Execution source of truth:
   - `python -m pytest -q` (158 passed)
   - `python -m compileall src` (pass)
 
+### macOS CI Test Isolation Tracking
+
+- Date updated: 2026-05-08
+- GitHub Actions run `25572581185` failed in `Build app + run tests` because `tests/test_exiftool_writer.py` monkeypatched global `os.name` to `nt`; on macOS this caused pytest/pathlib to instantiate `WindowsPath` and crash with `NotImplementedError`.
+- The Windows resolver test now patches `_exiftool_executable_names()` directly instead of mutating the process-wide platform flag.
+- Remaining macOS workflow note:
+  - after tests/build pass, `macos-build.yml` intentionally enforces signing secrets on `main`; successful main-branch distribution still requires `MACOS_CERT_P12` and `MACOS_CERT_PASSWORD`.
+- Verification:
+  - `python -m pytest tests/test_exiftool_writer.py -q` (7 passed)
+  - `python -m pytest -q` (158 passed)
+
 ### Methane Metadata Extension Tracking (MME)
 
 Execution source of truth:

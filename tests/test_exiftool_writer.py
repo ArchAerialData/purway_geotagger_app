@@ -183,7 +183,10 @@ def test_resolve_exiftool_path_prefers_windows_pyinstaller_exe(
     bundled_no_ext.write_text("", encoding="utf-8")
 
     monkeypatch.delenv("PURWAY_EXIFTOOL_PATH", raising=False)
-    monkeypatch.setattr("purway_geotagger.exif.exiftool_writer.os.name", "nt")
+    monkeypatch.setattr(
+        "purway_geotagger.exif.exiftool_writer._exiftool_executable_names",
+        lambda: ("exiftool.exe", "exiftool"),
+    )
     monkeypatch.setattr("purway_geotagger.exif.exiftool_writer.sys.frozen", True, raising=False)
     monkeypatch.setattr(
         "purway_geotagger.exif.exiftool_writer.sys.executable",
