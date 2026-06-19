@@ -733,3 +733,6 @@ Execution source of truth:
   - `python -m compileall src` (pass)
 - Deviations:
   - Downstream `pyweb-local` WWM ingestion files referenced by the handoff are not present in this repository, so downstream parsing remains externally verified.
+- Final WWM output handoff added:
+  - `docs/methane-geotagger-extension-request/planning/METHANE_GEOTAGGER_WWM_OUTPUT_HANDOFF.md`
+  - documents verified `F:\Payload Metadata List\Payload Example Data\Methane After Geotagging App v2` Model II/III processed JPGs and sidecar proof artifacts for downstream parser validation.
