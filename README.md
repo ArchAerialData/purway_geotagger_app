@@ -111,7 +111,14 @@ Provider order for full-row fetch:
 3. Open-Meteo historical archive (`archive-api.open-meteo.com`)
 
 Missing-field backfill order:
-- NWS primary rows are backfilled field-by-field from METAR, then Open-Meteo when fields are missing.
+- Partial rows from either NWS or METAR continue through the remaining providers, independently for Start and End.
+- Autofill Start/End time boxes can be selected, cleared and retyped. Complete entries like `09:30` / `0930` become `9:30 AM`, and `15:30` / `1530` become `3:30 PM`. Explicit `3:30 PM` input and manual AM/PM selection also work. Blank, incomplete and invalid entries block lookup without restoring the old value. DOCX times remain in 12-hour format.
+- Station readings default to a maximum **25-mile radial distance** and **60-minute time difference** from each requested time. The lookup dialog can adjust these limits; they are application defaults, not a guarantee of site conditions.
+- Open-Meteo fallback fields are explicitly labeled **estimated** (historical model/reanalysis data).
+- **View Weather Sources** expands each field's station/model, distance, actual measurement time and source link. Mixed sources and unresolved fields are disclosed; manual values remain editable.
+- Changing a report date/time/timezone flags previously imported values for review. Autofill derives CST/CDT (or the applicable zone) from the selected location and report date.
+- Per-field evidence, lookup context, original imported values and manual-edit status are saved in `.debug.json` and DOCX `customXml/purway_wind_metadata.xml`.
+- Manual generation remains available when weather lookup fails. Missing gusts are never assumed to be zero.
 
 Code pointers:
 - Provider clients + merge logic: `src/purway_geotagger/core/wind_weather_autofill.py`
@@ -356,3 +363,38 @@ The following are intentionally deferred manual checks to complete before final 
   - Finder-launch ExifTool preflight gate
   - Phase 4 and 4A pilot-manual UX gates
   - Phase 5 new-pilot end-to-end manual gate
+
+
+### Rebuild the Windows app locally
+
+After installing the pinned requirements and Windows `tzdata`, run the tests, then:
+
+```powershell
+./scripts/windows/build_exe.ps1 -PythonExe ./build/ci-venv311/Scripts/python.exe
+```
+
+Use `-PythonExe python` for another configured build environment. The same script is used by
+both Windows CI workflows. It builds in staging, validates bundled resources and ExifTool,
+then replaces `dist/windows/PurwayGeotagger`, preserving the previous folder with a timestamp.
+`build-info.json` records the executable hash and Python source hashes used for verification.
+Keep `PurwayGeotagger.exe` and its `_internal` folder together.
+
+Every Windows build must publish the newest successful app to this stable path:
+`dist/windows/PurwayGeotagger/PurwayGeotagger.exe`. Always use the script above; do not
+leave a new build only in staging or a versioned directory. Verify the output and
+`build-info.json` before declaring the build complete.
+
+On this workstation, Git Bash's `~/.bashrc` defines `methane` to launch that executable:
+
+```bash
+alias methane='"/c/Users/rbake/Desktop/VS Code Shortcuts/purway_geotagger_app/dist/windows/PurwayGeotagger/PurwayGeotagger.exe"'
+```
+
+Open a new Git Bash terminal, or run `source ~/.bashrc`, then type `methane`.
+The alias always uses the latest successful local build without needing edits.
+If the repository moves, update the absolute path in the alias.
+
+Local builds are manual; saving code does not rebuild the app. The `windows-exe`
+GitHub workflow is manually triggered, while `windows-installer` runs on pushes to
+`main` or manual dispatch. Those workflows build on GitHub and do not update this
+workstation's executable. Run the local build command above to refresh it.

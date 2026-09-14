@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, time
 import re
 from typing import Any
@@ -93,6 +93,7 @@ class WindDebugPayload:
     normalized_end: dict[str, str]
     computed_strings: dict[str, str]
     placeholder_map: dict[str, str]
+    weather_evidence: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -104,6 +105,7 @@ class WindDebugPayload:
             "normalized_end": dict(self.normalized_end),
             "computed_strings": dict(self.computed_strings),
             "placeholder_map": dict(self.placeholder_map),
+            "weather_evidence": self.weather_evidence,
         }
 
 

@@ -736,3 +736,52 @@ Execution source of truth:
 - Final WWM output handoff added:
   - `docs/methane-geotagger-extension-request/planning/METHANE_GEOTAGGER_WWM_OUTPUT_HANDOFF.md`
   - documents verified `F:\Payload Metadata List\Payload Example Data\Methane After Geotagging App v2` Model II/III processed JPGs and sidecar proof artifacts for downstream parser validation.
+
+
+### Weather Hardening Maintenance (WSH)
+
+- [x] Close weather distance/time validation, provenance, partial fallback and timezone gaps.
+- [x] Preserve manual workflow and verify report evidence export.
+- [x] Full pinned Python 3.11 regression suite (177 passed).
+- [x] Rebuild and verify Windows executable at `dist/windows/PurwayGeotagger/PurwayGeotagger.exe`.
+
+Gate: **complete**; all WSH items verified. See `WIND_WEATHER_AUTOFILL_SPIKE_PLAN.md` for defaults and details.
+Phase Notes (completed, 2026-09-10):
+- `build/ci-venv311/Scripts/python.exe -B -m pytest -p no:cacheprovider -q`: 177 passed.
+- `scripts/windows/build_exe.ps1 -PythonExe ./build/ci-venv311/Scripts/python.exe`: passed.
+- NWS/METAR live checks passed. GUI-to-DOCX evidence integration and rendered source details verified.
+- Final Windows executable source hashes and seven embedded modules match current source; packaged
+  startup and clean exit verified. Final build time: 2026-09-10 15:34:22 UTC.
+- Previous Windows app preserved in timestamped backups. Packaging is user-requested; no macOS
+  build was run, and macOS signed/notarized release smoke remains tracked separately.
+- Deviation: distance/time thresholds were not previously specified. WSH uses documented,
+  adjustable application defaults (25 miles / 60 minutes), rather than asserting a meteorological standard.
+
+
+### Autofill Time Entry Maintenance (WTE)
+
+- [x] Replace popup spin-box time editing with a clearable text control and retain AM/PM selectors.
+- [x] Format complete HH:MM/HHMM input from 24-hour time to displayed 12-hour time; support AM/PM suffixes.
+- [x] Keep blank/partial/invalid entries editable, reject invalid times without clamping, and guard all autofill submission paths.
+- [x] Verify actual typing, select-all/delete, paste, midnight/noon, AM/PM overrides and 12-hour report output.
+- [x] Full regression suite, rendered popup review and rebuilt Windows executable verification.
+
+Gate: **complete**; all WTE items verified.
+Phase Notes (completed, 2026-09-10): Scoped to the Autofill Wind/Temp Data popup. Bare new
+entries use 24-hour interpretation (09:30 = AM; 15:30 = PM); users can include an AM/PM suffix
+or override the adjacent selector. 24:00 is rejected rather than silently becoming noon.
+
+- Verification: `build/ci-venv311/Scripts/python.exe -B -m pytest -p no:cacheprovider -q` (177 passed).
+- Build: `scripts/windows/build_exe.ps1 -PythonExe ./build/ci-venv311/Scripts/python.exe` (passed),
+  final executable built 2026-09-10 15:51:35 UTC at `dist/windows/PurwayGeotagger/PurwayGeotagger.exe`.
+- Verified source hashes and embedded bytecode for the new editor, popup, page and DOCX formatter.
+  Packaged app reached its main window and exited cleanly (exit code 0).
+- Popup layout visually reviewed; existing Windows distribution preserved in timestamped backups.
+  No macOS package build was run; widgets use portable Qt controls and standard shortcuts.
+
+### Windows launcher maintenance — 2026-09-10
+- [x] Configure local Git Bash `methane` alias for `dist/windows/PurwayGeotagger/PurwayGeotagger.exe`.
+- [x] Document stable output requirement in README, AGENTS.md and the shared Windows build script.
+- [x] Verify fresh Git Bash loads the alias, its target exists, and the executable hash matches `build-info.json`.
+
+Phase Notes (2026-09-10): Maintenance only; no new implementation phase. The existing build script already promotes the complete successful build to the stable location and preserves the previous build. Documented that local builds are manual and CI does not refresh this workstation. No application code changed or rebuild needed; verification above passed.

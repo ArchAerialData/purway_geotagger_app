@@ -235,6 +235,9 @@ def _build_embedded_metadata_xml(*, report: WindReportBuildResult, output_docx_p
         entry = ET.SubElement(component_values, "entry", {"key": key})
         entry.text = component_map[key]
 
+    weather = ET.SubElement(root, "weatherEvidence", {"format": "json", "schemaVersion": "1"})
+    weather.text = json.dumps(report.debug_payload.weather_evidence, sort_keys=True)
+
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 

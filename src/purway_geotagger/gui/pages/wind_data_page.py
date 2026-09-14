@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
-from PySide6.QtCore import QDate, QSize, QTimer, Qt, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QIcon, QLinearGradient, QPainter, QPainterPath, QRadialGradient
+from PySide6.QtCore import QDate, QSize, QTimer, Qt
+from PySide6.QtGui import QColor, QIcon, QLinearGradient, QPainter, QPainterPath, QRadialGradient
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -34,6 +35,8 @@ from purway_geotagger.core.wind_weather_autofill import (
     WindAutofillResult,
 )
 from purway_geotagger.core.wind_docx_writer import WindDocxWriterError, generate_wind_docx_report
+from purway_geotagger.core.wind_weather_evidence import WindWeatherEvidence, report_timezone
+from purway_geotagger.gui.widgets.wind_source_details import WindSourceDetails
 from purway_geotagger.gui.pages.wind_data_logic import (
     build_live_preview_payload,
     compute_generate_availability,
@@ -158,6 +161,8 @@ class WindDataPage(QWidget):
         self._last_debug_json: Path | None = None
         self._last_validation_error: str | None = None
         self._last_autofill_source_url: str | None = None
+        self._weather_evidence = WindWeatherEvidence()
+        self._applying_weather = False
         self._autofill_dialog: WindAutofillDialog | None = None
         self._autofill_search_workers: dict[int, WindLocationSearchWorker] = {}
         self._autofill_fill_worker: WindAutofillWorker | None = None
@@ -294,9 +299,11 @@ class WindDataPage(QWidget):
             "<b>Source hierarchy:</b><br>"
             "1) NOAA/NWS station observations (api.weather.gov)<br>"
             "2) AviationWeather METAR observations (aviationweather.gov)<br>"
-            "3) Open-Meteo historical hourly archive (archive-api.open-meteo.com)<br><br>"
+            "3) Open-Meteo historical model estimates (archive-api.open-meteo.com)<br><br>"
             "<b>Missing-value fill order:</b><br>"
             "NWS -> METAR -> Open-Meteo (missing fields only).<br><br>"
+            "Station readings must meet the selected distance and time limits. "
+            "Review per-field sources below; estimates are labeled and all evidence is saved with the report.<br><br>"
             "<span style='color:#D93025; font-weight:700;'>"
             "Pilots are responsible for verifying data accuracy before client delivery. "
             "Any data uploaded to internal folders is treated as accurate and verified."
@@ -326,6 +333,8 @@ class WindDataPage(QWidget):
 
         self.entry_grid = WindEntryGrid()
         layout.addWidget(self.entry_grid)
+        self.source_details = WindSourceDetails()
+        layout.addWidget(self.source_details)
         return card
 
     def _build_preview_card(self) -> QFrame:
@@ -471,7 +480,7 @@ class WindDataPage(QWidget):
         self.open_debug_btn.clicked.connect(self._open_generated_debug)
         layout.addWidget(self.open_debug_btn)
 
-        self.open_source_btn = QPushButton("Open Autofill Source URL")
+        self.open_source_btn = QPushButton("View Weather Sources")
         self.open_source_btn.setEnabled(False)
         self.open_source_btn.clicked.connect(self._open_autofill_source_url)
         layout.addWidget(self.open_source_btn)
@@ -487,12 +496,29 @@ class WindDataPage(QWidget):
         return layout
 
     def _wire_signals(self) -> None:
+        for row in ("start", "end"):
+            for name, suffix in (("direction", "direction_edit"), ("speed_mph", "speed_spin"),
+                                 ("gust_mph", "gust_spin"), ("temp_f", "temp_spin")):
+                control = getattr(self.entry_grid, f"{row}_{suffix}")
+                signal = control.textChanged if name == "direction" else control.valueChanged
+                signal.connect(lambda value, r=row, n=name: self._mark_weather_manual(r, n, value))
         self.client_edit.textChanged.connect(self._refresh_preview)
         self.system_edit.textChanged.connect(self._refresh_preview)
         self.region_edit.textChanged.connect(self._refresh_preview)
         self.date_edit.dateChanged.connect(self._refresh_preview)
         self.timezone_edit.textChanged.connect(self._refresh_preview)
         self.entry_grid.changed.connect(self._refresh_preview)
+
+    def _mark_weather_manual(self, row: str, name: str, value: object) -> None:
+        if not self._applying_weather:
+            self._weather_evidence.mark_manual(row, name, value)
+            self._refresh_weather_evidence()
+
+    def _refresh_weather_evidence(self) -> dict:
+        evidence = self._weather_evidence.snapshot(self._build_metadata(),
+            self.entry_grid.start_row_raw(), self.entry_grid.end_row_raw())
+        self.source_details.set_evidence(evidence)
+        return evidence
 
     def _build_metadata(self) -> WindReportMetadataRaw:
         return WindReportMetadataRaw(
@@ -504,6 +530,7 @@ class WindDataPage(QWidget):
         )
 
     def _refresh_preview(self) -> None:
+        self._refresh_weather_evidence()
         metadata = self._build_metadata()
         start_raw = self.entry_grid.start_row_raw()
         end_raw = self.entry_grid.end_row_raw()
@@ -611,6 +638,8 @@ class WindDataPage(QWidget):
             return
 
         output_dir = Path(self.output_dir_edit.text().strip())
+        report = replace(report, debug_payload=replace(report.debug_payload,
+                         weather_evidence=self._refresh_weather_evidence()))
         try:
             render = generate_wind_docx_report(
                 template_path=selection.template_path,
@@ -651,9 +680,7 @@ class WindDataPage(QWidget):
             open_in_finder(self._last_debug_json)
 
     def _open_autofill_source_url(self) -> None:
-        if not self._last_autofill_source_url:
-            return
-        QDesktopServices.openUrl(QUrl(self._last_autofill_source_url))
+        self.source_details.show_details()
 
     def _open_autofill_dialog(self) -> None:
         if self._autofill_dialog is not None and self._autofill_dialog.isVisible():
@@ -753,6 +780,8 @@ class WindDataPage(QWidget):
             )
             return
 
+        if not self._autofill_dialog.validate_times():
+            return
         report_date = self._autofill_dialog.selected_report_date()
         selected_qdate = QDate(report_date.year, report_date.month, report_date.day)
         if self.date_edit.date() != selected_qdate:
@@ -768,6 +797,7 @@ class WindDataPage(QWidget):
             report_date=report_date,
             start_time_24h=selected_start_time_24h,
             end_time_24h=selected_end_time_24h,
+            policy=self._autofill_dialog.selected_policy(),
         )
 
         worker = WindAutofillWorker(request=request)
@@ -785,13 +815,28 @@ class WindDataPage(QWidget):
             self._on_autofill_failed("Autofill returned an unexpected payload.")
             return
 
-        summary = self.entry_grid.apply_autofill_rows(start=payload.start, end=payload.end)
+        if payload.request is not None:
+            request = payload.request
+            if (self.date_edit.date().toPython() != request.report_date
+                    or self.entry_grid.start_time_24h_text() != request.start_time_24h
+                    or self.entry_grid.end_time_24h_text() != request.end_time_24h):
+                self._on_autofill_failed("Report date or times changed during lookup. Run autofill again for the new times.")
+                return
+        self._applying_weather = True
+        try:
+            self._weather_evidence.apply(payload)
+            label = report_timezone(payload)
+            if label:
+                self.timezone_edit.setText(label)
+            summary = self.entry_grid.apply_autofill_rows(start=payload.start, end=payload.end)
+        finally:
+            self._applying_weather = False
         self._last_autofill_source_url = payload.verification_url
-        self.open_source_btn.setEnabled(bool(self._last_autofill_source_url))
+        self.open_source_btn.setEnabled(bool(payload.source_urls or self._last_autofill_source_url))
         self._refresh_preview()
 
         message_parts = [
-            f"Autofill applied from {payload.location.display_name}.",
+            f"Autofill applied for {payload.location.display_name}. Review the measurement sources below Wind Inputs.",
             (
                 "Applied fields: "
                 f"Start[{', '.join(summary.start_applied_fields) or 'none'}], "
@@ -802,20 +847,16 @@ class WindDataPage(QWidget):
         warning_lines: list[str] = []
         for warning in payload.warnings:
             warning_lines.append(warning)
-        for warning in payload.start.warnings:
-            warning_lines.append(f"Start: {warning}")
-        for warning in payload.end.warnings:
-            warning_lines.append(f"End: {warning}")
 
         if warning_lines:
-            message_parts.append("Some fields were not available from the provider:")
+            message_parts.append("Weather lookup notes:")
             message_parts.extend(warning_lines)
             if payload.verification_url:
-                message_parts.append("Use 'Open Autofill Source URL' to manually verify source observations.")
+                message_parts.append("Use 'View Weather Sources' for each field’s station/model and measurement time.")
             self._set_status("\n".join(message_parts), css_class="status_info")
         else:
             if payload.verification_url:
-                message_parts.append("Use 'Open Autofill Source URL' to manually verify source observations.")
+                message_parts.append("Use 'View Weather Sources' for each field’s station/model and measurement time.")
             self._set_status(" ".join(message_parts), css_class="status_success")
 
         if self._autofill_dialog is not None:

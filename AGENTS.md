@@ -57,6 +57,8 @@ All implementation must follow `PILOT_RAW_DATA_CONTEXT_AND_PLAN.md` and `IMPLEME
 ## 6) Packaging / scripts organization
 - macOS scripts live under `scripts/macos/` (not repo root).
 - Windows scripts live under `scripts/windows/`.
+- For every Windows build, use `scripts/windows/build_exe.ps1` so the newest successful build replaces the entire `dist/windows/PurwayGeotagger/` folder, including `_internal`. The stable launcher target is `dist/windows/PurwayGeotagger/PurwayGeotagger.exe`; do not leave the newest build only in staging or a versioned folder. Verify the output and `build-info.json` before reporting completion.
+- The local Git Bash alias `methane` in `~/.bashrc` targets that stable executable. Keep this path stable for future builds. CI artifacts do not automatically update the local checkout; local builds must be run explicitly (see README).
 - Pilot distribution should be a **signed + notarized `.app`**; avoid requiring Homebrew/Terminal/venv on pilot machines.
 
 ---
