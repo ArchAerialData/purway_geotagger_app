@@ -57,7 +57,9 @@ Retrospective window findings:
 - Same-day and recent-day retrieval is feasible from station observations.
 - Older retention depth can vary by station/API behavior; this feature should target current day + recent days first.
 
-## 5) Locked UX/Behavior Rules for Autofill
+## 5) Original UX/Behavior Rules for Autofill
+
+The WSH maintenance section below supersedes the original single-source-URL and unrestricted nearest-observation policies.
 
 Location input:
 - Single search field (ZIP/city/state/address) with suggestion list.
@@ -289,3 +291,67 @@ Defer if:
 - https://open-meteo.com/en/docs/geocoding-api
 - https://open-meteo.com/en/pricing
 - https://www.ncei.noaa.gov/cdo-web/webservices/v2
+
+
+## Weather hardening maintenance — WSH (2026-09-10)
+
+This maintenance phase follows the completed WS phases; the existing macOS release smoke
+checks remain tracked in `RELEASE_READINESS_OPEN_ITEMS.md`.
+
+- [x] Enforce radial station distance and per-target time eligibility for NWS/METAR.
+- [x] Default to 25 miles / 60 minutes, adjustable in the lookup dialog (1–100 miles / 1–120 minutes).
+  These are application defaults, not a meteorological assurance of site representativeness.
+- [x] Query recent station data around each historical target; reject result-cap responses,
+  unknown station coordinates, future observations and future target times.
+- [x] Preserve usable Start/End rows independently and run the complete missing-field provider chain.
+- [x] Preserve per-field provider, station/model, measurement UTC/local time, distance, location,
+  requested time, lookup limits, retrieval time and source URL.
+- [x] Label Open-Meteo Best Match output as model/reanalysis estimates, and disclose mixing.
+- [x] Preserve missing/manual values; distinguish missing, unverified, observed, estimated,
+  manually edited and report-context-changed entries. Keep original evidence after edits.
+- [x] Derive the report timezone label from the selected location and report date; reject
+  ambiguous/nonexistent DST lookup times, and use epoch timestamps for archive data.
+- [x] Keep evidence visible in the Wind Inputs UI and persist it in debug JSON and DOCX custom XML.
+- [x] Regression tests, GUI-to-DOCX integration and live provider verification.
+- [x] Build and smoke-check the Windows distribution with source/build fingerprints.
+
+Gate: **complete**; all WSH work items above verified. Windows packaging does not close the outstanding
+macOS signed/notarized app checks.
+
+Phase Notes (completed): 2026-09-10.
+- `build/ci-venv311/Scripts/python.exe -B -m pytest -p no:cacheprovider -q`: 177 passed.
+- `scripts/windows/build_exe.ps1 -PythonExe ./build/ci-venv311/Scripts/python.exe`: passed.
+- Final Windows app: `dist/windows/PurwayGeotagger/PurwayGeotagger.exe`, built 2026-09-10 15:34:22 UTC.
+- Verified executable SHA256 and all source hashes against `build-info.json`; recursively compared
+  the seven changed/new weather/report modules in the executable's PYZ archive with current source bytecode.
+- Packaged hidden launch reached the `Purway Geotagger` window and closed normally with exit code 0.
+- Bundled ExifTool 13.50, timezone data, assets and report templates verified.
+- Rendered Wind Inputs/source details visually reviewed; GUI-to-DOCX integration verifies manual edits,
+  timezone labels and identical JSON evidence in sidecar/custom XML.
+- Previous Windows distribution preserved in timestamped backup folders. No macOS build was run;
+  existing signed/notarized macOS checks remain in the release-readiness tracker.
+Live Houston NWS and METAR queries returned nearby station records within the policy.
+Missing gust stays missing unless a valid fallback supplies it; calm/variable winds are
+preserved as CALM/VRB. Unresolved values never become invented zero gusts.
+
+Provider references checked 2026-09-10:
+- https://aviationweather.gov/data/api/ (history, result limits and HTTP 204)
+- https://aviationweather.gov/data/schema/openapi.yaml (METAR date/hours parameters)
+- https://open-meteo.com/en/docs/historical-weather-api (model/reanalysis and epoch times)
+
+
+## Autofill Time Entry Maintenance (WTE, 2026-09-10)
+
+The popup now uses clearable text entries for Start/End, retaining the adjacent AM/PM selectors
+and custom steppers. Complete typed or pasted HH:MM and HHMM entries use 24-hour interpretation
+and normalize to a displayed 12-hour time. Explicit AM/PM suffixes and manual selector overrides
+are supported. Blank and partial input is preserved while editing; invalid values are not
+clamped or replaced with old values. Both the button and location double-click paths require
+valid times, and the page controller validates before changing report inputs or starting a worker.
+The report writer still receives canonical HH:MM input and renders 12-hour DOCX times.
+
+Verification: real QTest typing, select-all/delete, paste, partial input, invalid values,
+midnight/noon, AM/PM overrides, busy-state protection, and report formatting passed.
+Full pinned Python 3.11 suite: 177 passed. Popup layout rendered and visually reviewed.
+Final Windows build verification is recorded in the WTE Phase Notes in
+`PILOT_RAW_DATA_CONTEXT_AND_PLAN.md`.

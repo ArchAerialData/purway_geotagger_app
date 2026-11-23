@@ -6,7 +6,7 @@ This README is the canonical repo map for humans and agents. Every section inclu
 
 ## What This App Does
 
-- Methane workflow: scan dropped Raw Data folders, correlate JPGs to CSV records, inject EXIF/XMP, generate cleaned methane CSVs, and optionally KMZ outputs.
+- Methane workflow: scan dropped Raw Data folders, correlate JPGs to CSV/XLSX records, inject EXIF/XMP, generate cleaned methane CSV/XLSX files, and optionally KMZ outputs.
   - Core pipeline: `src/purway_geotagger/core/pipeline.py`
   - Methane outputs: `src/purway_geotagger/ops/methane_outputs.py`
   - Methane GUI: `src/purway_geotagger/gui/pages/methane_page.py`
@@ -35,19 +35,35 @@ This README is the canonical repo map for humans and agents. Every section inclu
 
 Behavior:
 - Forces in-place EXIF injection on matched JPGs.
-- Generates cleaned methane CSV files beside source methane CSVs.
-- Optionally generates KMZ files from cleaned CSV outputs.
+- Generates cleaned methane CSV/XLSX files beside their source metadata files.
+- Optionally generates KMZ files from retained rows in cleaned CSV/XLSX outputs.
 - Writes run artifacts (`manifest.csv`, `run_log.txt`, `run_config.json`, `run_summary.json`) to a run log folder.
 
 Code pointers:
 - Mode defaults/options mapping: `src/purway_geotagger/gui/controllers.py`
 - Mode state model/validation: `src/purway_geotagger/gui/mode_state.py`
-- Cleaned CSV + KMZ generation: `src/purway_geotagger/ops/methane_outputs.py`
+- Cleaned CSV/XLSX + KMZ generation: `src/purway_geotagger/ops/methane_outputs.py`
 
 Output naming:
 - Cleaned CSV: `*_Cleaned_<threshold>-PPM.csv`
-- KMZ: same stem with `.kmz`
+- Cleaned XLSX: `*_Cleaned_<threshold>-PPM.xlsx`
+- CSV KMZ: `*_Cleaned_<threshold>-PPM.kmz`
+- Workbook KMZ: `*_Cleaned_<threshold>-PPM_XLSX.kmz`, grouped by worksheet
 - Naming helper: `src/purway_geotagger/ops/methane_outputs.py`
+
+### Calibration filtering and PAC (CSV/XLSX)
+
+In Methane Only and Combined, **Exclude calibration readings below 1 m** starts enabled for each new job. It removes rows only when finite methane concentration is strictly greater than 0 and finite relative altitude is strictly below 1 meter. Exactly 1 meter is retained for the remaining filters. This runs before the PPM threshold and photo-presence checks; the exclusion counts do not overlap. Missing, invalid or non-finite altitude does not establish calibration and produces a warning. Disabling the checkbox restores threshold/photo-only filtering. Photo matching, geotagging and Encroachment copies still use the original input rows.
+
+Each data sheet independently preserves any exact `PAC` header (ignoring case and surrounding whitespace), its position and all retained values, including blanks. When absent, `PAC` is appended using methane concentration divided by relative altitude, rounded to two decimals by the same calculator used for photos. Unavailable/non-finite inputs, altitude <= 0 or non-finite results produce a blank and a count. Existing spreadsheet PAC is authoritative only for cleaned tables; photo PAC is always independently calculated.
+
+XLSX support requires no installed Excel. Every worksheet, including hidden sheets, is inspected. One table per sheet is supported; headers may follow introductory rows and columns may appear in any order. A header must contain a recognized methane field plus an altitude, photo, timestamp or coordinate field. Capitalization, surrounding whitespace, spaces, underscores and hyphens are normalized for field detection. Explicit `methane_concentration` and `relative_altitude` headers take precedence over aliases. Ambiguous mappings, duplicate headers and multiple table headers fail the workbook with a sheet-specific error. Unrelated sheets are copied as saved values and excluded from matching/filtering. Conflicting photo matches across sheets/files report ambiguity with source locations.
+
+Cleaned workbooks are **data-focused copies**: sheet names/order/visibility, introductory rows, column order, retained values and basic date/time number formats are preserved. Literal strings stay text. Formulas become their saved results; missing results fail the entire workbook with instructions to recalculate and save it first. Cached empty-string results are accepted. Original formulas, charts, macros and styling are not preserved. Source CSV/XLSX files are never overwritten. Temporary output files replace earlier cleaned outputs only after successful completion; failed or cancelled writes leave earlier outputs intact.
+
+Run logs/summaries report per-file and per-sheet calibration, threshold, invalid-methane, missing-photo and retained-row counts, plus preserved/calculated/unavailable PAC and altitude warnings. Preview/schema tools and manifests retain workbook, sheet and original row provenance. Legacy summary keys such as `source_csv` and `cleaned_csv` remain compatible and can now contain XLSX paths, with `source_format`, `sheets`, `counts` and `warnings` added. The saved run configuration includes `methane_exclude_calibration`.
+
+Implementation: `parsers/table_inputs.py`, `parsers/columns.py`, `ops/table_export.py`, `ops/methane_outputs.py` and `core/pac_calculator.py` under `src/purway_geotagger/`. Dependencies are pinned to [openpyxl 3.1.5](https://pypi.org/project/openpyxl/3.1.5/) and `defusedxml==0.7.1`; the reader requires XML protection. Formula handling follows [openpyxl's cached-value loading behavior](https://openpyxl.readthedocs.io/en/stable/tutorial.html#loading-from-a-file).
 
 ### 2) Encroachment Mode
 
@@ -111,21 +127,35 @@ Provider order for full-row fetch:
 3. Open-Meteo historical archive (`archive-api.open-meteo.com`)
 
 Missing-field backfill order:
-- NWS primary rows are backfilled field-by-field from METAR, then Open-Meteo when fields are missing.
+- Partial rows from either NWS or METAR continue through the remaining providers, independently for Start and End.
+- Start/End time boxes on both the main Wind Data page and the autofill dialog can be fully selected, cleared, pasted into and retyped. Complete entries like `09:30` / `0930` become `9:30 AM`, and `15:30` / `1530` become `3:30 PM`. Explicit `3:30 PM` input and manual AM/PM selection also work. Blank, incomplete and invalid entries block report generation or lookup without restoring the old value. DOCX times remain in 12-hour format.
+- Station readings default to a maximum **25-mile radial distance** and **60-minute time difference** from each requested time. The lookup dialog can adjust these limits; they are application defaults, not a guarantee of site conditions.
+- Open-Meteo fallback fields are explicitly labeled **estimated** (historical model/reanalysis data).
+- **View Weather Sources** expands each field's station/model, distance, actual measurement time and source link. Mixed sources and unresolved fields are disclosed; manual values remain editable.
+- Changing a report date/time/timezone flags previously imported values for review. Autofill derives CST/CDT (or the applicable zone) from the selected location and report date.
+- Per-field evidence, lookup context, original imported values and manual-edit status are saved in `.debug.json` and DOCX `customXml/purway_wind_metadata.xml`.
+- Manual generation remains available when weather lookup fails. Missing gusts are never assumed to be zero.
 
 Code pointers:
 - Provider clients + merge logic: `src/purway_geotagger/core/wind_weather_autofill.py`
 - Autofill dialog UI: `src/purway_geotagger/gui/widgets/wind_autofill_dialog.py`
 
+### Calibration/XLSX verification (2026-09-28)
+
+- Full regression suite: **232 passed**; source log: `build/calibration-xlsx-tests.log`.
+- Real ExifTool verification covered CSV/XLSX inputs, calibration photo retention, independently calculated photo PAC and Encroachment copies. Source tables remained unchanged.
+- Methane/Combined controls and populated reports reviewed in light/dark themes; wheel protection retained.
+- Latest Windows build: **2026-09-28T16:34:27.6167969Z**, at the stable `dist/windows/PurwayGeotagger/PurwayGeotagger.exe` path used by `methane`. Executable hash, all 69 source hashes, embedded changed modules, XLSX/XML dependencies and native startup/clean exit verified. Full results are in `PILOT_RAW_DATA_CONTEXT_AND_PLAN.md`.
+
 ## Input Scanning and Correlation
 
 Scanner:
-- Recursively scans folders for JPG and CSV.
+- Recursively scans folders for JPG/JPEG, CSV and XLSX. Excel lock files (`~$*`), generated `_Cleaned_<threshold>-PPM` tables, `.xls` and `.xlsm` are excluded.
 - Skips macOS artifacts (`._*`, `.DS_Store`, `__MACOSX`).
 - Implementation: `src/purway_geotagger/core/scanner.py`
 - Artifact filter helpers: `src/purway_geotagger/util/paths.py`
 
-CSV parsing and photo matching:
+CSV/XLSX parsing and photo matching:
 - Column heuristics for photo/lat/lon/time/ppm + extended telemetry.
 - Filename join preferred; timestamp join fallback with threshold and ambiguity handling.
 - Implementation: `src/purway_geotagger/parsers/purway_csv.py`
@@ -133,7 +163,7 @@ CSV parsing and photo matching:
 
 Preview/schema tools:
 - Preview builder: `src/purway_geotagger/core/preview.py`
-- CSV schema dialog plumbing: `src/purway_geotagger/gui/widgets/schema_dialog.py`
+- CSV/XLSX schema dialog plumbing: `src/purway_geotagger/gui/widgets/schema_dialog.py`
 
 ## EXIF/XMP Injection Contract
 
@@ -289,7 +319,7 @@ bash scripts/macos/build_app.sh
   - Resolver logic/order: `src/purway_geotagger/exif/exiftool_writer.py`
   - macOS setup/build notes: `scripts/macos/README.md`
 - Many unmatched photos:
-  - Validate CSV schema detection and join inputs in Preview/Schema tools
+  - Validate CSV/XLSX schema detection and join inputs in Preview/Schema tools
   - Matching logic: `src/purway_geotagger/parsers/purway_csv.py`
   - Preview builder: `src/purway_geotagger/core/preview.py`
   - Run report failure table: `src/purway_geotagger/gui/widgets/run_report_view.py`
@@ -301,6 +331,7 @@ bash scripts/macos/build_app.sh
 
 Representative test coverage pointers:
 - Scanner/macOS artifact handling: `tests/test_scanner.py`
+- Calibration/XLSX/PAC integration: `tests/test_table_workflows.py`, `tests/test_calibration_gui.py`
 - CSV parsing + join logic: `tests/test_purway_csv_parse.py`, `tests/test_join_logic.py`
 - EXIF writer contract: `tests/test_exiftool_writer.py`, `tests/test_exif_extended.py`
 - Pipeline and outputs: `tests/test_pipeline_artifacts.py`, `tests/test_pipeline_phase3_e2e.py`, `tests/test_methane_outputs.py`
@@ -356,3 +387,47 @@ The following are intentionally deferred manual checks to complete before final 
   - Finder-launch ExifTool preflight gate
   - Phase 4 and 4A pilot-manual UX gates
   - Phase 5 new-pilot end-to-end manual gate
+
+
+### Scrolling and form inputs
+
+Form values throughout the app (including number, date/time and dropdown fields)
+ignore the mouse wheel and trackpad scrolling, even while focused. Scrolling over
+a field scrolls its containing page. Type values or use keyboard arrows, clickable
+steppers, calendar buttons and dropdown selections to make intentional changes.
+This policy is installed centrally in `gui/input_wheel_guard.py` at app startup
+and also covers dialogs opened later.
+
+### Rebuild the Windows app locally
+
+After installing the pinned requirements and Windows `tzdata`, run the tests, then:
+
+```powershell
+./scripts/windows/build_exe.ps1 -PythonExe ./build/ci-venv311/Scripts/python.exe
+```
+
+Use `-PythonExe python` for another configured build environment. The same script is used by
+both Windows CI workflows. It builds in staging, validates bundled resources and ExifTool,
+then replaces `dist/windows/PurwayGeotagger`, preserving the previous folder with a timestamp.
+`build-info.json` records the executable hash and Python source hashes used for verification.
+Keep `PurwayGeotagger.exe` and its `_internal` folder together.
+
+Every Windows build must publish the newest successful app to this stable path:
+`dist/windows/PurwayGeotagger/PurwayGeotagger.exe`. Always use the script above; do not
+leave a new build only in staging or a versioned directory. Verify the output and
+`build-info.json` before declaring the build complete.
+
+On this workstation, Git Bash's `~/.bashrc` defines `methane` to launch that executable:
+
+```bash
+alias methane='"/c/Users/rbake/Desktop/VS Code Shortcuts/purway_geotagger_app/dist/windows/PurwayGeotagger/PurwayGeotagger.exe"'
+```
+
+Open a new Git Bash terminal, or run `source ~/.bashrc`, then type `methane`.
+The alias always uses the latest successful local build without needing edits.
+If the repository moves, update the absolute path in the alias.
+
+Local builds are manual; saving code does not rebuild the app. The `windows-exe`
+GitHub workflow is manually triggered, while `windows-installer` runs on pushes to
+`main` or manual dispatch. Those workflows build on GitHub and do not update this
+workstation's executable. Run the local build command above to refresh it.

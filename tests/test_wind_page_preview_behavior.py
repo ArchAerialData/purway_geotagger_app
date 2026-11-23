@@ -63,32 +63,93 @@ def test_main_wind_time_inputs_convert_24h_to_12h_with_meridiem_sync() -> None:
 
     script = """
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt, QTime
+from PySide6.QtTest import QTest
 from purway_geotagger.core.settings import AppSettings
 from purway_geotagger.gui.pages.wind_data_page import WindDataPage
+from purway_geotagger.gui.widgets.mac_stepper import MacStepper
+from purway_geotagger.core.wind_docx import build_wind_template_payload
 
 app = QApplication([])
 page = WindDataPage(AppSettings())
-page.entry_grid.start_time_edit.lineEdit().setText("22:00")
-page.entry_grid.start_time_edit.interpretText()
+page.show()
+page.client_edit.setText("Client")
+page.system_edit.setText("Blackcomb")
+page.output_dir_edit.setText(".")
+page.entry_grid.start_direction_edit.setText("S")
+page.entry_grid.end_direction_edit.setText("N")
 app.processEvents()
-print(
-    "time_normalized",
-    page.entry_grid.start_time_edit.time().toString("h:mm"),
-    page.entry_grid.start_meridiem_combo.currentText(),
-    page.entry_grid.start_time_24h_text(),
-)
-page.entry_grid.start_time_edit.lineEdit().setText("24:00")
-# Simulate user-typed overflow input that gets normalized on editingFinished.
-page.entry_grid._remember_typed_time_text(page.entry_grid.start_time_edit, "24:00")
-page.entry_grid.start_time_edit.editingFinished.emit()
-app.processEvents()
-print(
-    "time_normalized_24",
-    page.entry_grid.start_time_edit.time().toString("h:mm"),
-    page.entry_grid.start_meridiem_combo.currentText(),
-    page.entry_grid.start_time_24h_text(),
-)
+for row in ("start", "end"):
+    if row == "start":
+        page.entry_grid.end_time_edit.setTime(QTime(23, 59))
+    else:
+        page.entry_grid.start_time_edit.setTime(QTime(0, 0))
+    edit = getattr(page.entry_grid, row + "_time_edit")
+    marker = getattr(page.entry_grid, row + "_meridiem_combo")
+    raw_time = getattr(page.entry_grid, row + "_time_24h_text")
+    for typed, displayed, meridiem, canonical in [
+        ("09:30", "9:30", "AM", "09:30"),
+        ("15:30", "3:30", "PM", "15:30"),
+        ("00:00", "12:00", "AM", "00:00"),
+        ("12:00", "12:00", "PM", "12:00"),
+        ("23:59", "11:59", "PM", "23:59"),
+        ("0930", "9:30", "AM", "09:30"),
+        ("1530", "3:30", "PM", "15:30"),
+        ("3:30 PM", "3:30", "PM", "15:30"),
+    ]:
+        edit.setFocus()
+        QTest.keyClick(edit, Qt.Key_A, Qt.ControlModifier)
+        assert edit.selectedText() == edit.text()
+        QTest.keyClick(edit, Qt.Key_Backspace)
+        assert edit.text() == ""
+        assert raw_time() == ""
+        assert not page.generate_btn.isEnabled()
+        QTest.keyClicks(edit, typed)
+        assert edit.text() == displayed, (typed, edit.text())
+        assert marker.currentText() == meridiem
+        assert raw_time() == canonical
+        assert getattr(page, row + "_time_preview").text() == displayed + meridiem.lower(), (row, typed, getattr(page, row + "_time_preview").text(), page._last_validation_error)
+    edit.selectAll()
+    QTest.keyClicks(edit, "15:3")
+    assert edit.text() == "15:3" and not page.generate_btn.isEnabled()
+    QTest.keyClicks(edit, "0")
+    assert edit.text() == "3:30" and raw_time() == "15:30"
+    marker.setCurrentText("AM")
+    assert raw_time() == "03:30"
+    # Reading preview/evidence does not alter selection or rewrite the input.
+    edit.selectAll()
+    page._refresh_preview()
+    assert edit.selectedText() == "3:30"
+    for invalid in ("24:00", "09:99", "bad", ""):
+        edit.selectAll()
+        QTest.keyClick(edit, Qt.Key_Delete)
+        QTest.keyClicks(edit, invalid)
+        assert edit.text() == invalid
+        assert raw_time() == ""
+        assert not page.generate_btn.isEnabled()
+    edit.selectAll()
+    app.clipboard().setText("15:30")
+    edit.paste()
+    assert edit.text() == "3:30" and raw_time() == "15:30"
+    # Existing custom buttons and keyboard stepping remain usable.
+    edit.setCursorPosition(0)
+    stepper = getattr(page.entry_grid, row + "_time_field").findChild(MacStepper)
+    QTest.mouseClick(stepper.up_btn, Qt.LeftButton)
+    assert raw_time() == "16:30"
+    QTest.keyClick(edit, Qt.Key_Down)
+    assert raw_time() == "15:30"
+# The final report continues to use 12-hour AM/PM strings.
+page.entry_grid.start_time_edit.setTime(QTime(15, 30))
+report = build_wind_template_payload(page._build_metadata(),
+    page.entry_grid.start_row_raw(), page.entry_grid.end_row_raw())
+assert report.payload.s_time == "3:30pm" and report.payload.e_time == "3:30pm"
+page.entry_grid.start_time_edit.clear()
+page._open_autofill_dialog()
+assert page._autofill_dialog.start_time_edit.text() == ""
+assert not page._autofill_dialog.validate_times()
+page._autofill_dialog.close()
 page.close()
+print("main_time_editing_verified")
 """
     completed = subprocess.run(
         [sys.executable, "-c", script],
@@ -99,8 +160,7 @@ page.close()
         timeout=30,
     )
     assert completed.returncode == 0, completed.stderr or completed.stdout
-    assert "time_normalized 10:00 PM 22:00" in completed.stdout
-    assert "time_normalized_24 12:00 PM 12:00" in completed.stdout
+    assert "main_time_editing_verified" in completed.stdout
 
 
 def test_autofill_dialog_inherits_report_date_and_applies_bounds() -> None:

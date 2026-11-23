@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from PySide6.QtCore import QDate, QPoint, Qt, QTimer, QTime, Signal
+from PySide6.QtCore import QDate, QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QPalette, QTextCharFormat
 from PySide6.QtWidgets import (
-    QAbstractSpinBox,
     QCalendarWidget,
     QComboBox,
     QDateEdit,
@@ -18,15 +17,16 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMenu,
     QPushButton,
-    QTimeEdit,
+    QSpinBox,
     QToolButton,
     QVBoxLayout,
     QWidget,
     QWidgetAction,
 )
 
-from purway_geotagger.core.wind_weather_autofill import LocationSuggestion
+from purway_geotagger.core.wind_weather_autofill import LocationSuggestion, WeatherMatchPolicy
 from purway_geotagger.gui.widgets.mac_stepper import MacStepper
+from purway_geotagger.gui.widgets.editable_time import EditableTime
 
 
 class WindAutofillDialog(QDialog):
@@ -42,11 +42,10 @@ class WindAutofillDialog(QDialog):
         parent=None,
     ) -> None:
         super().__init__(parent)
-        self._time_normalization_active = False
-        self._typed_time_text: dict[QTimeEdit, str] = {}
+        self._busy = False
         self.setWindowTitle("Autofill Wind/Temp Data")
         self.setModal(True)
-        self.resize(640, 460)
+        self.resize(680, 560)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
@@ -136,24 +135,49 @@ class WindAutofillDialog(QDialog):
         start_label = QLabel("Start")
         start_label.setProperty("cssClass", "subtitle")
         time_card.addWidget(start_label, 2, 0)
-        self.start_time_edit = self._make_time_edit(start_time_24h)
+        self.start_meridiem_combo = self._make_meridiem_combo(start_time_24h)
+        self.start_time_edit = EditableTime(start_time_24h, self.start_meridiem_combo)
         self.start_time_field = self._with_stepper(self.start_time_edit)
         time_card.addWidget(self.start_time_field, 2, 1)
-        self.start_meridiem_combo = self._make_meridiem_combo(start_time_24h)
         time_card.addWidget(self.start_meridiem_combo, 2, 2)
 
         end_label = QLabel("End")
         end_label.setProperty("cssClass", "subtitle")
         time_card.addWidget(end_label, 3, 0)
-        self.end_time_edit = self._make_time_edit(end_time_24h)
+        self.end_meridiem_combo = self._make_meridiem_combo(end_time_24h)
+        self.end_time_edit = EditableTime(end_time_24h, self.end_meridiem_combo)
         self.end_time_field = self._with_stepper(self.end_time_edit)
         time_card.addWidget(self.end_time_field, 3, 1)
-        self.end_meridiem_combo = self._make_meridiem_combo(end_time_24h)
         time_card.addWidget(self.end_meridiem_combo, 3, 2)
         root.addLayout(time_card)
+        time_hint = QLabel("Select all to replace a time. Type 09:30 for AM, 15:30 for PM, or include AM/PM.")
+        time_hint.setWordWrap(True)
+        root.addWidget(time_hint)
+        self.time_error_label = QLabel("Enter complete Start and End times (e.g. 09:30 or 15:30).")
+        self.time_error_label.setProperty("cssClass", "status_error")
+        self.time_error_label.setWordWrap(True)
+        self.time_error_label.hide()
+        root.addWidget(self.time_error_label)
 
-        self._wire_time_normalization(self.start_time_edit, self.start_meridiem_combo)
-        self._wire_time_normalization(self.end_time_edit, self.end_meridiem_combo)
+        limits = QHBoxLayout()
+        defaults = WeatherMatchPolicy()
+        limits.addWidget(QLabel("Station within"))
+        self.distance_limit = QSpinBox()
+        self.distance_limit.setRange(1, 100)
+        self.distance_limit.setValue(int(defaults.max_distance_miles))
+        self.distance_limit.setSuffix(" miles")
+        limits.addWidget(self.distance_limit)
+        limits.addWidget(QLabel("Time difference up to"))
+        self.time_limit = QSpinBox()
+        self.time_limit.setRange(1, 120)
+        self.time_limit.setValue(defaults.max_time_delta_minutes)
+        self.time_limit.setSuffix(" min")
+        limits.addWidget(self.time_limit)
+        root.addLayout(limits)
+        limit_note = QLabel("Limits apply to each requested time. Missing station values may use labeled historical model estimates.")
+        limit_note.setWordWrap(True)
+        root.addWidget(limit_note)
+
 
         search_row = QHBoxLayout()
         search_row.setSpacing(8)
@@ -170,7 +194,7 @@ class WindAutofillDialog(QDialog):
 
         self.result_list = QListWidget()
         self.result_list.setSelectionMode(QListWidget.SingleSelection)
-        self.result_list.itemDoubleClicked.connect(lambda _item: self.autofill_requested.emit())
+        self.result_list.itemDoubleClicked.connect(lambda _item: self._request_autofill())
         self.result_list.itemSelectionChanged.connect(self._on_selection_changed)
         root.addWidget(self.result_list, 1)
 
@@ -190,7 +214,7 @@ class WindAutofillDialog(QDialog):
         self.autofill_btn = QPushButton("Use Selected Location")
         self.autofill_btn.setProperty("cssClass", "run")
         self.autofill_btn.setEnabled(False)
-        self.autofill_btn.clicked.connect(self.autofill_requested.emit)
+        self.autofill_btn.clicked.connect(self._request_autofill)
         actions.addWidget(self.autofill_btn)
         root.addLayout(actions)
 
@@ -199,9 +223,14 @@ class WindAutofillDialog(QDialog):
         self._search_timer.setSingleShot(True)
         self._search_timer.timeout.connect(self._emit_search_from_timer)
         self.query_edit.textChanged.connect(self._on_query_text_changed)
+        self.start_time_edit.validityChanged.connect(self._on_selection_changed)
+        self.end_time_edit.validityChanged.connect(self._on_selection_changed)
 
     def current_query(self) -> str:
         return self.query_edit.text().strip()
+
+    def selected_policy(self) -> WeatherMatchPolicy:
+        return WeatherMatchPolicy(self.distance_limit.value(), self.time_limit.value())
 
     def selected_location(self) -> LocationSuggestion | None:
         item = self.result_list.currentItem()
@@ -215,18 +244,21 @@ class WindAutofillDialog(QDialog):
         return date(selected.year(), selected.month(), selected.day())
 
     def selected_start_time_24h(self) -> str:
-        return _to_24h_time_string(
-            hour_12=self.start_time_edit.time().hour() % 12 or 12,
-            minute=self.start_time_edit.time().minute(),
-            meridiem=self.start_meridiem_combo.currentText(),
-        )
+        return self.start_time_edit.time_24h()
 
     def selected_end_time_24h(self) -> str:
-        return _to_24h_time_string(
-            hour_12=self.end_time_edit.time().hour() % 12 or 12,
-            minute=self.end_time_edit.time().minute(),
-            meridiem=self.end_meridiem_combo.currentText(),
-        )
+        return self.end_time_edit.time_24h()
+
+    def validate_times(self) -> bool:
+        start_valid = self.start_time_edit.commit()
+        end_valid = self.end_time_edit.commit()
+        valid = start_valid and end_valid
+        self.time_error_label.setVisible(not valid)
+        return valid
+
+    def _request_autofill(self) -> None:
+        if not self._busy and self.selected_location() is not None and self.validate_times():
+            self.autofill_requested.emit()
 
     def set_suggestions(self, suggestions: list[LocationSuggestion]) -> None:
         had_query_focus = self.query_edit.hasFocus()
@@ -260,6 +292,7 @@ class WindAutofillDialog(QDialog):
         message: str | None = None,
         allow_typing_when_busy: bool = False,
     ) -> None:
+        self._busy = busy
         lock_inputs = busy and not allow_typing_when_busy
         self.query_edit.setEnabled(not lock_inputs)
         self.search_btn.setEnabled(not lock_inputs)
@@ -272,11 +305,9 @@ class WindAutofillDialog(QDialog):
         self.end_time_field.setEnabled(not lock_inputs)
         self.end_meridiem_combo.setEnabled(not lock_inputs)
         self.cancel_btn.setEnabled(not lock_inputs)
-        if busy and allow_typing_when_busy:
-            # Avoid submitting autofill against stale in-flight search results.
-            self.autofill_btn.setEnabled(False)
-        else:
-            self.autofill_btn.setEnabled((not lock_inputs) and self.selected_location() is not None)
+        self.distance_limit.setEnabled(not lock_inputs)
+        self.time_limit.setEnabled(not lock_inputs)
+        self._on_selection_changed()
         if message:
             self.set_status(message, css_class="status_info")
 
@@ -294,20 +325,12 @@ class WindAutofillDialog(QDialog):
     def _on_query_text_changed(self, _text: str) -> None:
         self._search_timer.start()
 
-    def _on_selection_changed(self) -> None:
-        self.autofill_btn.setEnabled(self.selected_location() is not None)
+    def _on_selection_changed(self, *_args) -> None:
+        valid = self.start_time_edit.is_valid() and self.end_time_edit.is_valid()
+        self.time_error_label.setVisible(not valid)
+        self.autofill_btn.setEnabled(not self._busy and valid and self.selected_location() is not None)
 
-    def _make_time_edit(self, default_24h: str) -> QTimeEdit:
-        hour_24, minute = self._parse_24h(default_24h)
-        hour_12 = hour_24 % 12 or 12
-        edit = QTimeEdit()
-        edit.setDisplayFormat("h:mm")
-        edit.setTime(datetime(2000, 1, 1, hour=hour_12, minute=minute).time())
-        edit.setButtonSymbols(QAbstractSpinBox.NoButtons)
-        edit.setFixedWidth(84)
-        return edit
-
-    def _with_stepper(self, editor: QAbstractSpinBox) -> QWidget:
+    def _with_stepper(self, editor: EditableTime) -> QWidget:
         container = QWidget()
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -335,97 +358,6 @@ class WindAutofillDialog(QDialog):
             return parsed.hour, parsed.minute
         except ValueError:
             return 10, 0
-
-    def _wire_time_normalization(self, time_edit: QTimeEdit, meridiem_combo: QComboBox) -> None:
-        line = time_edit.lineEdit()
-        if line is not None:
-            line.textEdited.connect(
-                lambda text, edit=time_edit: self._remember_typed_time_text(edit, text)
-            )
-        time_edit.timeChanged.connect(
-            lambda _value: self._normalize_time_overflow(time_edit, meridiem_combo)
-        )
-        time_edit.editingFinished.connect(
-            lambda: self._normalize_typed_time_overflow(time_edit, meridiem_combo)
-        )
-
-    def _remember_typed_time_text(self, time_edit: QTimeEdit, text: str) -> None:
-        self._typed_time_text[time_edit] = text
-
-    def _normalize_typed_time_overflow(self, time_edit: QTimeEdit, meridiem_combo: QComboBox) -> None:
-        typed = self._typed_time_text.pop(time_edit, "").strip()
-        if not typed:
-            return
-        parsed = self._parse_typed_time(typed, default_minute=time_edit.time().minute())
-        if parsed is None:
-            return
-        hour, minute = parsed
-        if hour == 0:
-            self._apply_time_and_meridiem(
-                time_edit, meridiem_combo, normalized_hour=12, minute=minute, meridiem="AM"
-            )
-            return
-        if hour > 12:
-            normalized_hour = 12 if hour >= 24 else ((hour - 1) % 12) + 1
-            self._apply_time_and_meridiem(
-                time_edit, meridiem_combo, normalized_hour=normalized_hour, minute=minute, meridiem="PM"
-            )
-
-    def _normalize_time_overflow(self, time_edit: QTimeEdit, meridiem_combo: QComboBox) -> None:
-        if self._time_normalization_active:
-            return
-
-        raw_time = time_edit.time()
-        hour = raw_time.hour()
-        minute = raw_time.minute()
-        if hour == 0:
-            normalized_hour = 12
-            normalized_meridiem = "AM"
-        elif hour > 12:
-            normalized_hour = ((hour - 1) % 12) + 1
-            normalized_meridiem = "PM"
-        else:
-            return
-        self._apply_time_and_meridiem(
-            time_edit,
-            meridiem_combo,
-            normalized_hour=normalized_hour,
-            minute=minute,
-            meridiem=normalized_meridiem,
-        )
-
-    def _apply_time_and_meridiem(
-        self,
-        time_edit: QTimeEdit,
-        meridiem_combo: QComboBox,
-        *,
-        normalized_hour: int,
-        minute: int,
-        meridiem: str,
-    ) -> None:
-        self._time_normalization_active = True
-        try:
-            if meridiem_combo.currentText() != meridiem:
-                meridiem_combo.setCurrentText(meridiem)
-            time_edit.setTime(QTime(normalized_hour, minute))
-        finally:
-            self._time_normalization_active = False
-
-    def _parse_typed_time(self, text: str, *, default_minute: int) -> tuple[int, int] | None:
-        cleaned = (text or "").strip()
-        if not cleaned:
-            return None
-        parts = cleaned.split(":", maxsplit=1)
-        hour_digits = "".join(ch for ch in parts[0] if ch.isdigit())
-        if not hour_digits:
-            return None
-        hour = int(hour_digits)
-        minute = default_minute
-        if len(parts) == 2:
-            minute_digits = "".join(ch for ch in parts[1] if ch.isdigit())
-            if minute_digits:
-                minute = max(0, min(int(minute_digits[:2]), 59))
-        return hour, minute
 
     def _to_qdate(self, value: date) -> QDate:
         return QDate(value.year, value.month, value.day)
@@ -471,18 +403,3 @@ class WindAutofillDialog(QDialog):
     def _on_report_calendar_date_selected(self, value: QDate) -> None:
         self._set_report_date(value)
         self._report_date_menu.hide()
-
-
-def _to_24h_time_string(*, hour_12: int, minute: int, meridiem: str) -> str:
-    if hour_12 < 1 or hour_12 > 12:
-        raise ValueError("hour_12 must be in range 1..12")
-    if minute < 0 or minute > 59:
-        raise ValueError("minute must be in range 0..59")
-    marker = (meridiem or "").strip().upper()
-    if marker not in {"AM", "PM"}:
-        raise ValueError("meridiem must be AM or PM")
-
-    hour_24 = hour_12 % 12
-    if marker == "PM":
-        hour_24 += 12
-    return f"{hour_24:02d}:{minute:02d}"

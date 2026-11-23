@@ -514,3 +514,12 @@ Remaining open decisions:
 - `README.md`
 - `WIND_DATA_DOCX_FEATURE_PLAN.md` (phase-notes alignment only)
 - `PILOT_RAW_DATA_CONTEXT_AND_PLAN.md` (phase notes/checklist updates during execution)
+
+
+### WSH maintenance completion (2026-09-10)
+
+Weather validation, per-field report evidence, fallback and timezone hardening are complete.
+See `WIND_WEATHER_AUTOFILL_SPIKE_PLAN.md` (WSH) for policy defaults and verification.
+The full Python 3.11 suite passed (177 tests); the Windows distribution was rebuilt and
+its embedded weather/report modules verified against current source. Existing macOS release
+checks remain in `RELEASE_READINESS_OPEN_ITEMS.md`.

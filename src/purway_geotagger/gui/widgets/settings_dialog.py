@@ -118,7 +118,7 @@ class SettingsDialog(QDialog):
         self.join_delta_spin.setSuffix(" s")
         self.join_delta_spin.setButtonSymbols(QAbstractSpinBox.NoButtons)
         self.join_delta_spin.setFixedWidth(92)
-        self.join_delta_spin.setToolTip("Max timestamp delta used when correlating images and CSV rows.")
+        self.join_delta_spin.setToolTip("Max timestamp delta used when correlating images and CSV/XLSX rows.")
         self.join_delta_field = self._with_stepper(self.join_delta_spin)
 
         self.ppm_edges_edit = QLineEdit()

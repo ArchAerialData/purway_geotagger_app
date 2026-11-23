@@ -48,7 +48,7 @@ All implementation must follow `PILOT_RAW_DATA_CONTEXT_AND_PLAN.md` and `IMPLEME
 ---
 
 ## 5) Outputs / workflows (confirmed decisions)
-- **Methane**: in‑place EXIF on all matchable JPGs + cleaned CSVs (ppm ≥1000) written **next to** original methane CSVs.
+- **Methane**: in‑place EXIF on all matchable JPGs + cleaned CSV/XLSX files (default ppm ≥1000) written **next to** their original metadata files. The default-on calibration toggle excludes finite methane >0 with finite relative altitude <1 m only from cleaned outputs and their KMZs; never from photo processing. Preserve existing PAC per data sheet, otherwise calculate via the shared PAC calculator. XLSX outputs are saved-value copies; fail uncached formulas rather than erasing them.
 - **Encroachment**: copied JPGs to a **single pilot‑selected folder**, with logs for missing/unprocessed JPGs.
 - **Combined**: a single run produces both outputs; renaming affects only encroachment copies.
 
@@ -57,6 +57,8 @@ All implementation must follow `PILOT_RAW_DATA_CONTEXT_AND_PLAN.md` and `IMPLEME
 ## 6) Packaging / scripts organization
 - macOS scripts live under `scripts/macos/` (not repo root).
 - Windows scripts live under `scripts/windows/`.
+- For every Windows build, use `scripts/windows/build_exe.ps1` so the newest successful build replaces the entire `dist/windows/PurwayGeotagger/` folder, including `_internal`. The stable launcher target is `dist/windows/PurwayGeotagger/PurwayGeotagger.exe`; do not leave the newest build only in staging or a versioned folder. Verify the output and `build-info.json` before reporting completion.
+- The local Git Bash alias `methane` in `~/.bashrc` targets that stable executable. Keep this path stable for future builds. CI artifacts do not automatically update the local checkout; local builds must be run explicitly (see README).
 - Pilot distribution should be a **signed + notarized `.app`**; avoid requiring Homebrew/Terminal/venv on pilot machines.
 
 ---

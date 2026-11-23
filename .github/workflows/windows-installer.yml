@@ -52,57 +52,9 @@ jobs:
           $ErrorActionPreference = "Stop"
           ./scripts/windows/stage_exiftool.ps1 -Version "${env:EXIFTOOL_VERSION}" -BuildDir "build" -StageDir "build/windows_exiftool"
 
-      - name: Build Windows exe folder (PyInstaller onedir)
+      - name: Build Windows exe (shared local/CI script)
         shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-
-          $repo = (Get-Location).Path
-          $srcRoot = Join-Path $repo "src"
-
-          $defaultTemplates = Join-Path $repo "config/default_templates.json"
-          $windTemplates = Join-Path $repo "config/wind_templates"
-          $exiftoolConfig = Join-Path $repo "config/exiftool_config.txt"
-          $assetsDir = Join-Path $repo "assets"
-
-          $bundledExiftool = Join-Path $repo "build/windows_exiftool/exiftool.exe"
-          $bundledExiftoolFiles = Join-Path $repo "build/windows_exiftool/exiftool_files"
-
-          $entry = Join-Path $repo "src/purway_geotagger/app.py"
-
-          $args = @(
-            "--noconfirm",
-            "--clean",
-            "--name", "PurwayGeotagger",
-            "--windowed",
-            "--onedir",
-            "--specpath", "build/pyinstaller/windows",
-            "--workpath", "build/pyinstaller/windows/work",
-            "--distpath", "dist/windows",
-            "--paths", $srcRoot,
-            "--add-data", "$defaultTemplates;config",
-            "--add-data", "$windTemplates;config/wind_templates",
-            "--add-data", "$exiftoolConfig;config",
-            "--add-data", "$assetsDir;assets",
-            "--add-binary", "$bundledExiftool;bin",
-            "--add-data", "$bundledExiftoolFiles;bin/exiftool_files",
-            "--collect-all", "tzdata"
-          )
-
-          python -m PyInstaller @args $entry
-
-          $outDir = "dist/windows/PurwayGeotagger"
-          if (-not (Test-Path $outDir)) { throw "Build failed: $outDir not found." }
-          $internal = Join-Path $outDir "_internal"
-          if (-not (Test-Path $internal)) { throw "Build output missing _internal/ folder (PyInstaller onedir contents)." }
-
-          if (-not (Test-Path "$internal/config/default_templates.json")) { throw "Missing bundled resource: _internal/config/default_templates.json" }
-          if (-not (Test-Path "$internal/config/exiftool_config.txt")) { throw "Missing bundled resource: _internal/config/exiftool_config.txt" }
-          if (-not (Test-Path "$internal/assets")) { throw "Missing bundled resource: _internal/assets/" }
-          if (-not (Test-Path "$internal/bin/exiftool.exe")) { throw "Missing bundled ExifTool: _internal/bin/exiftool.exe" }
-          if (-not (Test-Path "$internal/bin/exiftool_files")) { throw "Missing bundled ExifTool payload: _internal/bin/exiftool_files/" }
-
-          & "$internal/bin/exiftool.exe" "-ver"
+        run: ./scripts/windows/build_exe.ps1 -PythonExe "python" -ExifToolVersion "${env:EXIFTOOL_VERSION}"
 
       - name: Install Inno Setup
         shell: pwsh

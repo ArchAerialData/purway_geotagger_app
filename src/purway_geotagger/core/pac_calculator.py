@@ -1,5 +1,6 @@
 """PAC (Path Average Concentration) calculation utility."""
 from __future__ import annotations
+import math
 
 
 def calculate_pac(
@@ -23,6 +24,7 @@ def calculate_pac(
     """
     if methane_concentration is None or relative_altitude is None:
         return None
-    if relative_altitude <= 0:
+    if not math.isfinite(methane_concentration) or not math.isfinite(relative_altitude) or relative_altitude <= 0:
         return None  # Avoid division by zero or nonsensical negative altitude
-    return round(methane_concentration / relative_altitude, precision)
+    result = methane_concentration / relative_altitude
+    return round(result, precision) if math.isfinite(result) else None

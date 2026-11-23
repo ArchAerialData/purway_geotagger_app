@@ -29,6 +29,10 @@ class MethaneOutputSummary:
     kmz_status: str = "skipped"
     kmz_rows: int = 0
     kmz_error: str = ""
+    source_format: str = "csv"
+    sheets: list[dict] = field(default_factory=list)
+    counts: dict[str, int] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass

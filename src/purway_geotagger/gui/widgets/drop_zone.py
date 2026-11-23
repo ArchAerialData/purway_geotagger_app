@@ -8,7 +8,7 @@ class DropZone(QFrame):
 
     Accepts:
     - directories
-    - files (jpg/csv)
+    - files (jpg/csv/xlsx)
     """
     paths_dropped = Signal(list)
 

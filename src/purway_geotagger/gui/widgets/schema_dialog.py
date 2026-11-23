@@ -14,14 +14,14 @@ from purway_geotagger.parsers.purway_csv import CSVSchema
 class SchemaDialog(QDialog):
     def __init__(self, schemas: list[CSVSchema], parent=None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("CSV Schema Inspector")
+        self.setWindowTitle("CSV/XLSX Schema Inspector")
         self.resize(900, 300)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel(f"CSVs inspected: {len(schemas)}"))
+        layout.addWidget(QLabel(f"Tables/sheets inspected: {len(schemas)}"))
 
         table = QTableWidget()
-        headers = ["CSV", "Rows", "Photo", "Lat", "Lon", "Time", "PPM", "Columns"]
+        headers = ["CSV/XLSX", "Rows", "Photo", "Lat", "Lon", "Time", "PPM", "Columns", "Sheet", "Header row", "Error"]
         table.setProperty("cssClass", "outputs_table")
         table.setColumnCount(len(headers))
         table.setHorizontalHeaderLabels(headers)
@@ -39,6 +39,10 @@ class SchemaDialog(QDialog):
             table.setItem(i, 5, QTableWidgetItem(s.time_col or ""))
             table.setItem(i, 6, QTableWidgetItem(s.ppm_col or ""))
             table.setItem(i, 7, QTableWidgetItem(", ".join(s.columns)))
+
+            table.setItem(i, 8, QTableWidgetItem(s.source_sheet))
+            table.setItem(i, 9, QTableWidgetItem(str(s.header_row or "")))
+            table.setItem(i, 10, QTableWidgetItem(s.error))
 
         table.resizeColumnsToContents()
         layout.addWidget(table)

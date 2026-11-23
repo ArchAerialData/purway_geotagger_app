@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from purway_geotagger.core.scanner import scan_inputs, ScanResult
-from purway_geotagger.parsers.purway_csv import PurwayCSVIndex, inspect_csv_schema, CSVSchema
+from purway_geotagger.parsers.purway_csv import PurwayCSVIndex, inspect_table_schemas, CSVSchema
 from purway_geotagger.util.errors import CorrelationError
 
 
@@ -19,6 +19,8 @@ class PreviewRow:
     ppm: str
     datetime_original: str
     reason: str
+    source_sheet: str = ""
+    source_row: int | None = None
 
 
 @dataclass
@@ -27,6 +29,8 @@ class PreviewResult:
     scanned_csvs: int
     rows: list[PreviewRow]
     schemas: list[CSVSchema]
+    scanned_workbooks: int = 0
+    errors: list[str] = field(default_factory=list)
 
 
 def build_preview(
@@ -35,8 +39,8 @@ def build_preview(
     max_join_delta_seconds: int,
 ) -> PreviewResult:
     scan: ScanResult = scan_inputs(inputs)
-    schemas = [inspect_csv_schema(p) for p in scan.csvs]
-    index = PurwayCSVIndex.from_csv_files(scan.csvs)
+    schemas = [schema for p in scan.tables for schema in inspect_table_schemas(p)]
+    index = PurwayCSVIndex.from_csv_files(scan.tables)
 
     rows: list[PreviewRow] = []
     for p in scan.photos[:max_rows]:
@@ -48,6 +52,7 @@ def build_preview(
                     status="MATCHED",
                     join_method=match.join_method,
                     csv_path=match.csv_path,
+                    source_sheet=match.source_sheet, source_row=match.source_row,
                     lat=str(match.lat),
                     lon=str(match.lon),
                     ppm=str(match.ppm),
@@ -74,5 +79,5 @@ def build_preview(
         scanned_photos=len(scan.photos),
         scanned_csvs=len(scan.csvs),
         rows=rows,
-        schemas=schemas,
+        schemas=schemas, scanned_workbooks=len(scan.workbooks), errors=index.errors,
     )

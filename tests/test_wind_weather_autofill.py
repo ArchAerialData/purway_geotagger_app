@@ -64,7 +64,7 @@ def _nws_success_responses() -> dict[tuple[str, tuple[tuple[str, str], ...]] | s
         },
         f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations": {
             "features": [
-                {"properties": {"stationIdentifier": "KHOU"}},
+                {"properties": {"stationIdentifier": "KHOU"}, "geometry": {"coordinates": [-95.27889, 29.64582]}},
             ]
         },
         f"{NWS_BASE_URL}/stations/KHOU/observations": {
@@ -168,8 +168,8 @@ def test_build_autofill_maps_required_fields_from_nws_observations() -> None:
     assert result.end.station_id == "KHOU"
     assert result.verification_url is not None
     assert "/stations/KHOU/observations" in result.verification_url
-    assert "start=2026-02-06T19%3A00%3A00Z" in result.verification_url
-    assert "end=2026-02-06T23%3A00%3A00Z" in result.verification_url
+    assert "start=2026-02-06T18%3A59%3A00Z" in result.verification_url
+    assert "end=2026-02-06T19%3A01%3A00Z" in result.verification_url
     assert result.warnings == ()
 
 
@@ -182,7 +182,7 @@ def test_build_autofill_uses_nearest_observation_for_half_hour_inputs() -> None:
                 }
             },
             f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations": {
-                "features": [{"properties": {"stationIdentifier": "KHOU"}}]
+                "features": [{"properties": {"stationIdentifier": "KHOU"}, "geometry": {"coordinates": [-95.27889, 29.64582]}}]
             },
             f"{NWS_BASE_URL}/stations/KHOU/observations": {
                 "features": [
@@ -231,7 +231,7 @@ def test_build_autofill_backfills_missing_fields_from_aviationweather_metar_befo
                 "properties": {"observationStations": f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations"}
             },
             f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations": {
-                "features": [{"properties": {"stationIdentifier": "KHOU"}}]
+                "features": [{"properties": {"stationIdentifier": "KHOU"}, "geometry": {"coordinates": [-95.27889, 29.64582]}}]
             },
             f"{NWS_BASE_URL}/stations/KHOU/observations": {
                 "features": [
@@ -305,11 +305,13 @@ def test_build_autofill_backfills_missing_fields_from_aviationweather_metar_befo
 def test_build_autofill_returns_partial_row_when_field_missing_and_backfill_unavailable() -> None:
     fake_http = FakeJsonHttpClient(
         {
+            AWC_METAR_URL: WindAutofillProviderError("offline"),
+            OPEN_METEO_ARCHIVE_URL: WindAutofillProviderError("offline"),
             f"{NWS_BASE_URL}/points/29.7604,-95.3698": {
                 "properties": {"observationStations": f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations"}
             },
             f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations": {
-                "features": [{"properties": {"stationIdentifier": "KHOU"}}]
+                "features": [{"properties": {"stationIdentifier": "KHOU"}, "geometry": {"coordinates": [-95.27889, 29.64582]}}]
             },
             f"{NWS_BASE_URL}/stations/KHOU/observations": {
                 "features": [
@@ -351,7 +353,7 @@ def test_build_autofill_returns_partial_row_when_field_missing_and_backfill_unav
     assert "Wind gust not reported" in " | ".join(result.start.warnings)
     assert result.verification_url is not None
     assert "/stations/KHOU/observations" in result.verification_url
-    assert any("Open-Meteo backfill was unavailable" in warning for warning in result.warnings)
+    assert any("Open-Meteo historical hourly data (estimated) backfill was unavailable" in warning for warning in result.warnings)
 
 
 def test_build_autofill_raises_when_provider_returns_no_observations() -> None:
@@ -361,7 +363,7 @@ def test_build_autofill_raises_when_provider_returns_no_observations() -> None:
                 "properties": {"observationStations": f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations"}
             },
             f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations": {
-                "features": [{"properties": {"stationIdentifier": "KHOU"}}]
+                "features": [{"properties": {"stationIdentifier": "KHOU"}, "geometry": {"coordinates": [-95.27889, 29.64582]}}]
             },
             f"{NWS_BASE_URL}/stations/KHOU/observations": {"features": []},
             AWC_METAR_URL: [],
@@ -387,7 +389,7 @@ def test_build_autofill_falls_back_to_open_meteo_archive_when_nws_missing() -> N
                 "properties": {"observationStations": f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations"}
             },
             f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations": {
-                "features": [{"properties": {"stationIdentifier": "KHOU"}}]
+                "features": [{"properties": {"stationIdentifier": "KHOU"}, "geometry": {"coordinates": [-95.27889, 29.64582]}}]
             },
             f"{NWS_BASE_URL}/stations/KHOU/observations": {"features": []},
             AWC_METAR_URL: [],
@@ -438,7 +440,7 @@ def test_build_autofill_falls_back_to_aviationweather_metar_when_nws_missing() -
                 "properties": {"observationStations": f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations"}
             },
             f"{NWS_BASE_URL}/gridpoints/HGX/54,97/stations": {
-                "features": [{"properties": {"stationIdentifier": "KHOU"}}]
+                "features": [{"properties": {"stationIdentifier": "KHOU"}, "geometry": {"coordinates": [-95.27889, 29.64582]}}]
             },
             f"{NWS_BASE_URL}/stations/KHOU/observations": {"features": []},
             AWC_METAR_URL: [

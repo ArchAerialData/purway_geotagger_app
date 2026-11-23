@@ -147,51 +147,99 @@ print("worker_cleanup_stable")
     assert "worker_cleanup_stable" in completed.stdout
 
 
-def test_wind_autofill_dialog_converts_24h_time_input_to_12h_plus_pm() -> None:
+def test_wind_autofill_dialog_allows_clear_retype_and_formats_completed_times() -> None:
     repo_root = Path(__file__).resolve().parents[1]
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(repo_root / "src")
-    env["QT_QPA_PLATFORM"] = "offscreen"
-
+    env = {**os.environ, "PYTHONPATH": str(repo_root / "src"), "QT_QPA_PLATFORM": "offscreen",
+           "PYTHONDONTWRITEBYTECODE": "1"}
     script = """
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from purway_geotagger.gui.widgets.wind_autofill_dialog import WindAutofillDialog
+from purway_geotagger.core.wind_weather_autofill import LocationSuggestion
+from purway_geotagger.core.wind_docx import WindReportMetadataRaw, WindRowRaw, build_wind_template_payload
 
 app = QApplication([])
 dialog = WindAutofillDialog(start_time_24h="10:00", end_time_24h="13:00")
-dialog.end_time_edit.lineEdit().setText("22:30")
-dialog.end_time_edit.interpretText()
+dialog.set_suggestions([LocationSuggestion("Houston", "Houston, TX", 29.7, -95.3, "America/Chicago")])
+dialog.show()
 app.processEvents()
-print(
-    "normalized",
-    dialog.end_time_edit.time().toString("h:mm"),
-    dialog.end_meridiem_combo.currentText(),
-    dialog.selected_end_time_24h(),
-)
-dialog.end_time_edit.lineEdit().setText("24:00")
-# Simulate user-typed overflow input that gets normalized on editingFinished.
-dialog._remember_typed_time_text(dialog.end_time_edit, "24:00")
-dialog.end_time_edit.editingFinished.emit()
+edit = dialog.end_time_edit
+edit.setFocus()
+edit.selectAll()
+QTest.keyClick(edit, Qt.Key_Backspace)
+assert edit.text() == ""
+assert not dialog.autofill_btn.isEnabled()
+assert not dialog.validate_times()
+QTest.keyClicks(edit, "15:3")
+assert edit.text() == "15:3"  # Do not format an unfinished entry.
+assert not dialog.autofill_btn.isEnabled()
+QTest.keyClicks(edit, "0")
+assert edit.text() == "3:30"
+assert dialog.end_meridiem_combo.currentText() == "PM"
+assert dialog.selected_end_time_24h() == "15:30"
+assert dialog.autofill_btn.isEnabled()
+# Re-reading a formatted value must not flip PM back to AM.
+assert dialog.selected_end_time_24h() == "15:30"
+for typed, displayed, marker, canonical in [
+    ("09:30", "9:30", "AM", "09:30"),
+    ("00:00", "12:00", "AM", "00:00"),
+    ("12:00", "12:00", "PM", "12:00"),
+    ("23:59", "11:59", "PM", "23:59"),
+    ("0930", "9:30", "AM", "09:30"),
+    ("1530", "3:30", "PM", "15:30"),
+    ("3:30 PM", "3:30", "PM", "15:30"),
+]:
+    edit.selectAll()
+    QTest.keyClick(edit, Qt.Key_Delete)
+    QTest.keyClicks(edit, typed)
+    assert edit.text() == displayed, (typed, edit.text())
+    assert dialog.end_meridiem_combo.currentText() == marker, typed
+    assert dialog.selected_end_time_24h() == canonical, typed
+# Keep the manual AM/PM override and normalize on focus loss / pasted input.
+dialog.end_meridiem_combo.setCurrentText("AM")
+assert dialog.selected_end_time_24h() == "03:30"
+edit.setText("15:45")
+dialog.query_edit.setFocus()
 app.processEvents()
-print(
-    "normalized_24",
-    dialog.end_time_edit.time().toString("h:mm"),
-    dialog.end_meridiem_combo.currentText(),
-    dialog.selected_end_time_24h(),
-)
+assert dialog.selected_end_time_24h() == "15:45"
+for invalid in ("", "15:", "15:7", "24:00", "09:99", "bad"):
+    edit.setText(invalid)
+    assert not dialog.validate_times()
+    assert edit.text() == invalid  # Never clamp or restore the old time.
+    assert not dialog.autofill_btn.isEnabled()
+    emitted = []
+    dialog.autofill_requested.connect(lambda: emitted.append(True))
+    dialog._request_autofill()  # Also protects the location double-click path.
+    assert not emitted
+edit.setText("15:30")
+assert dialog.validate_times()
+dialog.set_busy(True, allow_typing_when_busy=True)
+edit.selectAll()
+QTest.keyClicks(edit, "16:30")
+assert not dialog.autofill_btn.isEnabled()
+dialog.set_busy(False)
+assert dialog.autofill_btn.isEnabled()
+# Select-all paste works in Start as well as End.
+dialog.start_time_edit.selectAll()
+app.clipboard().setText("09:30")
+dialog.start_time_edit.paste()
+assert dialog.start_time_edit.text() == "9:30"
+assert dialog.start_meridiem_combo.currentText() == "AM"
+# Autofill request is canonical 24h; the report contract remains 12h.
+report = build_wind_template_payload(
+    WindReportMetadataRaw("Client", "System", "2026-07-01", "CDT"),
+    WindRowRaw(dialog.selected_start_time_24h(), "S", 10, 20, 70),
+    WindRowRaw(dialog.selected_end_time_24h(), "S", 10, 20, 70))
+assert report.payload.s_time == "9:30am"
+assert report.payload.e_time == "4:30pm"
 dialog.close()
+print("clearable_times_and_docx_verified")
 """
-    completed = subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=repo_root,
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+    completed = subprocess.run([sys.executable, "-B", "-c", script], cwd=repo_root, env=env,
+                               capture_output=True, text=True, timeout=30)
     assert completed.returncode == 0, completed.stderr or completed.stdout
-    assert "normalized 10:30 PM 22:30" in completed.stdout
-    assert "normalized_24 12:00 PM 12:00" in completed.stdout
+    assert "clearable_times_and_docx_verified" in completed.stdout
 
 
 def test_wind_autofill_dialog_report_date_is_limited_to_current_year_and_today() -> None:

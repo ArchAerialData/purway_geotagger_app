@@ -152,6 +152,7 @@ class CombinedWizard(QWidget):
             self.inputs_list.addItem(str(p))
         self.threshold_spin.setValue(max(1, int(self.state.methane_threshold)))
         self.kmz_chk.setChecked(bool(self.state.methane_generate_kmz))
+        self.calibration_chk.setChecked(self.state.methane_exclude_calibration)
         self._update_log_location()
         self._update_naming_preview()
         self._update_output_default()
@@ -244,10 +245,20 @@ class CombinedWizard(QWidget):
         threshold_row.addStretch(1)
         methane_layout.addLayout(threshold_row)
 
-        self.kmz_chk = QCheckBox("Generate KMZ from cleaned CSV (optional)")
+        self.kmz_chk = QCheckBox("Generate KMZ from cleaned CSV/XLSX (optional)")
         self.kmz_chk.setChecked(bool(self.state.methane_generate_kmz))
+        self.kmz_chk.setToolTip("XLSX KMZs group retained rows by worksheet. Existing PAC values are preserved in cleaned tables; photo PAC is calculated independently.")
         self.kmz_chk.toggled.connect(self._on_kmz_toggled)
         methane_layout.addWidget(self.kmz_chk)
+
+        self.calibration_chk = QCheckBox("Exclude calibration readings below 1 m")
+        self.calibration_chk.setChecked(self.state.methane_exclude_calibration)
+        self.calibration_chk.setToolTip(
+            "Remove rows with methane > 0 and relative altitude < 1 meter from cleaned CSV/XLSX and KMZ outputs. "
+            "Missing/invalid altitude is retained for the remaining filters and reported. Photo metadata is unaffected."
+        )
+        self.calibration_chk.toggled.connect(self._on_calibration_toggled)
+        methane_layout.addWidget(self.calibration_chk)
 
         self.cleaned_preview = QLabel()
         self.cleaned_preview.setProperty("cssClass", "subtitle")
@@ -544,8 +555,8 @@ class CombinedWizard(QWidget):
         log_base = default_methane_log_base(inputs) if self.state.methane_log_base is None else self.state.methane_log_base
         log_text = str(log_base) if log_base else "(not set)"
         kmz = "Enabled" if self.state.methane_generate_kmz else "Disabled"
-        cleaned_name = f"*_Cleaned_{threshold}-PPM.csv"
-        kmz_name = f"*_Cleaned_{threshold}-PPM.kmz"
+        cleaned_name = f"*_Cleaned_{threshold}-PPM.csv / .xlsx"
+        kmz_name = f"*_Cleaned_{threshold}-PPM.kmz (CSV) / *_Cleaned_{threshold}-PPM_XLSX.kmz (XLSX)"
 
         output = self.state.encroachment_output_base
         output_text = str(output) if output else "(not set)"
@@ -564,7 +575,8 @@ class CombinedWizard(QWidget):
             "<b>Methane</b><br/>"
             f"• PPM threshold: {threshold}<br/>"
             f"• KMZ: {kmz}<br/>"
-            f"• Cleaned CSV name: {cleaned_name}<br/>"
+            f"• Exclude calibration below 1 m: {'Yes' if self.state.methane_exclude_calibration else 'No'}<br/>"
+            f"• Cleaned CSV/XLSX name: {cleaned_name}<br/>"
             f"• KMZ name: {kmz_name}<br/>"
             f"• Methane logs: {log_text}<br/><br/>"
             "<b>Encroachment</b><br/>"
@@ -633,7 +645,8 @@ class CombinedWizard(QWidget):
             "Combined mode writes methane EXIF metadata in-place on source JPGs and copies "
             "encroachment photos.\n"
             "Renaming applies to copied encroachment files only.\n"
-            f"{self._backup_behavior_text()}\n\n"
+            f"{self._backup_behavior_text()}\n"
+            f"Exclude calibration below 1 m: {'Yes' if self.state.methane_exclude_calibration else 'No'}\n\n"
             "Continue?"
         )
         if not self._confirm_run(
@@ -696,6 +709,7 @@ class CombinedWizard(QWidget):
         self.state.inputs = []
         self.state.methane_threshold = 1000
         self.state.methane_generate_kmz = True
+        self.state.methane_exclude_calibration = True
         self.state.methane_log_base = None
         self.state.encroachment_output_base = None
         self.state.encroachment_rename_enabled = False
@@ -783,7 +797,7 @@ class CombinedWizard(QWidget):
             self._add_inputs([Path(selected)])
 
     def _add_files(self) -> None:
-        files, _ = QFileDialog.getOpenFileNames(self, "Select input files", str(Path.home()))
+        files, _ = QFileDialog.getOpenFileNames(self, "Select input files", str(Path.home()), "Photos and metadata (*.jpg *.jpeg *.csv *.xlsx)")
         if files:
             self._add_inputs([Path(p) for p in files])
 
@@ -804,6 +818,10 @@ class CombinedWizard(QWidget):
         self.state.methane_threshold = max(1, int(value))
         self._update_naming_preview()
 
+    def _on_calibration_toggled(self, enabled: bool) -> None:
+        self.state.methane_exclude_calibration = enabled
+        self._update_naming_preview()
+
     def _on_kmz_toggled(self, enabled: bool) -> None:
         self.state.methane_generate_kmz = enabled
         self._update_naming_preview()
@@ -811,12 +829,12 @@ class CombinedWizard(QWidget):
     def _update_naming_preview(self) -> None:
         threshold = max(1, int(self.state.methane_threshold))
         self.cleaned_preview.setText(
-            f"Cleaned CSV name: *_Cleaned_{threshold}-PPM.csv "
-            "(saved next to each source methane CSV)"
+            f"Cleaned CSV/XLSX name: *_Cleaned_{threshold}-PPM.csv / .xlsx "
+            "(saved next to each source methane CSV/XLSX)"
         )
         self.kmz_preview.setVisible(self.kmz_chk.isChecked())
         if self.kmz_chk.isChecked():
-            self.kmz_preview.setText(f"KMZ name: *_Cleaned_{threshold}-PPM.kmz")
+            self.kmz_preview.setText(f"KMZ name: *_Cleaned_{threshold}-PPM.kmz (CSV) / *_Cleaned_{threshold}-PPM_XLSX.kmz (XLSX)")
 
     def _update_log_location(self) -> None:
         resolved = default_methane_log_base(self.state.inputs) if self.state.methane_log_base is None else self.state.methane_log_base

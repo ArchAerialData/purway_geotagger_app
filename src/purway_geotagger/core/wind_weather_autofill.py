@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time, timedelta, timezone
 import json
 from math import asin
 from math import cos
-from math import isnan
+from math import isfinite
 from math import radians
 from math import sin
 from math import sqrt
@@ -23,6 +23,35 @@ OPEN_METEO_ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
 AWC_BASE_URL = "https://aviationweather.gov/api/data"
 AWC_METAR_URL = f"{AWC_BASE_URL}/metar"
 US_COUNTRY_CODE = "US"
+
+
+@dataclass(frozen=True)
+class WeatherMatchPolicy:
+    """Application defaults, not a guarantee of site-level representativeness."""
+
+    max_distance_miles: float = 25.0
+    max_time_delta_minutes: int = 60
+
+    def __post_init__(self) -> None:
+        if not isfinite(self.max_distance_miles) or not 1 <= self.max_distance_miles <= 100:
+            raise ValueError("Station distance must be between 1 and 100 miles.")
+        if not 1 <= self.max_time_delta_minutes <= 120:
+            raise ValueError("Time difference must be between 1 and 120 minutes.")
+
+
+@dataclass(frozen=True)
+class WeatherFieldSource:
+    provider: str
+    kind: str  # observed or estimated
+    observed_at_utc: datetime
+    station_id: str | None
+    source_url: str | None
+    distance_miles: float | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    model: str | None = None
+
+
 _ROW_MISSING_WARNING_BY_FIELD = {
     "direction": "Wind direction not reported for selected timestamp.",
     "speed_mph": "Wind speed not reported for selected timestamp.",
@@ -72,6 +101,7 @@ class WindAutofillRow:
     station_id: str | None
     source_url: str | None
     warnings: tuple[str, ...]
+    field_sources: dict[str, WeatherFieldSource] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -80,6 +110,7 @@ class WindAutofillRequest:
     report_date: date
     start_time_24h: str
     end_time_24h: str
+    policy: WeatherMatchPolicy = field(default_factory=WeatherMatchPolicy)
 
 
 @dataclass(frozen=True)
@@ -89,6 +120,14 @@ class WindAutofillResult:
     end: WindAutofillRow
     verification_url: str | None
     warnings: tuple[str, ...]
+    request: WindAutofillRequest | None = None
+
+    @property
+    def source_urls(self) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(
+            source.source_url for row in (self.start, self.end)
+            for source in row.field_sources.values() if source.source_url
+        ))
 
 
 class JsonHttpClient:
@@ -119,6 +158,8 @@ class UrlLibJsonHttpClient(JsonHttpClient):
         )
         try:
             with urlopen(request, timeout=self.timeout_seconds, context=self._ssl_context) as response:
+                if response.status == 204:
+                    return []
                 payload = response.read()
         except (HTTPError, URLError, TimeoutError) as exc:
             raise WindAutofillProviderError(f"Weather API request failed: {exc}") from exc
@@ -226,121 +267,98 @@ class NwsObservationClient:
         self.station_scan_limit = max(1, station_scan_limit)
 
     def fetch_rows(
-        self,
-        *,
-        latitude: float,
-        longitude: float,
-        start_utc: datetime,
-        end_utc: datetime,
-        targets_utc: Sequence[datetime],
-        verification_start_utc: datetime,
-        verification_end_utc: datetime,
-        local_timezone: ZoneInfo,
+        self, *, latitude: float, longitude: float, start_utc: datetime,
+        end_utc: datetime, targets_utc: Sequence[datetime],
+        verification_start_utc: datetime, verification_end_utc: datetime,
+        local_timezone: ZoneInfo, policy: WeatherMatchPolicy = WeatherMatchPolicy(),
     ) -> tuple[WindAutofillRow, WindAutofillRow]:
         if start_utc.tzinfo is None or end_utc.tzinfo is None:
             raise WindAutofillProviderError("Provider request timestamps must be timezone-aware.")
-
-        stations = self._resolve_station_ids(latitude, longitude)
-        if not stations:
-            raise WindAutofillProviderError("No nearby weather stations were found for the selected location.")
-
+        stations = self._resolve_stations(latitude, longitude)
         observations: list[dict[str, Any]] = []
-        station_id_used: str | None = None
-        for station_id in stations[: self.station_scan_limit]:
-            observations = self._fetch_station_observations(station_id=station_id, start_utc=start_utc, end_utc=end_utc)
-            if observations:
-                station_id_used = station_id
-                break
-
-        if not observations:
-            raise WindAutofillProviderError("No weather observations were found for the selected times.")
-
-        start_target, end_target = targets_utc
-        start_observation = _nearest_observation(observations, start_target)
-        end_observation = _nearest_observation(observations, end_target)
-        if start_observation is None or end_observation is None:
-            raise WindAutofillProviderError("Could not map observations to both Start and End times.")
-
-        source_url = None
-        if station_id_used:
+        for distance, station_id, station_lat, station_lon in stations[:self.station_scan_limit]:
+            if distance > policy.max_distance_miles:
+                continue
+            for target in dict.fromkeys(targets_utc):
+                window = timedelta(minutes=policy.max_time_delta_minutes)
+                try:
+                    records = self._fetch_station_observations(
+                        station_id=station_id, start_utc=target - window, end_utc=target + window)
+                except WindAutofillProviderError:
+                    continue
+                for record in records:
+                    record.update(station_id=station_id, distance_miles=distance,
+                                  latitude=station_lat, longitude=station_lon)
+                    observations.append(record)
+        rows = []
+        for target in targets_utc:
+            observation = _nearest_awc_observation(observations, target, policy=policy)
+            if observation is None:
+                rows.append(_empty_row())
+                continue
+            station_id = observation["station_id"]
+            # Link to the actual selected record, even if outside the flight's time span.
             source_url = _build_observations_url(
-                station_id=station_id_used,
-                start_utc=verification_start_utc,
-                end_utc=verification_end_utc,
-            )
+                station_id=station_id,
+                start_utc=observation["timestamp"] - timedelta(minutes=1),
+                end_utc=observation["timestamp"] + timedelta(minutes=1))
+            rows.append(_to_wind_row(observation, station_id, source_url, local_timezone))
+        return _require_any_data(rows, "NWS")
 
-        start_row = _to_wind_row(start_observation, station_id_used, source_url, local_timezone)
-        end_row = _to_wind_row(end_observation, station_id_used, source_url, local_timezone)
-        return start_row, end_row
-
-    def _resolve_station_ids(self, latitude: float, longitude: float) -> list[str]:
+    def _resolve_stations(self, latitude: float, longitude: float) -> list[tuple[float, str, float, float]]:
         point = self._http.get_json(f"{NWS_BASE_URL}/points/{latitude:.4f},{longitude:.4f}")
-        properties = point.get("properties")
+        properties = point.get("properties") if isinstance(point, dict) else None
         if not isinstance(properties, dict):
             raise WindAutofillProviderError("NWS points response was missing 'properties'.")
-
         stations_url = properties.get("observationStations")
         if not isinstance(stations_url, str) or not stations_url.strip():
             raise WindAutofillProviderError("NWS points response was missing observation station links.")
-
-        stations_json = self._http.get_json(stations_url)
-        features = stations_json.get("features")
+        payload = self._http.get_json(stations_url)
+        features = payload.get("features") if isinstance(payload, dict) else None
         if not isinstance(features, list):
             raise WindAutofillProviderError("NWS stations response was malformed.")
-
-        identifiers: list[str] = []
+        stations = []
         for feature in features:
             if not isinstance(feature, dict):
                 continue
             props = feature.get("properties")
-            if not isinstance(props, dict):
+            geometry = feature.get("geometry")
+            if not isinstance(props, dict) or not isinstance(geometry, dict):
                 continue
-            raw = props.get("stationIdentifier")
-            if isinstance(raw, str) and raw.strip():
-                identifiers.append(raw.strip())
-        return identifiers
+            coords = geometry.get("coordinates")
+            station_id = props.get("stationIdentifier")
+            if not isinstance(station_id, str) or not station_id.strip():
+                continue
+            if not isinstance(coords, list) or len(coords) < 2:
+                continue  # Unknown distance is not eligible for automatic matching.
+            lon, lat = _as_float(coords[0]), _as_float(coords[1])
+            if not _valid_coordinates(lat, lon):
+                continue
+            stations.append((_haversine_miles(latitude, longitude, lat, lon), station_id.strip(), lat, lon))
+        return sorted(stations)
 
-    def _fetch_station_observations(
-        self,
-        *,
-        station_id: str,
-        start_utc: datetime,
-        end_utc: datetime,
-    ) -> list[dict[str, Any]]:
+    def _fetch_station_observations(self, *, station_id: str, start_utc: datetime,
+                                    end_utc: datetime) -> list[dict[str, Any]]:
         payload = self._http.get_json(
             f"{NWS_BASE_URL}/stations/{station_id}/observations",
-            params={
-                "start": _to_utc_iso(start_utc),
-                "end": _to_utc_iso(end_utc),
-            },
-        )
+            params={"start": _to_utc_iso(start_utc), "end": _to_utc_iso(end_utc), "limit": "500"})
         if not isinstance(payload, dict):
             return []
         features = payload.get("features")
         if not isinstance(features, list):
             return []
-
-        observations: list[dict[str, Any]] = []
+        if len(features) >= 500:
+            raise WindAutofillProviderError("NWS query reached the provider result limit; narrow the time window.")
+        observations = []
         for feature in features:
-            if not isinstance(feature, dict):
+            props = feature.get("properties") if isinstance(feature, dict) else None
+            if not isinstance(props, dict):
                 continue
-            properties = feature.get("properties")
-            if not isinstance(properties, dict):
-                continue
-            timestamp_raw = properties.get("timestamp")
-            timestamp = _parse_iso_datetime(timestamp_raw)
-            if timestamp is None:
-                continue
-            observations.append(
-                {
-                    "timestamp": timestamp,
-                    "temperature": properties.get("temperature"),
-                    "windDirection": properties.get("windDirection"),
-                    "windSpeed": properties.get("windSpeed"),
-                    "windGust": properties.get("windGust"),
-                }
-            )
-        observations.sort(key=lambda item: item["timestamp"])
+            timestamp = _parse_iso_datetime(props.get("timestamp"))
+            if timestamp is not None:
+                observations.append({"timestamp": timestamp, **{
+                    name: props.get(name) for name in ("temperature", "windDirection", "windSpeed", "windGust")
+                }})
         return observations
 
 
@@ -356,15 +374,18 @@ class OpenMeteoArchiveClient:
         report_date: date,
         targets_utc: Sequence[datetime],
         local_timezone: ZoneInfo,
+        policy: WeatherMatchPolicy = WeatherMatchPolicy(),
     ) -> tuple[WindAutofillRow, WindAutofillRow]:
-        report_date_text = report_date.isoformat()
+        window = timedelta(minutes=policy.max_time_delta_minutes)
         params = {
             "latitude": f"{latitude:.5f}",
             "longitude": f"{longitude:.5f}",
-            "start_date": report_date_text,
-            "end_date": report_date_text,
+            "start_date": (min(targets_utc) - window).astimezone(local_timezone).date().isoformat(),
+            "end_date": min((max(targets_utc) + window).astimezone(local_timezone).date(),
+                            datetime.now(local_timezone).date()).isoformat(),
             "hourly": "temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m",
             "timezone": local_timezone.key,
+            "timeformat": "unixtime",
         }
         try:
             payload = self._http.get_json(OPEN_METEO_ARCHIVE_URL, params=params)
@@ -385,121 +406,70 @@ class OpenMeteoArchiveClient:
             raise WindAutofillProviderError("Open-Meteo archive returned no observations for selected date.")
 
         start_target, end_target = targets_utc
-        start_observation = _nearest_observation(observations, start_target)
-        end_observation = _nearest_observation(observations, end_target)
-        if start_observation is None or end_observation is None:
-            raise WindAutofillProviderError("Could not map Open-Meteo hourly observations to selected times.")
-
         source_url = _build_open_meteo_archive_url(params=params)
-        start_row = _to_wind_row(
-            start_observation,
-            "OPEN_METEO_ARCHIVE",
-            source_url,
-            local_timezone,
-        )
-        end_row = _to_wind_row(
-            end_observation,
-            "OPEN_METEO_ARCHIVE",
-            source_url,
-            local_timezone,
-        )
-        return start_row, end_row
+        rows = []
+        for target in (start_target, end_target):
+            observation = _nearest_observation(observations, target, policy=policy)
+            if observation is None:
+                rows.append(_empty_row())
+            else:
+                observation.update(latitude=payload.get("latitude"), longitude=payload.get("longitude"),
+                                   model="Open-Meteo Best Match (model/reanalysis blend)")
+                rows.append(_to_wind_row(observation, "OPEN_METEO_ARCHIVE", source_url, local_timezone))
+        return _require_any_data(rows, "Open-Meteo")
 
 
 class AviationWeatherMetarClient:
-    def __init__(
-        self,
-        http_client: JsonHttpClient | None = None,
-        *,
-        radius_miles_steps: Sequence[float] = (25.0, 80.0, 160.0),
-        max_history_hours: int = 720,
-        minimum_hours: int = 6,
-    ) -> None:
+    def __init__(self, http_client: JsonHttpClient | None = None, *,
+                 max_history_hours: int = 720) -> None:
         self._http = http_client or UrlLibJsonHttpClient()
-        steps = [float(step) for step in radius_miles_steps if float(step) > 0.0]
-        self.radius_miles_steps = tuple(steps) if steps else (80.0,)
         self.max_history_hours = max(24, int(max_history_hours))
-        self.minimum_hours = max(1, int(minimum_hours))
 
-    def fetch_rows(
-        self,
-        *,
-        latitude: float,
-        longitude: float,
-        targets_utc: Sequence[datetime],
-        local_timezone: ZoneInfo,
-    ) -> tuple[WindAutofillRow, WindAutofillRow]:
+    def fetch_rows(self, *, latitude: float, longitude: float,
+                   targets_utc: Sequence[datetime], local_timezone: ZoneInfo,
+                   policy: WeatherMatchPolicy = WeatherMatchPolicy(),
+                   ) -> tuple[WindAutofillRow, WindAutofillRow]:
         if len(targets_utc) != 2:
             raise WindAutofillProviderError("AviationWeather METAR requires exactly two target timestamps.")
-        start_target, end_target = targets_utc
-        required_hours = _required_history_hours(
-            now_utc=datetime.now(timezone.utc),
-            oldest_target_utc=min(start_target, end_target),
-            minimum_hours=self.minimum_hours,
-        )
-        if required_hours > self.max_history_hours:
-            raise WindAutofillProviderError(
-                "AviationWeather METAR history is limited to recent days; selected timestamps are too old."
-            )
-        hours_text = str(min(required_hours, self.max_history_hours))
-
-        last_error: WindAutofillProviderError | None = None
-        for radius_miles in self.radius_miles_steps:
+        now_utc = datetime.now(timezone.utc)
+        rows = []
+        cache: dict[str, list[dict[str, Any]]] = {}
+        for target in targets_utc:
+            if now_utc - target > timedelta(hours=self.max_history_hours):
+                rows.append(_empty_row())
+                continue
+            window = timedelta(minutes=policy.max_time_delta_minutes)
+            # A fixed end date makes the verification URL reproducible, and a small
+            # target window avoids losing older reports behind the API result cap.
             params = {
                 "format": "json",
-                "hours": hours_text,
-                "bbox": _bbox_for_radius(latitude=latitude, longitude=longitude, radius_miles=radius_miles),
+                "date": _to_utc_iso(min(target + window, now_utc)),
+                "hours": str(max(1, (2 * policy.max_time_delta_minutes + 59) // 60)),
+                "bbox": _bbox_for_radius(latitude=latitude, longitude=longitude,
+                                         radius_miles=policy.max_distance_miles),
             }
+            url = _build_awc_metar_url(params=params)
             try:
-                payload = self._http.get_json(AWC_METAR_URL, params=params)
-            except WindAutofillProviderError as exc:
-                last_error = exc
+                if url not in cache:
+                    payload = self._http.get_json(AWC_METAR_URL, params=params)
+                    if isinstance(payload, list) and len(payload) >= 400:
+                        raise WindAutofillProviderError("METAR query reached the provider result limit; narrow the search.")
+                    cache[url] = _awc_observations(payload=payload, latitude=latitude, longitude=longitude)
+                observation = _nearest_awc_observation(cache[url], target, policy=policy)
+            except WindAutofillProviderError:
+                rows.append(_empty_row())
                 continue
-            except Exception as exc:
-                last_error = WindAutofillProviderError(f"AviationWeather METAR request failed: {exc}")
-                continue
-
-            observations = _awc_observations(payload=payload, latitude=latitude, longitude=longitude)
-            if not observations:
-                continue
-
-            start_observation = _nearest_awc_observation(observations, start_target)
-            end_observation = _nearest_awc_observation(observations, end_target)
-            if start_observation is None or end_observation is None:
-                continue
-
-            source_url = _build_awc_metar_url(params=params)
-            start_row = _to_wind_row(
-                start_observation,
-                _as_station_id(start_observation),
-                source_url,
-                local_timezone,
-            )
-            end_row = _to_wind_row(
-                end_observation,
-                _as_station_id(end_observation),
-                source_url,
-                local_timezone,
-            )
-            return start_row, end_row
-
-        if last_error is not None:
-            raise WindAutofillProviderError(
-                "AviationWeather METAR observations were unavailable for selected location/times."
-            ) from last_error
-        raise WindAutofillProviderError("AviationWeather METAR returned no observations for selected location/times.")
+            rows.append(_to_wind_row(observation, _as_station_id(observation), url, local_timezone)
+                        if observation else _empty_row())
+        return _require_any_data(rows, "AviationWeather METAR")
 
 
 class WindWeatherAutofillService:
-    def __init__(
-        self,
-        *,
-        geocoder: OpenMeteoGeocoder | None = None,
-        weather_client: NwsObservationClient | None = None,
-        metar_client: AviationWeatherMetarClient | None = None,
-        archive_client: OpenMeteoArchiveClient | None = None,
-        search_window_hours: int = 2,
-    ) -> None:
+    def __init__(self, *, geocoder: OpenMeteoGeocoder | None = None,
+                 weather_client: NwsObservationClient | None = None,
+                 metar_client: AviationWeatherMetarClient | None = None,
+                 archive_client: OpenMeteoArchiveClient | None = None,
+                 search_window_hours: int = 2) -> None:
         self.geocoder = geocoder or OpenMeteoGeocoder()
         self.weather_client = weather_client or NwsObservationClient()
         self.metar_client = metar_client or AviationWeatherMetarClient()
@@ -511,150 +481,61 @@ class WindWeatherAutofillService:
 
     def build_autofill(self, request: WindAutofillRequest) -> WindAutofillResult:
         zone = _resolve_timezone(request.location.timezone_name)
+        if not _valid_coordinates(request.location.latitude, request.location.longitude):
+            raise WindAutofillLocationError("Selected location coordinates are invalid.")
         start_local = _combine_local(request.report_date, _parse_hhmm(request.start_time_24h), zone)
         end_local = _combine_local(request.report_date, _parse_hhmm(request.end_time_24h), zone)
         if end_local < start_local:
             raise WindAutofillProviderError("End time must be the same as or later than Start time for autofill.")
-
-        start_utc = start_local.astimezone(timezone.utc)
-        end_utc = end_local.astimezone(timezone.utc)
-        span_start = start_utc - timedelta(hours=self.search_window_hours)
-        span_end = end_utc + timedelta(hours=self.search_window_hours)
-
-        provider_warnings: list[str] = []
-        verification_url: str | None = None
-        primary_provider = ""
-        try:
-            start_row, end_row = self.weather_client.fetch_rows(
-                latitude=request.location.latitude,
-                longitude=request.location.longitude,
-                start_utc=span_start,
-                end_utc=span_end,
-                targets_utc=(start_utc, end_utc),
-                verification_start_utc=start_utc,
-                verification_end_utc=end_utc,
-                local_timezone=zone,
-            )
-            verification_url = start_row.source_url or end_row.source_url
-            primary_provider = "NWS"
-        except WindAutofillProviderError as nws_error:
-            try:
-                start_row, end_row = self.metar_client.fetch_rows(
-                    latitude=request.location.latitude,
-                    longitude=request.location.longitude,
-                    targets_utc=(start_utc, end_utc),
-                    local_timezone=zone,
-                )
-                provider_warnings.append(
-                    "NWS station observations were unavailable for selected date/times; used AviationWeather METAR observations."
-                )
-                verification_url = start_row.source_url or end_row.source_url
-                primary_provider = "AWC"
-            except WindAutofillProviderError as metar_error:
-                try:
-                    start_row, end_row = self.archive_client.fetch_rows(
-                        latitude=request.location.latitude,
-                        longitude=request.location.longitude,
-                        report_date=request.report_date,
-                        targets_utc=(start_utc, end_utc),
-                        local_timezone=zone,
-                    )
-                    provider_warnings.append(
-                        "NWS and AviationWeather METAR observations were unavailable; used Open-Meteo historical hourly data."
-                    )
-                    verification_url = start_row.source_url or end_row.source_url
-                    primary_provider = "OPEN_METEO_ARCHIVE"
-                except WindAutofillProviderError as archive_error:
-                    report_date_text = request.report_date.isoformat()
-                    raise WindAutofillProviderError(
-                        "No weather observations were found for the selected times. "
-                        f"NWS observations may only retain recent history for {report_date_text}. "
-                        f"NWS error: {nws_error}. METAR fallback error: {metar_error}. Historical fallback error: {archive_error}."
-                    ) from archive_error
-        else:
-            if _row_has_missing_fields(start_row) or _row_has_missing_fields(end_row):
-                metar_warning_added = False
-                if primary_provider != "AWC":
-                    try:
-                        metar_start_row, metar_end_row = self.metar_client.fetch_rows(
-                            latitude=request.location.latitude,
-                            longitude=request.location.longitude,
-                            targets_utc=(start_utc, end_utc),
-                            local_timezone=zone,
-                        )
-                    except WindAutofillProviderError:
-                        provider_warnings.append(
-                            "NWS observations were partial and AviationWeather METAR backfill was unavailable."
-                        )
-                        metar_warning_added = True
-                    else:
-                        start_row, start_backfilled = _merge_row_with_fallback(
-                            primary=start_row,
-                            fallback=metar_start_row,
-                        )
-                        end_row, end_backfilled = _merge_row_with_fallback(
-                            primary=end_row,
-                            fallback=metar_end_row,
-                        )
-                        if start_backfilled or end_backfilled:
-                            provider_warnings.append(
-                                _format_backfill_warning(
-                                    provider_label="AviationWeather METAR",
-                                    start_fields=start_backfilled,
-                                    end_fields=end_backfilled,
-                                )
-                            )
-                            verification_url = (
-                                metar_start_row.source_url or metar_end_row.source_url or verification_url
-                            )
-
-                if _row_has_missing_fields(start_row) or _row_has_missing_fields(end_row):
-                    if primary_provider == "AWC" and not metar_warning_added:
-                        provider_warnings.append(
-                            "AviationWeather METAR observations were partial; trying Open-Meteo backfill."
-                        )
-                    try:
-                        archive_start_row, archive_end_row = self.archive_client.fetch_rows(
-                            latitude=request.location.latitude,
-                            longitude=request.location.longitude,
-                            report_date=request.report_date,
-                            targets_utc=(start_utc, end_utc),
-                            local_timezone=zone,
-                        )
-                    except WindAutofillProviderError:
-                        provider_warnings.append(
-                            "Observations were partial and Open-Meteo backfill was unavailable; "
-                            "some fields may remain missing."
-                        )
-                    else:
-                        start_row, start_backfilled = _merge_row_with_fallback(
-                            primary=start_row,
-                            fallback=archive_start_row,
-                        )
-                        end_row, end_backfilled = _merge_row_with_fallback(
-                            primary=end_row,
-                            fallback=archive_end_row,
-                        )
-                        if start_backfilled or end_backfilled:
-                            provider_warnings.append(
-                                _format_backfill_warning(
-                                    provider_label="Open-Meteo historical hourly data",
-                                    start_fields=start_backfilled,
-                                    end_fields=end_backfilled,
-                                )
-                            )
-                            verification_url = (
-                                archive_start_row.source_url or archive_end_row.source_url or verification_url
-                            )
-
-        warnings = tuple(provider_warnings + list(start_row.warnings) + list(end_row.warnings))
-        return WindAutofillResult(
-            location=request.location,
-            start=start_row,
-            end=end_row,
-            verification_url=verification_url or start_row.source_url or end_row.source_url,
-            warnings=warnings,
+        targets = (start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc))
+        if max(targets) > datetime.now(timezone.utc):
+            raise WindAutofillProviderError("Autofill is retrospective; select Start and End times in the past.")
+        window = timedelta(minutes=request.policy.max_time_delta_minutes)
+        common = dict(latitude=request.location.latitude, longitude=request.location.longitude,
+                      targets_utc=targets, local_timezone=zone, policy=request.policy)
+        providers = (
+            ("NWS", self.weather_client, dict(start_utc=targets[0] - window, end_utc=targets[1] + window,
+                verification_start_utc=targets[0], verification_end_utc=targets[1])),
+            ("AviationWeather METAR", self.metar_client, {}),
+            ("Open-Meteo historical hourly data (estimated)", self.archive_client, dict(report_date=request.report_date)),
         )
+        rows = (_empty_row(), _empty_row())
+        warnings: list[str] = []
+        errors: list[str] = []
+        verification_url = None
+        for label, client, extra in providers:
+            if not any(_row_has_missing_fields(row) for row in rows):
+                break
+            try:
+                candidates = client.fetch_rows(**common, **extra)
+            except WindAutofillProviderError as exc:
+                errors.append(f"{label}: {exc}")
+                warnings.append(f"{label} backfill was unavailable within the selected distance/time limits.")
+                continue
+            merged = [_merge_row_with_fallback(primary=primary, fallback=fallback)
+                      for primary, fallback in zip(rows, candidates)]
+            if any(fields for _, fields in merged):
+                if all(not _row_has_data(row) for row in rows):
+                    if label != "NWS":
+                        value_label = "estimates" if client is self.archive_client else "observations"
+                        warnings.append(f"Station observations were unavailable; used {label} {value_label}.")
+                else:
+                    warnings.append(_format_backfill_warning(
+                        provider_label=label, start_fields=merged[0][1], end_fields=merged[1][1]))
+                verification_url = candidates[0].source_url or candidates[1].source_url or verification_url
+            rows = (merged[0][0], merged[1][0])
+        if not any(_row_has_data(row) for row in rows):
+            raise WindAutofillProviderError(
+                "No weather observations were found within the selected distance/time limits. "
+                "Manual entries were preserved. " + " | ".join(errors))
+        for label, row in zip(("Start", "End"), rows):
+            warnings.extend(f"{label}: {warning}" for warning in row.warnings)
+            if len(set(row.field_sources.values())) > 1:
+                warnings.append(f"{label}: mixed sources/times; review the source for each field.")
+            if any(source.kind == "estimated" for source in row.field_sources.values()):
+                warnings.append(f"{label}: includes model estimates, not on-site measurements.")
+        return WindAutofillResult(request.location, rows[0], rows[1], verification_url,
+                                  tuple(dict.fromkeys(warnings)), request=request)
 
 
 def _resolve_timezone(timezone_name: str) -> ZoneInfo:
@@ -669,7 +550,12 @@ def _resolve_timezone(timezone_name: str) -> ZoneInfo:
 
 def _combine_local(report_date: date, t: time, zone: ZoneInfo) -> datetime:
     naive = datetime.combine(report_date, t)
-    return naive.replace(tzinfo=zone)
+    local = naive.replace(tzinfo=zone)
+    if local.astimezone(timezone.utc).astimezone(zone).replace(tzinfo=None) != naive:
+        raise WindAutofillProviderError("Selected local time does not exist during the daylight-saving transition.")
+    if local.utcoffset() != local.replace(fold=1).utcoffset():
+        raise WindAutofillProviderError("Selected local time occurs twice during the daylight-saving transition; enter weather manually.")
+    return local
 
 
 def _parse_hhmm(value: str) -> time:
@@ -702,12 +588,14 @@ def _parse_iso_datetime(raw: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
-def _nearest_observation(observations: Sequence[dict[str, Any]], target_utc: datetime) -> dict[str, Any] | None:
-    if not observations:
+def _nearest_observation(observations: Sequence[dict[str, Any]], target_utc: datetime,
+                         *, policy: WeatherMatchPolicy = WeatherMatchPolicy()) -> dict[str, Any] | None:
+    eligible = [obs for obs in observations if _time_is_eligible(obs, target_utc, policy)]
+    if not eligible:
         return None
     nearest = min(
-        observations,
-        key=lambda obs: abs((obs["timestamp"] - target_utc).total_seconds()),
+        eligible,
+        key=lambda obs: (abs((obs["timestamp"] - target_utc).total_seconds()), obs["timestamp"]),
     )
     return nearest
 
@@ -719,25 +607,38 @@ def _to_wind_row(
     local_timezone: ZoneInfo,
 ) -> WindAutofillRow:
     timestamp_utc = observation["timestamp"]
-    warnings: list[str] = []
 
     direction_degrees = _extract_quant_value(observation.get("windDirection"))
     direction = _degrees_to_compass(direction_degrees)
-    if direction is None:
-        warnings.append("Wind direction not reported for selected timestamp.")
 
     speed_mph = _wind_to_mph(observation.get("windSpeed"))
-    if speed_mph is None:
-        warnings.append("Wind speed not reported for selected timestamp.")
+    if speed_mph is not None and not 0 <= speed_mph <= 200:
+        speed_mph = None
+    if speed_mph == 0 and _extract_quant_value(observation.get("windSpeed")) == 0:
+        direction = "CALM"
+    elif str(_raw_quant_value(observation.get("windDirection"))).upper() == "VRB":
+        direction = "VRB"
 
     gust_mph = _wind_to_mph(observation.get("windGust"))
-    if gust_mph is None:
-        warnings.append("Wind gust not reported for selected timestamp.")
+    if gust_mph is not None and not 0 <= gust_mph <= 250:
+        gust_mph = None
 
     temp_f = _temp_to_f(observation.get("temperature"))
-    if temp_f is None:
-        warnings.append("Temperature not reported for selected timestamp.")
+    if temp_f is not None and not -100 <= temp_f <= 150:
+        temp_f = None
 
+    source = WeatherFieldSource(
+        provider="Open-Meteo" if station_id == "OPEN_METEO_ARCHIVE" else
+                 ("AviationWeather METAR" if source_url and AWC_METAR_URL in source_url else "NWS"),
+        kind="estimated" if station_id == "OPEN_METEO_ARCHIVE" else "observed",
+        observed_at_utc=timestamp_utc,
+        station_id=None if station_id == "OPEN_METEO_ARCHIVE" else station_id,
+        source_url=source_url,
+        distance_miles=_as_float(observation.get("distance_miles")),
+        latitude=_as_float(observation.get("latitude")), longitude=_as_float(observation.get("longitude")),
+        model=observation.get("model"),
+    )
+    values = dict(direction=direction, speed_mph=speed_mph, gust_mph=gust_mph, temp_f=temp_f)
     return WindAutofillRow(
         direction=direction,
         speed_mph=speed_mph,
@@ -747,12 +648,40 @@ def _to_wind_row(
         observed_at_local=timestamp_utc.astimezone(local_timezone),
         station_id=station_id,
         source_url=source_url,
-        warnings=tuple(warnings),
+        warnings=tuple(_ROW_MISSING_WARNING_BY_FIELD[name] for name, value in values.items() if value is None),
+        field_sources={name: source for name, value in values.items() if value is not None},
     )
 
 
 def _row_has_missing_fields(row: WindAutofillRow) -> bool:
     return row.direction is None or row.speed_mph is None or row.gust_mph is None or row.temp_f is None
+
+
+def _row_has_data(row: WindAutofillRow) -> bool:
+    return any(getattr(row, name) is not None for name in _ROW_FIELD_LABELS)
+
+
+def _empty_row() -> WindAutofillRow:
+    return WindAutofillRow(None, None, None, None, None, None, None, None,
+                           tuple(_ROW_MISSING_WARNING_BY_FIELD.values()))
+
+
+def _require_any_data(rows: Sequence[WindAutofillRow], provider: str) -> tuple[WindAutofillRow, WindAutofillRow]:
+    if len(rows) != 2 or not any(_row_has_data(row) for row in rows):
+        raise WindAutofillProviderError(f"{provider} returned no eligible observations within the selected limits.")
+    return rows[0], rows[1]
+
+
+def _valid_coordinates(latitude: float | None, longitude: float | None) -> bool:
+    return (latitude is not None and longitude is not None and isfinite(latitude) and isfinite(longitude)
+            and -90 <= latitude <= 90 and -180 <= longitude <= 180)
+
+
+def _time_is_eligible(obs: Mapping[str, Any], target: datetime, policy: WeatherMatchPolicy) -> bool:
+    timestamp = obs.get("timestamp")
+    return (isinstance(timestamp, datetime) and timestamp.tzinfo is not None
+            and timestamp <= datetime.now(timezone.utc)
+            and abs((timestamp - target).total_seconds()) <= policy.max_time_delta_minutes * 60)
 
 
 def _merge_row_with_fallback(
@@ -791,13 +720,26 @@ def _merge_row_with_fallback(
             warning for warning in resolved_warnings if warning not in resolved_missing_warnings
         ]
 
+    sources = dict(primary.field_sources)
+    for name in backfilled_fields:
+        if name in fallback.field_sources:
+            sources[name] = fallback.field_sources[name]
+    base = primary if _row_has_data(primary) else fallback
+    mixed = bool(backfilled_fields) and _row_has_data(primary) and (
+        len(set(sources.values())) > 1 or (primary.station_id, primary.observed_at_utc, primary.source_url)
+        != (fallback.station_id, fallback.observed_at_utc, fallback.source_url))
     merged_row = replace(
-        primary,
+        base,
         direction=direction,
         speed_mph=speed_mph,
         gust_mph=gust_mph,
         temp_f=temp_f,
         warnings=tuple(resolved_warnings),
+        field_sources=sources,
+        observed_at_utc=None if mixed else base.observed_at_utc,
+        observed_at_local=None if mixed else base.observed_at_local,
+        station_id=None if mixed else base.station_id,
+        source_url=None if mixed else base.source_url,
     )
     return merged_row, tuple(backfilled_fields)
 
@@ -814,13 +756,6 @@ def _format_backfill_warning(
         f"Filled missing values from {provider_label}. "
         f"Start[{start_labels}] End[{end_labels}]."
     )
-
-
-def _required_history_hours(*, now_utc: datetime, oldest_target_utc: datetime, minimum_hours: int) -> int:
-    delta = now_utc - oldest_target_utc
-    total_seconds = max(0.0, delta.total_seconds())
-    raw_hours = int(total_seconds // 3600) + 3
-    return max(minimum_hours, raw_hours)
 
 
 def _bbox_for_radius(*, latitude: float, longitude: float, radius_miles: float) -> str:
@@ -848,7 +783,7 @@ def _awc_observations(*, payload: Any, latitude: float, longitude: float) -> lis
             continue
         station_lat = _as_float(item.get("lat"))
         station_lon = _as_float(item.get("lon"))
-        if station_lat is None or station_lon is None:
+        if not _valid_coordinates(station_lat, station_lon):
             continue
         distance_miles = _haversine_miles(latitude, longitude, station_lat, station_lon)
         observations.append(
@@ -860,6 +795,8 @@ def _awc_observations(*, payload: Any, latitude: float, longitude: float) -> lis
                 "windGust": {"value": item.get("wgst"), "unitCode": "wmoUnit:kt"},
                 "station_id": str(item.get("icaoId") or "").strip() or None,
                 "distance_miles": distance_miles,
+                "latitude": station_lat,
+                "longitude": station_lon,
             }
         )
     observations.sort(key=lambda item: item["timestamp"])
@@ -885,10 +822,16 @@ def _parse_awc_timestamp(obs_time_raw: Any, report_time_raw: Any) -> datetime | 
 def _nearest_awc_observation(
     observations: Sequence[dict[str, Any]],
     target_utc: datetime,
+    *, policy: WeatherMatchPolicy = WeatherMatchPolicy(),
 ) -> dict[str, Any] | None:
-    if not observations:
+    eligible = [obs for obs in observations
+                if _time_is_eligible(obs, target_utc, policy)
+                and _as_float(obs.get("distance_miles")) is not None
+                and 0 <= float(obs["distance_miles"]) <= policy.max_distance_miles]
+    if not eligible:
         return None
-    nearest = min(observations, key=lambda obs: _awc_score(obs=obs, target_utc=target_utc))
+    nearest = min(eligible, key=lambda obs: (_awc_score(obs=obs, target_utc=target_utc),
+                                           obs["timestamp"], str(obs.get("station_id", ""))))
     return nearest
 
 
@@ -897,7 +840,9 @@ def _awc_score(*, obs: dict[str, Any], target_utc: datetime) -> float:
     if not isinstance(timestamp, datetime):
         return float("inf")
     time_seconds = abs((timestamp - target_utc).total_seconds())
-    distance_miles = _as_float(obs.get("distance_miles")) or 9999.0
+    distance_miles = _as_float(obs.get("distance_miles"))
+    if distance_miles is None:
+        return float("inf")
     # 1 mile ~= 60 seconds score weight to balance time and distance.
     return time_seconds + (distance_miles * 60.0)
 
@@ -920,17 +865,23 @@ def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> floa
     return radius_miles * c
 
 
+def _raw_quant_value(raw: Any) -> Any:
+    if not isinstance(raw, dict) or raw.get("qualityControl") in {"X", "Z"}:
+        return None
+    return raw.get("value")
+
+
 def _extract_quant_value(raw: Any) -> float | None:
     if not isinstance(raw, dict):
         return None
-    value = _as_float(raw.get("value"))
+    value = _as_float(_raw_quant_value(raw))
     return value
 
 
 def _wind_to_mph(raw: Any) -> int | None:
     if not isinstance(raw, dict):
         return None
-    value = _as_float(raw.get("value"))
+    value = _as_float(_raw_quant_value(raw))
     if value is None:
         return None
     unit = str(raw.get("unitCode") or "").lower()
@@ -951,7 +902,7 @@ def _wind_to_mph(raw: Any) -> int | None:
 def _temp_to_f(raw: Any) -> int | None:
     if not isinstance(raw, dict):
         return None
-    value = _as_float(raw.get("value"))
+    value = _as_float(_raw_quant_value(raw))
     if value is None:
         return None
     unit = str(raw.get("unitCode") or "").lower()
@@ -965,7 +916,7 @@ def _temp_to_f(raw: Any) -> int | None:
 
 
 def _degrees_to_compass(value: float | None) -> str | None:
-    if value is None:
+    if value is None or not 0 <= value <= 360:
         return None
     normalized = value % 360.0
     directions = (
@@ -995,7 +946,7 @@ def _as_float(value: Any) -> float | None:
         return None
     if isinstance(value, (int, float)):
         candidate = float(value)
-        if isnan(candidate):
+        if not isfinite(candidate):
             return None
         return candidate
     if isinstance(value, str):
@@ -1006,7 +957,7 @@ def _as_float(value: Any) -> float | None:
             candidate = float(text)
         except ValueError:
             return None
-        if isnan(candidate):
+        if not isfinite(candidate):
             return None
         return candidate
     return None
@@ -1046,14 +997,20 @@ def _open_meteo_hourly_observations(*, hourly: Mapping[str, Any], local_timezone
 
     observations: list[dict[str, Any]] = []
     for idx, raw_time in enumerate(raw_times):
-        if not isinstance(raw_time, str) or not raw_time.strip():
+        if isinstance(raw_time, (int, float)) and not isinstance(raw_time, bool):
+            try:
+                timestamp_utc = datetime.fromtimestamp(raw_time, tz=timezone.utc)
+            except (ValueError, OverflowError, OSError):
+                continue
+        elif isinstance(raw_time, str) and raw_time.strip():
+            try:
+                local_naive = datetime.fromisoformat(raw_time.strip())
+                local_aware = _combine_local(local_naive.date(), local_naive.time(), local_timezone)
+                timestamp_utc = local_aware.astimezone(timezone.utc)
+            except (ValueError, WindAutofillProviderError):
+                continue
+        else:
             continue
-        try:
-            local_naive = datetime.fromisoformat(raw_time.strip())
-        except ValueError:
-            continue
-        local_aware = local_naive.replace(tzinfo=local_timezone)
-        timestamp_utc = local_aware.astimezone(timezone.utc)
         observations.append(
             {
                 "timestamp": timestamp_utc,

@@ -1,63 +1,47 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
-import csv
-import logging
-from typing import Optional
 
 from purway_geotagger.util.timeparse import parse_csv_timestamp, parse_photo_timestamp_from_name, format_exif_datetime
 from purway_geotagger.util.errors import CorrelationError
 from purway_geotagger.core.pac_calculator import calculate_pac
+from purway_geotagger.parsers.table_inputs import InputTable, read_tables, finite_number, check_cancel, CancelCheck
 
-PHOTO_COL_CANDIDATES = ["photo", "image", "filename", "file", "sourcefile"]
-LAT_COL_CANDIDATES = ["latitude", "lat", "gpslatitude"]
-LON_COL_CANDIDATES = ["longitude", "lon", "lng", "gpslongitude"]
-TIME_COL_CANDIDATES = ["timestamp", "time", "datetime", "date"]
-PPM_COL_CANDIDATES = ["concentration", "ppm", "methane", "ch4", "methane_concentration"]
-
-# Extended metadata column candidates
-ALT_COL_CANDIDATES = ["altitude", "alt", "gpsaltitude"]
-REL_ALT_COL_CANDIDATES = ["relative_altitude", "rel_alt", "agl", "height_agl"]
-LIGHT_COL_CANDIDATES = ["light_intensity", "light", "lux", "brightness"]
-UAV_PITCH_CANDIDATES = ["uav_pitch", "pitch"]
-UAV_ROLL_CANDIDATES = ["uav_roll", "roll"]
-UAV_YAW_CANDIDATES = ["uav_yaw", "yaw", "heading"]
-GIMBAL_PITCH_CANDIDATES = ["gimbal_pitch", "cam_pitch"]
-GIMBAL_ROLL_CANDIDATES = ["gimbal_roll", "cam_roll"]
-GIMBAL_YAW_CANDIDATES = ["gimbal_yaw", "cam_yaw"]
-FOCAL_LENGTH_CANDIDATES = ["camera_focal_length", "focal_length", "focal", "lens_focal"]
-ZOOM_CANDIDATES = ["camera_zoom", "zoom", "digital_zoom", "zoom_ratio"]
-TARGET_LAT_COL_CANDIDATES = ["dest_latitude", "target_latitude", "target_lat", "destination_latitude", "destination_lat"]
-TARGET_LON_COL_CANDIDATES = ["dest_longitude", "target_longitude", "target_lon", "destination_longitude", "destination_lon"]
-DISTANCE_COL_CANDIDATES = ["distance", "target_distance", "methane_distance"]
-STATUS_COL_CANDIDATES = ["status"]
-ERR_CODE_COL_CANDIDATES = ["err_code", "error_code"]
-SNR_COL_CANDIDATES = ["snr"]
-RELIABILITY_COL_CANDIDATES = ["reliability"]
-FLIGHT_STATUS_COL_CANDIDATES = ["flight_status"]
-DIS_CODE_COL_CANDIDATES = ["dis_code"]
-HOME_DISTANCE_COL_CANDIDATES = ["home_distance"]
-SPEED_COL_CANDIDATES = ["speed"]
+from purway_geotagger.parsers.columns import (
+    PHOTO_COL_CANDIDATES,
+    LAT_COL_CANDIDATES,
+    LON_COL_CANDIDATES,
+    TIME_COL_CANDIDATES,
+    PPM_COL_CANDIDATES,
+    ALT_COL_CANDIDATES,
+    REL_ALT_COL_CANDIDATES,
+    LIGHT_COL_CANDIDATES,
+    UAV_PITCH_CANDIDATES,
+    UAV_ROLL_CANDIDATES,
+    UAV_YAW_CANDIDATES,
+    GIMBAL_PITCH_CANDIDATES,
+    GIMBAL_ROLL_CANDIDATES,
+    GIMBAL_YAW_CANDIDATES,
+    FOCAL_LENGTH_CANDIDATES,
+    ZOOM_CANDIDATES,
+    TARGET_LAT_COL_CANDIDATES,
+    TARGET_LON_COL_CANDIDATES,
+    DISTANCE_COL_CANDIDATES,
+    STATUS_COL_CANDIDATES,
+    ERR_CODE_COL_CANDIDATES,
+    SNR_COL_CANDIDATES,
+    RELIABILITY_COL_CANDIDATES,
+    FLIGHT_STATUS_COL_CANDIDATES,
+    DIS_CODE_COL_CANDIDATES,
+    HOME_DISTANCE_COL_CANDIDATES,
+    SPEED_COL_CANDIDATES,
+    pick_column as _pick_col,
+)
 
 REASON_NO_PHOTO_OR_TIMESTAMP = "no explicit Photo column correlation and no timestamped CSV rows available"
 REASON_NO_FILENAME_TIMESTAMP = "no filename timestamp and no explicit Photo column correlation"
 REASON_AMBIGUOUS_TIMESTAMP = "ambiguous timestamp join"
-
-def _pick_col(cols: list[str], candidates: list[str], exclude_substrings: list[str] | None = None) -> Optional[str]:
-    cols_l = {c.lower().strip(): c for c in cols}
-    for cand in candidates:
-        if cand in cols_l:
-            return cols_l[cand]
-    # substring fallback
-    exclude_substrings = exclude_substrings or []
-    for c in cols:
-        cl = c.lower()
-        if any(excluded in cl for excluded in exclude_substrings):
-            continue
-        if any(cand in cl for cand in candidates):
-            return c
-    return None
 
 @dataclass(frozen=True)
 class PurwayRecord:
@@ -93,6 +77,8 @@ class PurwayRecord:
     dis_code: str | None = None
     home_distance: float | None = None
     speed: float | None = None
+    source_sheet: str = ""
+    source_row: int | None = None
 
 @dataclass(frozen=True)
 class PhotoMatch:
@@ -132,30 +118,58 @@ class PhotoMatch:
     dis_code: str | None = None
     home_distance: float | None = None
     speed: float | None = None
+    source_sheet: str = ""
+    source_row: int | None = None
 
 class PurwayCSVIndex:
     def __init__(self, records: list[PurwayRecord]) -> None:
         self.records = records
+        self.errors: list[str] = []
+        self.ambiguous_photos: set[str] = set()
 
         # Precompute maps for faster joins
         self.by_photo: dict[str, PurwayRecord] = {}
         self.by_time: list[PurwayRecord] = []
         for r in records:
             if r.photo_ref:
-                self.by_photo[Path(r.photo_ref).name] = r
+                name = Path(r.photo_ref.replace("\\", "/")).name
+                previous = self.by_photo.get(name)
+                if previous is not None:
+                    ignored = {"csv_path", "source_sheet", "source_row"}
+                    if any(getattr(previous, f.name) != getattr(r, f.name) for f in fields(r) if f.name not in ignored):
+                        self.ambiguous_photos.add(name)
+                else:
+                    self.by_photo[name] = r
             if r.timestamp:
                 self.by_time.append(r)
 
     @classmethod
-    def from_csv_files(cls, csv_files: list[Path]) -> "PurwayCSVIndex":
+    def from_csv_files(cls, csv_files: list[Path], cancel: CancelCheck = None) -> "PurwayCSVIndex":
+        """Compatibility entrypoint: accepts CSV and XLSX metadata sources."""
         records: list[PurwayRecord] = []
-        for p in csv_files:
-            recs = _parse_single_csv(p)
-            records.extend(recs)
-        return cls(records=records)
+        errors = []
+        for path in csv_files:
+            check_cancel(cancel)
+            try:
+                file_records = []
+                for table in read_tables(path, cancel):
+                    try:
+                        file_records.extend(_parse_table(table, cancel))
+                    except ValueError as exc:
+                        raise ValueError(f"{table.sheet or 'CSV'}: {exc}") from exc
+                records.extend(file_records)
+            except (ValueError, OSError) as exc:
+                errors.append(f"{path.name}: {exc}")
+        index = cls(records)
+        index.errors = errors
+        return index
 
     def match_photo(self, photo_path: Path, max_join_delta_seconds: int) -> PhotoMatch:
         # Step A: filename join
+        if photo_path.name in self.ambiguous_photos:
+            sources = [f"{r.csv_path.name} / {r.source_sheet or 'CSV'} / row {r.source_row}"
+                       for r in self.records if r.photo_ref and Path(r.photo_ref.replace('\\', '/')).name == photo_path.name]
+            raise CorrelationError(f"Ambiguous filename join for {photo_path.name}: conflicting metadata rows in {'; '.join(sources)}.")
         if self.by_photo:
             r = self.by_photo.get(photo_path.name)
             if r:
@@ -220,6 +234,8 @@ def _to_match(
     return PhotoMatch(
         csv_path=str(r.csv_path),
         source_csv=r.csv_path.name,
+        source_sheet=r.source_sheet,
+        source_row=r.source_row,
         lat=r.lat,
         lon=r.lon,
         ppm=r.ppm,
@@ -256,19 +272,13 @@ def _to_match(
     )
 
 def _parse_single_csv(path: Path) -> list[PurwayRecord]:
-    # Read with BOM tolerance
-    logger = logging.getLogger(__name__)
-    try:
-        with path.open("r", encoding="utf-8-sig", newline="") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-            if not rows:
-                return []
-            cols = reader.fieldnames or list(rows[0].keys())
-    except UnicodeDecodeError:
-        logger.warning("Skipping non-UTF8 CSV: %s", path)
-        return []
+    return [record for table in read_tables(path) for record in _parse_table(table)]
 
+
+def _parse_table(table: InputTable, cancel: CancelCheck = None) -> list[PurwayRecord]:
+    if table.header_index is None:
+        return []
+    path, cols = table.path, table.columns
     photo_col = _pick_col(cols, PHOTO_COL_CANDIDATES)
     lat_col = _pick_col(cols, LAT_COL_CANDIDATES, exclude_substrings=["dest_lat", "target_lat", "destination_lat"])
     lon_col = _pick_col(cols, LON_COL_CANDIDATES, exclude_substrings=["dest_lon", "target_lon", "destination_lon"])
@@ -276,7 +286,7 @@ def _parse_single_csv(path: Path) -> list[PurwayRecord]:
     ppm_col = _pick_col(cols, PPM_COL_CANDIDATES)
     
     # Extended column lookups
-    alt_col = _pick_col(cols, ALT_COL_CANDIDATES)
+    alt_col = _pick_col(cols, ALT_COL_CANDIDATES, exclude_substrings=REL_ALT_COL_CANDIDATES)
     rel_alt_col = _pick_col(cols, REL_ALT_COL_CANDIDATES)
     light_col = _pick_col(cols, LIGHT_COL_CANDIDATES)
     uav_pitch_col = _pick_col(cols, UAV_PITCH_CANDIDATES)
@@ -310,12 +320,7 @@ def _parse_single_csv(path: Path) -> list[PurwayRecord]:
         return []  # ignore CSVs without coordinate columns
 
     def _safe_float(row: dict, col: str | None) -> float | None:
-        if not col or row.get(col) in (None, ""):
-            return None
-        try:
-            return float(str(row.get(col)).strip())
-        except ValueError:
-            return None
+        return finite_number(row.get(col)) if col else None
 
     def _safe_str(row: dict, col: str | None) -> str | None:
         if not col or row.get(col) in (None, ""):
@@ -324,19 +329,12 @@ def _parse_single_csv(path: Path) -> list[PurwayRecord]:
         return value or None
 
     out: list[PurwayRecord] = []
-    for r in rows:
-        try:
-            lat = float(str(r.get(lat_col, "")).strip())
-            lon = float(str(r.get(lon_col, "")).strip())
-        except ValueError:
+    for source_row, r in table.data_rows():
+        check_cancel(cancel)
+        lat, lon = finite_number(r.get(lat_col)), finite_number(r.get(lon_col))
+        if lat is None or lon is None:
             continue
-
-        ppm = 0.0
-        if ppm_col and r.get(ppm_col) not in (None, ""):
-            try:
-                ppm = float(str(r.get(ppm_col)).strip())
-            except ValueError:
-                ppm = 0.0
+        ppm = finite_number(r.get(ppm_col)) or 0.0
 
         ts = None
         ts_raw = None
@@ -351,6 +349,8 @@ def _parse_single_csv(path: Path) -> list[PurwayRecord]:
 
         out.append(PurwayRecord(
             csv_path=path,
+            source_sheet=table.sheet,
+            source_row=source_row.number,
             lat=lat,
             lon=lon,
             ppm=ppm,
@@ -409,41 +409,30 @@ class CSVSchema:
     lon_col: str | None
     time_col: str | None
     ppm_col: str | None
+    source_sheet: str = ""
+    header_row: int | None = None
+    error: str = ""
 
 
 def inspect_csv_schema(path: Path) -> CSVSchema:
-    logger = logging.getLogger(__name__)
+    """Legacy single-table interface; workbook callers use inspect_table_schemas."""
+    return inspect_table_schemas(path)[0]
+
+
+def inspect_table_schemas(path: Path) -> list[CSVSchema]:
     try:
-        with path.open("r", encoding="utf-8-sig", newline="") as f:
-            reader = csv.DictReader(f)
-            rows = list(reader)
-            cols = reader.fieldnames or (list(rows[0].keys()) if rows else [])
-    except UnicodeDecodeError:
-        logger.warning("Skipping non-UTF8 CSV schema: %s", path)
-        return CSVSchema(
-            csv_path=path,
-            columns=[],
-            row_count=0,
-            photo_col=None,
-            lat_col=None,
-            lon_col=None,
-            time_col=None,
-            ppm_col=None,
-        )
-
-    photo_col = _pick_col(cols, PHOTO_COL_CANDIDATES)
-    lat_col = _pick_col(cols, LAT_COL_CANDIDATES, exclude_substrings=["dest_lat", "target_lat", "destination_lat"])
-    lon_col = _pick_col(cols, LON_COL_CANDIDATES, exclude_substrings=["dest_lon", "target_lon", "destination_lon"])
-    time_col = _pick_col(cols, TIME_COL_CANDIDATES)
-    ppm_col = _pick_col(cols, PPM_COL_CANDIDATES)
-
-    return CSVSchema(
-        csv_path=path,
-        columns=cols,
-        row_count=len(rows),
-        photo_col=photo_col,
-        lat_col=lat_col,
-        lon_col=lon_col,
-        time_col=time_col,
-        ppm_col=ppm_col,
-    )
+        schemas = []
+        for table in read_tables(path):
+            cols = table.columns
+            schemas.append(CSVSchema(
+                csv_path=path, columns=cols, row_count=sum(1 for _ in table.data_rows()),
+                photo_col=_pick_col(cols, PHOTO_COL_CANDIDATES),
+                lat_col=_pick_col(cols, LAT_COL_CANDIDATES, ["dest_lat", "target_lat", "destination_lat"]),
+                lon_col=_pick_col(cols, LON_COL_CANDIDATES, ["dest_lon", "target_lon", "destination_lon"]),
+                time_col=_pick_col(cols, TIME_COL_CANDIDATES), ppm_col=_pick_col(cols, PPM_COL_CANDIDATES),
+                source_sheet=table.sheet,
+                header_row=table.rows[table.header_index].number if table.header_index is not None else None,
+            ))
+        return schemas
+    except (ValueError, OSError) as exc:
+        return [CSVSchema(path, [], 0, None, None, None, None, None, error=str(exc))]

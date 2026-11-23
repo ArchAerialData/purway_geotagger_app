@@ -18,11 +18,16 @@ class PreviewDialog(QDialog):
         self.resize(900, 400)
 
         layout = QVBoxLayout(self)
-        summary = QLabel(f"Scanned photos: {result.scanned_photos}, CSVs: {result.scanned_csvs}. Showing {len(result.rows)} rows.")
+        summary = QLabel(f"Scanned photos: {result.scanned_photos}, CSVs: {result.scanned_csvs}, XLSX: {result.scanned_workbooks}. Showing {len(result.rows)} rows.")
         layout.addWidget(summary)
 
+        if result.errors:
+            errors = QLabel("\n".join(result.errors))
+            errors.setWordWrap(True)
+            layout.addWidget(errors)
+
         table = QTableWidget()
-        headers = ["Status", "Join", "Photo", "CSV", "Lat", "Lon", "PPM", "DateTime", "Reason"]
+        headers = ["Status", "Join", "Photo", "CSV/XLSX", "Lat", "Lon", "PPM", "DateTime", "Reason", "Sheet", "Source row"]
         table.setProperty("cssClass", "outputs_table")
         table.setColumnCount(len(headers))
         table.setHorizontalHeaderLabels(headers)
@@ -41,6 +46,9 @@ class PreviewDialog(QDialog):
             table.setItem(i, 6, QTableWidgetItem(r.ppm))
             table.setItem(i, 7, QTableWidgetItem(r.datetime_original))
             table.setItem(i, 8, QTableWidgetItem(r.reason))
+
+            table.setItem(i, 9, QTableWidgetItem(r.source_sheet))
+            table.setItem(i, 10, QTableWidgetItem(str(r.source_row or "")))
 
         table.resizeColumnsToContents()
         layout.addWidget(table)

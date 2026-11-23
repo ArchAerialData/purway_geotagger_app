@@ -710,7 +710,7 @@ class MainWindow(QMainWindow):
         self.jobs_detail_values["mode"].setText(self._job_mode_label(job))
         self.jobs_detail_values["progress"].setText(f"{max(0, int(st.progress))}%")
         self.jobs_detail_values["inputs"].setText(str(len(job.inputs)))
-        self.jobs_detail_values["scanned"].setText(f"{st.scanned_photos} photos / {st.scanned_csvs} CSVs")
+        self.jobs_detail_values["scanned"].setText(f"{st.scanned_photos} photos / {st.scanned_csvs} CSVs / {st.scanned_workbooks} XLSX")
         self.jobs_detail_values["matched"].setText(str(st.matched))
         self.jobs_detail_values["success"].setText(str(st.success))
         self.jobs_detail_values["failed"].setText(str(st.failed))

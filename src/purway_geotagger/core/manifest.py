@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, fields
 from pathlib import Path
 import csv
 
@@ -21,6 +21,8 @@ class ManifestRow:
     distance: str = ""
     source_file_name: str = ""
     source_csv: str = ""
+    source_sheet: str = ""
+    source_row: str = ""
     join_delta_seconds: str = ""
     payload_model: str = ""
     geotagger_version: str = ""
@@ -59,15 +61,7 @@ class ManifestWriter:
     def write(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=list(asdict(self._rows[0]).keys()) if self._rows else [
-                "source_path","output_path","status","reason","lat","lon","ppm","csv_path","join_method","exif_written",
-                "target_lat", "target_lon", "distance", "source_file_name", "source_csv", "join_delta_seconds",
-                "payload_model", "geotagger_version", "geotagger_run_id", "csv_status", "err_code", "snr",
-                "reliability", "flight_status", "dis_code", "home_distance", "speed",
-                "altitude", "relative_altitude", "light_intensity", "pac", 
-                "uav_pitch", "uav_roll", "uav_yaw", "gimbal_pitch", "gimbal_roll", "gimbal_yaw",
-                "camera_focal_length", "camera_zoom", "capture_time"
-            ])
+            w = csv.DictWriter(f, fieldnames=[field.name for field in fields(ManifestRow)])
             w.writeheader()
             for r in self._rows:
                 w.writerow(asdict(r))
