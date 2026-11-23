@@ -3,131 +3,42 @@ param(
     [string]$BuildDir = "build",
     [string]$StageDir = "build/windows_exiftool"
 )
-
 $ErrorActionPreference = "Stop"
-
-if ([string]::IsNullOrWhiteSpace($Version)) {
-    throw "EXIFTOOL_VERSION is required."
+$manifest = Get-Content -LiteralPath (Join-Path $PSScriptRoot "vendor/exiftool.json") -Raw | ConvertFrom-Json
+if ($Version -ne $manifest.version) { throw "Unsupported ExifTool version '$Version'. Update vendor/exiftool.json and its verified archive together." }
+$archive = Join-Path $PSScriptRoot ("vendor/" + $manifest.archive)
+if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $manifest.sha256) { throw "Vendored ExifTool checksum mismatch." }
+$buildRoot = [IO.Path]::GetFullPath($BuildDir)
+$stage = [IO.Path]::GetFullPath($StageDir)
+if (-not $stage.StartsWith($buildRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "StageDir must be a child of BuildDir."
 }
-
-function Test-ZipArchiveMagic {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    if (-not (Test-Path -LiteralPath $Path)) {
-        return $false
+New-Item -ItemType Directory -Force -Path $buildRoot | Out-Null
+$temporary = Join-Path $buildRoot ("exiftool-stage-" + [Guid]::NewGuid().ToString("N"))
+$backup = Join-Path $buildRoot ("exiftool-previous-" + [Guid]::NewGuid().ToString("N"))
+# Every recursive delete/move below is constrained to checked BuildDir children.
+foreach ($target in @($temporary, $backup, $stage)) {
+    if (-not $target.StartsWith($buildRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw "Unsafe stage path: $target" }
+}
+try {
+    $extract = Join-Path $temporary "extracted"
+    Expand-Archive -LiteralPath $archive -DestinationPath $extract
+    $source = Join-Path $extract ("exiftool-" + $Version + "_64")
+    $candidate = Join-Path $temporary "app"
+    New-Item -ItemType Directory -Path $candidate | Out-Null
+    Copy-Item -LiteralPath (Join-Path $source "exiftool(-k).exe") -Destination (Join-Path $candidate "exiftool.exe")
+    Copy-Item -LiteralPath (Join-Path $source "exiftool_files") -Destination $candidate -Recurse
+    $actual = (& (Join-Path $candidate "exiftool.exe") -ver | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or $actual -ne $Version) { throw "Staged ExifTool version check failed: $actual" }
+    if (Test-Path -LiteralPath $stage) { Move-Item -LiteralPath $stage -Destination $backup }
+    try { Move-Item -LiteralPath $candidate -Destination $stage }
+    catch {
+        if ((Test-Path -LiteralPath $backup) -and -not (Test-Path -LiteralPath $stage)) { Move-Item -LiteralPath $backup -Destination $stage }
+        throw
     }
-
-    $item = Get-Item -LiteralPath $Path
-    if ($item.Length -lt 1024) {
-        return $false
-    }
-
-    $stream = [System.IO.File]::OpenRead($item.FullName)
-    try {
-        $first = $stream.ReadByte()
-        $second = $stream.ReadByte()
-        return ($first -eq 0x50 -and $second -eq 0x4B)
-    }
-    finally {
-        $stream.Dispose()
-    }
+    if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
+    Write-Output "Verified and staged ExifTool $Version at: $stage"
 }
-
-function Save-ExifToolZip {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Version,
-        [Parameter(Mandatory = $true)]
-        [string]$ZipPath
-    )
-
-    $urls = @(
-        ("https://master.dl.sourceforge.net/project/exiftool/exiftool-$Version" + "_64.zip?viasf=1"),
-        ("https://cytranet.dl.sourceforge.net/project/exiftool/exiftool-$Version" + "_64.zip?viasf=1"),
-        ("https://sourceforge.net/projects/exiftool/files/exiftool-$Version" + "_64.zip/download"),
-        ("https://exiftool.org/exiftool-$Version" + "_64.zip")
-    )
-    $errors = [System.Collections.Generic.List[string]]::new()
-
-    foreach ($url in $urls) {
-        Write-Host "Downloading ExifTool $Version from: $url"
-        try {
-            if (Test-Path -LiteralPath $ZipPath) {
-                Remove-Item -LiteralPath $ZipPath -Force
-            }
-
-            Invoke-WebRequest -Uri $url -OutFile $ZipPath -MaximumRedirection 10 -ErrorAction Stop
-            if (Test-ZipArchiveMagic -Path $ZipPath) {
-                $size = (Get-Item -LiteralPath $ZipPath).Length
-                Write-Host "Downloaded ExifTool ZIP ($size bytes)."
-                return
-            }
-
-            $size = 0
-            if (Test-Path -LiteralPath $ZipPath) {
-                $size = (Get-Item -LiteralPath $ZipPath).Length
-            }
-            throw "Downloaded file is not a ZIP archive (size=$size)."
-        }
-        catch {
-            $message = $_.Exception.Message
-            $errors.Add("$url -> $message")
-            Write-Warning "ExifTool download attempt failed: $message"
-            if (Test-Path -LiteralPath $ZipPath) {
-                Remove-Item -LiteralPath $ZipPath -Force
-            }
-        }
-    }
-
-    $newLine = [Environment]::NewLine
-    $attemptText = ($errors | ForEach-Object { " - $_" }) -join $newLine
-    throw "Unable to download ExifTool $Version. Attempts:$newLine$attemptText"
+finally {
+    if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Recurse -Force }
 }
-
-New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
-
-$zipPath = Join-Path $BuildDir "exiftool_windows.zip"
-Save-ExifToolZip -Version $Version -ZipPath $zipPath
-
-$extractRoot = Join-Path $BuildDir "exiftool_windows"
-if (Test-Path -LiteralPath $extractRoot) {
-    Remove-Item -LiteralPath $extractRoot -Recurse -Force
-}
-Expand-Archive -Path $zipPath -DestinationPath $extractRoot -Force
-
-if (Test-Path -LiteralPath $StageDir) {
-    Remove-Item -LiteralPath $StageDir -Recurse -Force
-}
-New-Item -ItemType Directory -Force -Path $StageDir | Out-Null
-
-# Newer ExifTool Windows archives ship `exiftool(-k).exe` instead of `exiftool.exe`.
-$exeItem = Get-ChildItem -Path $extractRoot -Recurse -File -Filter "exiftool.exe" | Select-Object -First 1
-if (-not $exeItem) {
-    $exeItem = Get-ChildItem -Path $extractRoot -Recurse -File -Filter "exiftool(-k).exe" | Select-Object -First 1
-}
-if (-not $exeItem) {
-    $exeItem = Get-ChildItem -Path $extractRoot -Recurse -File -Filter "exiftool*.exe" | Select-Object -First 1
-}
-if (-not $exeItem) {
-    throw "Missing ExifTool executable in extracted archive under: $extractRoot"
-}
-
-$srcExe = $exeItem.FullName
-$srcFiles = Join-Path $exeItem.Directory.FullName "exiftool_files"
-if (-not (Test-Path -LiteralPath $srcFiles)) {
-    $filesItem = Get-ChildItem -Path $extractRoot -Recurse -Directory -Filter "exiftool_files" | Select-Object -First 1
-    if (-not $filesItem) {
-        throw "Missing exiftool_files in extracted archive under: $extractRoot"
-    }
-    $srcFiles = $filesItem.FullName
-}
-
-# Rename to `exiftool.exe` for command-line use when the archive ships
-# `exiftool(-k).exe`.
-Copy-Item -Force -LiteralPath $srcExe -Destination (Join-Path $StageDir "exiftool.exe")
-Copy-Item -Recurse -Force -LiteralPath $srcFiles -Destination (Join-Path $StageDir "exiftool_files")
-
-Write-Host "Staged ExifTool $Version at: $StageDir"

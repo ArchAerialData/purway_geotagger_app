@@ -2,18 +2,29 @@ name: windows-installer
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [main]
   workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-packages-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: windows-latest
-    timeout-minutes: 90
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
     env:
       PYTHON_VERSION: "3.11"
-      # Pin ExifTool so Windows builds are deterministic and don't depend on PATH.
       EXIFTOOL_VERSION: "13.50"
-      QT_QPA_PLATFORM: "offscreen"
+      QT_QPA_PLATFORM: offscreen
+      PYTHONDONTWRITEBYTECODE: "1"
 
     steps:
       - name: Checkout
@@ -23,70 +34,83 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: "pip"
+          cache: pip
 
-      - name: Resolve app version
-        shell: pwsh
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt tzdata
+
+      - name: Run regression suite
+        run: python -B -m pytest -p no:cacheprovider -q
+
+      - name: Stage verified bundled ExifTool
+        run: ./scripts/windows/stage_exiftool.ps1 -Version $env:EXIFTOOL_VERSION
+
+      - name: Build complete Windows app
+        run: ./scripts/windows/build_exe.ps1 -PythonExe python -ExifToolVersion $env:EXIFTOOL_VERSION
+
+      - name: Verify packaged startup and build identity
+        run: python -B scripts/windows/smoke_test.py
+
+      - name: Setup pinned installer compiler
+        run: ./scripts/windows/setup_inno.ps1
+
+      - name: Compile self-contained installer EXE
+        run: ./scripts/windows/build_installer.ps1
+
+      - name: Verify installer payload and installed startup
+        run: python -B scripts/windows/verify_installer.py
+
+      - name: Package verified portable ZIP
+        run: python -B scripts/windows/package_portable.py
+
+      - name: Prepare download metadata
+        id: identity
         run: |
-          $ErrorActionPreference = "Stop"
-          $txt = Get-Content -Raw "src/purway_geotagger/__init__.py"
-          $ver = "0.0.0"
-          if ($txt -match '__version__\s*=\s*"([^"]+)"') { $ver = $Matches[1] }
-          Add-Content -Path $env:GITHUB_ENV -Value ("APP_VERSION=" + $ver)
-          Write-Host ("APP_VERSION=" + $ver)
+          $info = Get-Content -LiteralPath dist/windows/PurwayGeotagger/build-info.json -Raw | ConvertFrom-Json
+          "version=$($info.app_version)" >> $env:GITHUB_OUTPUT
+          "build_id=$($info.build_id)" >> $env:GITHUB_OUTPUT
+          Copy-Item -LiteralPath dist/windows/PurwayGeotagger/build-info.json -Destination dist/windows-installer/build-info.json
+          Copy-Item -LiteralPath build/windows-smoke.json,build/windows-installer-smoke.json -Destination dist/windows-installer
+          "Run the Setup EXE to install the app and all dependencies. Python, Git Bash and a separate ExifTool installation are not required. The window title shows version and build ID." | Set-Content dist/windows-installer/START-HERE.txt
 
-      - name: Install deps (including tzdata for Windows ZoneInfo)
-        shell: pwsh
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt -r requirements-dev.txt tzdata
-
-      - name: Run tests
-        shell: pwsh
-        run: |
-          python -m pytest -q
-
-      - name: Download + stage ExifTool (Windows)
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          ./scripts/windows/stage_exiftool.ps1 -Version "${env:EXIFTOOL_VERSION}" -BuildDir "build" -StageDir "build/windows_exiftool"
-
-      - name: Build Windows exe (shared local/CI script)
-        shell: pwsh
-        run: ./scripts/windows/build_exe.ps1 -PythonExe "python" -ExifToolVersion "${env:EXIFTOOL_VERSION}"
-
-      - name: Install Inno Setup
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          choco install innosetup --no-progress -y
-          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\\ISCC.exe"
-          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at expected path: $iscc" }
-          Write-Host "Found ISCC.exe at: $iscc"
-
-      - name: Build installer (Inno Setup)
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\\ISCC.exe"
-          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at expected path: $iscc" }
-          & $iscc "scripts/windows/PurwayGeotagger.iss"
-
-          $outDir = "dist/windows-installer"
-          if (-not (Test-Path $outDir)) { throw "Installer output folder missing: $outDir" }
-
-          $expected = Join-Path $outDir ("PurwayGeotagger-Setup-" + "${env:APP_VERSION}" + ".exe")
-          if (-not (Test-Path $expected)) {
-            Write-Host "Expected installer not found at: $expected"
-            Write-Host "Directory contents:"
-            Get-ChildItem -Force $outDir | Format-Table -AutoSize
-            throw "Installer build failed."
-          }
-
-      - name: Upload installer artifact
+      - name: Upload installer EXE and checksums
+        id: installer
         uses: actions/upload-artifact@v4
         with:
-          name: PurwayGeotagger-windows-installer
-          path: dist/windows-installer/*.exe
+          name: PurwayGeotagger-Setup-${{ steps.identity.outputs.version }}-${{ steps.identity.outputs.build_id }}
+          path: dist/windows-installer/*
           if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+
+      - name: Upload portable ZIP and checksum
+        id: portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: PurwayGeotagger-Portable-${{ steps.identity.outputs.version }}-${{ steps.identity.outputs.build_id }}
+          path: dist/share/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+
+      - name: Download links
+        env:
+          INSTALLER_URL: ${{ steps.installer.outputs.artifact-url }}
+          PORTABLE_URL: ${{ steps.portable.outputs.artifact-url }}
+        run: |
+          "## Windows packages" >> $env:GITHUB_STEP_SUMMARY
+          "[Download self-contained installer EXE]($env:INSTALLER_URL)" >> $env:GITHUB_STEP_SUMMARY
+          "[Download portable ZIP]($env:PORTABLE_URL)" >> $env:GITHUB_STEP_SUMMARY
+          "Extract the GitHub artifact download first. Run Setup to install, or extract the portable ZIP and keep its entire application folder together." >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Preserve diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/windows-*.json
+            build/windows-installer-*.log
+            build/pyinstaller/windows/work/**/warn-*.txt
+          if-no-files-found: ignore
+          retention-days: 14
