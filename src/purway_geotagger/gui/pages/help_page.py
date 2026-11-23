@@ -56,7 +56,7 @@ class HelpPage(QWidget):
                 "Best when you need methane deliverables only.",
                 [
                     "Writes EXIF in-place for matched JPGs.",
-                    "Creates cleaned CSV files beside source methane CSV files.",
+                    "Creates cleaned CSV/XLSX files beside their source metadata files.",
                     "Optional KMZ output from cleaned data.",
                 ],
             )

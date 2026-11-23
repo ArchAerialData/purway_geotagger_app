@@ -20,6 +20,7 @@ class ModeState:
 
     methane_threshold: int = 1000
     methane_generate_kmz: bool = True
+    methane_exclude_calibration: bool = True
     methane_log_base: Path | None = None
 
     encroachment_output_base: Path | None = None

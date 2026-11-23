@@ -184,6 +184,7 @@ class JobController(QObject):
             run_mode=state.mode,
             methane_threshold=state.methane_threshold,
             methane_generate_kmz=state.methane_generate_kmz,
+            methane_exclude_calibration=state.methane_exclude_calibration,
             methane_log_base=resolved.methane_log_base,
             encroachment_output_base=resolved.encroachment_output_base,
             output_photos_root=output_photos_root,

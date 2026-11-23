@@ -785,3 +785,45 @@ or override the adjacent selector. 24:00 is rejected rather than silently becomi
 - [x] Verify fresh Git Bash loads the alias, its target exists, and the executable hash matches `build-info.json`.
 
 Phase Notes (2026-09-10): Maintenance only; no new implementation phase. The existing build script already promotes the complete successful build to the stable location and preserves the previous build. Documented that local builds are manual and CI does not refresh this workstation. No application code changed or rebuild needed; verification above passed.
+
+### Input wheel safety maintenance — 2026-09-25
+
+- [x] Install one application-wide wheel guard for numeric, date/time, dropdown and calendar controls, including dynamically opened dialogs and focused editors.
+- [x] Preserve typing, keyboard arrows, native/custom stepper buttons, calendar buttons, dropdown-list scrolling and page/scrollbar scrolling.
+- [x] Verify actual Methane, Encroachment, Combined, Wind Data, Settings and weather-autofill fields with Qt wheel events; include pixel-delta trackpad events and child editors.
+- [x] Run regression suite and rebuild the Windows application at the stable `methane` launcher path.
+
+Gate: **complete**.
+Phase Notes (completed, 2026-09-25): Maintenance within existing GUI behavior; no processing or report changes. The guard forwards wheel events over value controls to the containing scroll area, independent of keyboard focus. Open dropdown lists can still scroll without selecting a value. No wheel-dependent value-entry exceptions were needed. Verification: full pinned Python 3.11 suite (180 passed); strengthened per-event assertions rerun (3 passed); `scripts/windows/build_exe.ps1` succeeded. Build time 2026-09-25T17:06:17.8033178Z. Verified executable hash, all recorded source hashes, embedded guard code and entrypoint import, plus packaged main-window startup and clean exit (0). Latest app is `dist/windows/PurwayGeotagger/PurwayGeotagger.exe`; previous build retained in a timestamped backup. README updated. No macOS build was run; the implementation uses portable Qt events and preserves trackpad deltas.
+
+### Main Wind Data time entry and theme maintenance — 2026-09-25
+
+- [x] Replace the main grid's segmented Start/End time editors with the same clearable editor used by the autofill dialog; remove duplicate overflow parsing and silent 24:00-to-noon conversion.
+- [x] Preserve complete selection, delete/retype, paste, AM/PM synchronization, manual overrides and steppers. Keep partial/invalid text visible and block report generation; canonical times remain 24-hour internally and 12-hour in report output.
+- [x] Make live time reads side-effect-free and publish formatted time/AM-PM changes together, preserving text selection during preview/evidence refresh.
+- [x] Fix the native light weather-source button in dark mode with shared tool-button defaults and explicit text-panel surfaces; preserve specialized button styles and source disclosure behavior.
+- [x] Review all main pages, all Combined wizard steps, lower Methane/Encroachment sections and Settings, Autofill, Log, Run Report, Template Editor, Schema and Preview dialogs in dark and light themes (42 rendered views).
+- [x] Run full regression suite and verify the latest Windows package at the stable launcher path.
+
+Gate: **complete**.
+Phase Notes (completed, 2026-09-25): Root causes were the earlier time-entry change being scoped to the autofill popup, and an unstyled QToolButton inheriting light text while retaining a light Windows native background. Main-page edits now reuse EditableTime, with normal report validation handling empty/invalid values. Verification: 182 tests passed, including actual Qt select-all/delete/typing/paste/stepping events, live 12-hour report preview, invalid-input guards, wheel protection, rendered button/text-panel surface checks through dark/light/dark switches, and contrast ratios for enabled text. Visual review artifacts: `build/ui-audit-time-contrast/`; offscreen audit explicitly loaded Windows Arial fonts. Windows build completed 2026-09-25T17:32:30.3842241Z; verified executable hash, complete source manifest, six embedded changed modules and wheel-guard entrypoint import. Native Windows package reached the main window and exited cleanly (0). The latest complete application is at `dist/windows/PurwayGeotagger/`, used by `methane`; previous build retained. Reviewed and signed off for the requested time-entry/contrast scope. No macOS package smoke test was run; implementation uses portable Qt controls and signals.
+
+
+### Calibration filtering and CSV/XLSX PAC support — 2026-09-28
+
+User-approved extension of the completed methane workflow phases.
+
+- [x] Shared CSV/XLSX table reading, aliases, header validation and workbook/sheet/original-row provenance; reject ambiguous mappings and conflicting matches.
+- [x] Default-on fixed 1 m calibration toggle in Methane Only/Combined, job/reset/confirmation/config state; leave photo and Encroachment processing unfiltered.
+- [x] Preserve existing PAC per sheet including blanks; append shared finite-validated calculated PAC only when absent.
+- [x] Atomic value-focused exports, introductory/hidden/unrelated sheets, cached formula results, date/time formats and literal strings; workbook KMZ worksheet groups and distinct filename.
+- [x] Separate exclusion/PAC counts and warnings in logs and compatible summaries; preview/schema provenance and input counts; update README and persistent workflow rules.
+- [x] Full regression suite and final light/dark GUI review.
+- [x] Windows rebuild, source/hash verification and packaged startup at the stable methane launcher path.
+
+Gate: **complete**.
+Phase Notes (completed, 2026-09-28): Approved scope implemented and verified. Full pinned Python 3.11 regression suite: **232 passed** (`build/calibration-xlsx-tests.log`). Added coverage includes calibration boundaries and non-finite inputs, all PAC positions and blanks, multiple/hidden/introductory/unrelated sheets, numeric and empty-string formula caches, XML entity rejection, failed/cancelled atomic writes, duplicate-match ambiguity, source preservation, repeat runs, workbook KMZ grouping/collisions and dry-run pipelines for all three modes. Shared alias resolution keeps relative altitude distinct from absolute GPS altitude. Cancelled multi-file runs retain completed output details in their summaries.
+
+Real ExifTool 13.50 integration verified PAC on three source JPGs plus three Encroachment copies using mixed CSV/XLSX inputs, including a calibration photo; cleaned outputs/KMZs retained only the two eligible data rows. Existing table PAC remained authoritative while photo PAC was independently calculated. Test artifacts: `build/xlsx-real-exif-q8iq93tu/`. Toggle defaults, state/options propagation, resets and reporting passed Qt tests in both themes; rendered Methane/Combined options and populated reports were visually reviewed (`build/ui-audit-calibration-xlsx/`). Existing wheel-protection tests passed.
+
+Windows build: `scripts/windows/build_exe.ps1 -PythonExe ./build/ci-venv311/Scripts/python.exe` succeeded, built **2026-09-28T16:34:27.6167969Z**. Verified executable SHA-256, all **69 source hashes**, ten changed embedded modules and bundled openpyxl/defusedxml/et_xmlfile code. Native packaged main window opened and exited cleanly (0). Complete app promoted to `dist/windows/PurwayGeotagger/`; a fresh Git Bash confirmed `methane` targets that executable. Previous complete build retained in the timestamped backup. Build preflight now checks the pinned XLSX dependencies. README/AGENTS updated. Signed off for this requested Windows delivery; no macOS package smoke test was run, and the implementation uses cross-platform Python/Qt APIs.

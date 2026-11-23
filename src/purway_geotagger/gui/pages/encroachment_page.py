@@ -349,7 +349,7 @@ class EncroachmentPage(QWidget):
             self._add_inputs([Path(selected)])
 
     def _add_files(self) -> None:
-        files, _ = QFileDialog.getOpenFileNames(self, "Select input files", str(Path.home()))
+        files, _ = QFileDialog.getOpenFileNames(self, "Select input files", str(Path.home()), "Photos and metadata (*.jpg *.jpeg *.csv *.xlsx)")
         if files:
             self._add_inputs([Path(p) for p in files])
 

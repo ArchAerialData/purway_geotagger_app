@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import re
 
 def ensure_dir(p: Path) -> Path:
     p.mkdir(parents=True, exist_ok=True)
@@ -12,6 +13,13 @@ def is_jpg(p: Path) -> bool:
 
 def is_csv(p: Path) -> bool:
     return p.suffix.lower() == ".csv"
+
+
+def is_source_table(p: Path) -> bool:
+    return (p.suffix.lower() in {".csv", ".xlsx"}
+            and not p.name.startswith("~$")
+            and not re.search(r"_Cleaned_\d+-PPM$", p.stem, re.IGNORECASE)
+            and not is_macos_artifact(p))
 
 def is_macos_artifact(p: Path) -> bool:
     name = p.name

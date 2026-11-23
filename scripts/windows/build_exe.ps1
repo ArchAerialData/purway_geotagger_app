@@ -23,6 +23,8 @@ foreach ($targetPath in @($stagingRoot, $destination, $backup)) {
 Push-Location -LiteralPath $repoRoot
 try {
     $env:PYTHONDONTWRITEBYTECODE = "1"
+    & $PythonExe -c "import openpyxl, defusedxml; from openpyxl.xml import DEFUSEDXML; assert openpyxl.__version__ == '3.1.5' and defusedxml.__version__ == '0.7.1' and DEFUSEDXML"
+    if ($LASTEXITCODE -ne 0) { throw "XLSX dependencies are missing or incorrect. Install requirements.txt in the build Python environment." }
     $exifDir = Join-Path $repoRoot "build/windows_exiftool"
     $exifExe = Join-Path $exifDir "exiftool.exe"
     if (-not (Test-Path -LiteralPath $exifExe)) {

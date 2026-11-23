@@ -66,25 +66,31 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
         scan = scan_inputs(job.inputs)
         job.state.scanned_photos = len(scan.photos)
         job.state.scanned_csvs = len(scan.csvs)
-        logger.log(f"Scanned photos: {job.state.scanned_photos}, CSVs: {job.state.scanned_csvs}")
+        job.state.scanned_workbooks = len(scan.workbooks)
+        logger.log(f"Scanned photos: {job.state.scanned_photos}, CSVs: {job.state.scanned_csvs}, XLSX: {job.state.scanned_workbooks}")
 
         if cancel_cb():
             raise UserCancelledError()
 
         job.state.stage = "PARSE"
-        progress_cb(5, "Parsing CSV files...")
-        logger.log("Parsing CSV files...")
-        csv_index = PurwayCSVIndex.from_csv_files(scan.csvs)
+        progress_cb(5, "Parsing CSV/XLSX files...")
+        logger.log("Parsing CSV/XLSX files...")
+        csv_index = PurwayCSVIndex.from_csv_files(scan.tables, cancel_cb)
+        for issue in csv_index.errors:
+            logger.log(f"Metadata input failed: {issue}")
 
         methane_failure_count = 0
         if opts.run_mode in (RunMode.METHANE, RunMode.COMBINED):
             job.state.stage = "METHANE_OUTPUTS"
-            progress_cb(8, "Generating cleaned methane CSVs...")
-            logger.log("Generating cleaned methane CSVs...")
+            progress_cb(8, "Generating cleaned methane CSV/XLSX files...")
+            logger.log("Generating cleaned methane CSV/XLSX files...")
             methane_results = generate_methane_outputs(
-                csv_paths=scan.csvs,
+                csv_paths=scan.tables,
                 threshold=opts.methane_threshold,
                 generate_kmz=opts.methane_generate_kmz,
+                exclude_calibration=opts.methane_exclude_calibration,
+                cancel_cb=cancel_cb,
+                completed_results=methane_results,
             )
             methane_failure_count = _log_methane_results(
                 logger,
@@ -129,8 +135,8 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
             raise UserCancelledError()
 
         job.state.stage = "MATCH"
-        progress_cb(20, "Matching photos to CSV rows...")
-        logger.log("Matching photos to CSV rows...")
+        progress_cb(20, "Matching photos to CSV/XLSX rows...")
+        logger.log("Matching photos to CSV/XLSX rows...")
         last_update = time.monotonic()
         for i, t in enumerate(tasks):
             if cancel_cb():
@@ -164,6 +170,8 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
                 t.camera_zoom = match.camera_zoom
                 t.timestamp_raw = match.timestamp_raw
                 t.pac = match.pac
+                t.source_sheet = match.source_sheet
+                t.source_row = str(match.source_row or "")
                 t.target_lat = match.target_lat
                 t.target_lon = match.target_lon
                 t.distance = match.distance
@@ -294,8 +302,11 @@ def run_job(job: Job, progress_cb: ProgressCb, cancel_cb: CancelCb) -> None:
         logger.log("Flattening/moving JPGs (if enabled)...")
         maybe_flatten(job, post_tasks)
 
+        if not error_message and csv_index.errors:
+            error_message = "Metadata input failed: " + "; ".join(csv_index.errors)
+
         if not error_message and methane_failure_count:
-            error_message = f"Methane outputs failed for {methane_failure_count} CSV(s)."
+            error_message = f"Methane outputs failed for {methane_failure_count} table(s)."
 
         if error_message:
             raise RuntimeError(error_message)
@@ -332,6 +343,7 @@ def _log_run_settings(logger: RunLogger, opts: JobOptions) -> None:
     logger.log(f"Run mode: {mode}")
     if opts.run_mode in (RunMode.METHANE, RunMode.COMBINED):
         logger.log(f"Methane threshold: {opts.methane_threshold}")
+        logger.log(f"Exclude calibration below 1 m: {opts.methane_exclude_calibration}")
         logger.log(f"KMZ enabled: {'Yes' if opts.methane_generate_kmz else 'No'}")
     if opts.run_mode in (RunMode.ENCROACHMENT, RunMode.COMBINED):
         if opts.output_photos_root:
@@ -350,7 +362,7 @@ def _log_methane_results(
     kmz_enabled: bool,
 ) -> int:
     if not results:
-        logger.log("No methane CSVs found for cleaned outputs.")
+        logger.log("No methane CSV/XLSX files found for cleaned outputs.")
         return 0
 
     cleaned_success = sum(1 for r in results if r.cleaned_status == "success")
@@ -362,7 +374,7 @@ def _log_methane_results(
     kmz_skipped = sum(1 for r in results if r.kmz_status == "skipped")
 
     logger.log(
-        f"Cleaned CSVs: {cleaned_success} success, {cleaned_failed} failed, {cleaned_skipped} skipped."
+        f"Cleaned CSV/XLSX files: {cleaned_success} success, {cleaned_failed} failed, {cleaned_skipped} skipped."
     )
     if kmz_enabled:
         logger.log(
@@ -372,11 +384,17 @@ def _log_methane_results(
         logger.log("KMZ outputs: skipped (disabled).")
 
     for r in results:
+        if r.counts:
+            logger.log(f"{r.source_csv.name}: {r.counts}")
+        for sheet in r.sheets:
+            logger.log(f"Sheet {sheet.get('source_sheet') or 'CSV'}: {sheet}")
+        for warning in r.warnings:
+            logger.log(f"Warning: {warning}")
         if r.cleaned_status == "failed":
-            logger.log(f"Cleaned CSV failed for {r.source_csv}: {r.cleaned_error}")
+            logger.log(f"Cleaned table failed for {r.source_csv}: {r.cleaned_error}")
         if r.photo_col_missing and r.cleaned_status == "success":
             logger.log(
-                f"{r.source_csv}: photo filename column missing; used PPM-only filtering."
+                f"{r.source_csv}: photo filename column missing; photo-presence check skipped."
             )
         if r.missing_photo_rows:
             sample = ", ".join(r.missing_photo_names[:5])
@@ -433,6 +451,8 @@ def _clone_tasks_for_copy(
             clone.camera_zoom = base.camera_zoom
             clone.timestamp_raw = base.timestamp_raw
             clone.pac = base.pac
+            clone.source_sheet = base.source_sheet
+            clone.source_row = base.source_row
             clone.target_lat = base.target_lat
             clone.target_lon = base.target_lon
             clone.distance = base.distance
@@ -464,6 +484,7 @@ def _build_run_summary(
     for r in methane_results:
         outputs.append(MethaneOutputSummary(
             source_csv=str(r.source_csv),
+            source_format=r.source_format, sheets=r.sheets, counts=r.counts, warnings=r.warnings,
             cleaned_csv=str(r.cleaned_csv) if r.cleaned_csv else None,
             cleaned_status=r.cleaned_status,
             cleaned_rows=r.cleaned_rows,
@@ -482,6 +503,7 @@ def _build_run_summary(
     settings = {
         "methane_threshold": opts.methane_threshold,
         "methane_generate_kmz": opts.methane_generate_kmz,
+        "methane_exclude_calibration": opts.methane_exclude_calibration,
         "enable_renaming": opts.enable_renaming,
         "start_index": opts.start_index,
         "dry_run": opts.dry_run,
@@ -556,6 +578,7 @@ def _write_manifest(
                 distance="" if t.distance is None else str(t.distance),
                 source_file_name=t.source_file_name,
                 source_csv=t.source_csv,
+                source_sheet=t.source_sheet, source_row=t.source_row,
                 join_delta_seconds="" if t.join_delta_seconds is None else str(t.join_delta_seconds),
                 payload_model=t.payload_model,
                 geotagger_version=t.geotagger_version,

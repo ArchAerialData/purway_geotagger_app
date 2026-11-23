@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from PySide6.QtCore import QTime, Qt, Signal
+from PySide6.QtCore import QSignalBlocker, QTime, Qt, Signal
 from PySide6.QtWidgets import QComboBox, QLineEdit
 
 
@@ -25,6 +25,7 @@ def parse_time_entry(text: str) -> QTime | None:
 
 class EditableTime(QLineEdit):
     validityChanged = Signal(bool)
+    valueChanged = Signal()
 
     def __init__(self, default_24h: str, meridiem: QComboBox, parent=None) -> None:
         super().__init__(parent)
@@ -42,9 +43,12 @@ class EditableTime(QLineEdit):
         self.setTime(QTime.fromString(default_24h, "HH:mm"))
 
     def _text_changed(self, _text: str) -> None:
-        if not self._formatting and self.text() != self._formatted_text:
+        if self._formatting:
+            return
+        if self.text() != self._formatted_text:
             self._formatted_text = None
         self.validityChanged.emit(self.is_valid())
+        self.valueChanged.emit()
 
     def _format_complete_entry(self, _text: str) -> None:
         self.commit()
@@ -67,15 +71,23 @@ class EditableTime(QLineEdit):
             return
         self._formatting = True
         try:
-            self._meridiem.setCurrentText("PM" if value.hour() >= 12 else "AM")
+            # Publish the new time and marker together, so live report previews
+            # never observe an old time paired with a newly selected AM/PM.
+            with QSignalBlocker(self._meridiem):
+                self._meridiem.setCurrentText("PM" if value.hour() >= 12 else "AM")
             self._formatted_text = f"{value.hour() % 12 or 12}:{value.minute():02d}"
             self.setText(self._formatted_text)
         finally:
             self._formatting = False
         self.validityChanged.emit(True)
+        self.valueChanged.emit()
 
     def time_24h(self) -> str:
-        if not self.commit():
+        # Reading live previews must not rewrite a field or move its cursor.
+        if self._formatted_text != self.text():
+            parsed = parse_time_entry(self.text())
+            if parsed is not None:
+                return parsed.toString("HH:mm")
             raise ValueError("Enter a complete time, such as 09:30 or 15:30.")
         hour, minute = map(int, self.text().split(":"))
         hour = hour % 12 + (12 if self._meridiem.currentText() == "PM" else 0)

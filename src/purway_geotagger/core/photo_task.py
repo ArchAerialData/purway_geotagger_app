@@ -43,6 +43,8 @@ class PhotoTask:
     distance: float | None = None
     source_file_name: str = ""
     source_csv: str = ""
+    source_sheet: str = ""
+    source_row: str = ""
     join_delta_seconds: float | None = None
     payload_model: str = ""
     geotagger_version: str = ""

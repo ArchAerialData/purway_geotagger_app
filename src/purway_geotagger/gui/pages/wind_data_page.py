@@ -325,6 +325,7 @@ class WindDataPage(QWidget):
         root.addWidget(body)
 
         note = QLabel(
+            "Select all to replace a time: 09:30 selects AM; 15:30 becomes 3:30 PM. "
             "Wind Direction is direct text. Speed/Gust/Temp are integer-only inputs."
         )
         note.setProperty("cssClass", "subtitle")

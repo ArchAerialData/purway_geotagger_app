@@ -350,7 +350,7 @@ class HomePage(QWidget):
                 "Methane Reports Only",
                 "M",
                 [
-                    "Clean methane CSVs using a PPM threshold.",
+                    "Clean methane CSV/XLSX data using calibration and PPM filters.",
                     "Inject EXIF metadata in-place.",
                     "Optional KMZ output.",
                 ],

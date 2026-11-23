@@ -19,6 +19,9 @@ class WindSourceDetails(QWidget):
         self.summary.setTextFormat(Qt.PlainText)
         layout.addWidget(self.summary)
         self.toggle = QToolButton()
+        self.toggle.setProperty("cssClass", "disclosure")
+        self.toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.toggle.setArrowType(Qt.RightArrow)
         self.toggle.setText("Weather sources and measurement times")
         self.toggle.setCheckable(True)
         layout.addWidget(self.toggle)
@@ -28,6 +31,9 @@ class WindSourceDetails(QWidget):
         self.details.setMaximumHeight(300)
         self.details.hide()
         self.toggle.toggled.connect(self.details.setVisible)
+        self.toggle.toggled.connect(
+            lambda expanded: self.toggle.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+        )
         layout.addWidget(self.details)
 
     def show_details(self) -> None:

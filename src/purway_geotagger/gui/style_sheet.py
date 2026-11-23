@@ -484,6 +484,47 @@ def get_stylesheet(theme: str) -> str:
         border-color: {c['border']};
     }}
 
+    /* Explicit defaults prevent light native Windows surfaces under dark text rules.
+       Specialized icon/stepper/navigation selectors below retain their own sizing. */
+    QToolButton {{
+        background-color: {c['button_secondary_bg']};
+        color: {c['text_primary']};
+        border: 1px solid {c['button_secondary_border']};
+        border-radius: 6px;
+    }}
+
+    QToolButton:hover {{
+        background-color: {c['button_secondary_hover']};
+    }}
+
+    QToolButton:pressed, QToolButton:checked {{
+        background-color: {c['button_secondary_pressed']};
+    }}
+
+    QToolButton:focus {{
+        border-color: {c['focus_ring']};
+    }}
+
+    QToolButton:disabled {{
+        background-color: {c['disabled_bg']};
+        color: {c['disabled_text']};
+    }}
+
+    QToolButton[cssClass="disclosure"] {{
+        padding: 6px 10px;
+        text-align: left;
+    }}
+
+    QTextEdit, QTextBrowser, QPlainTextEdit {{
+        background-color: {c['input_bg']};
+        color: {c['text_primary']};
+        border: 1px solid {c['input_border']};
+        border-radius: 6px;
+        padding: 6px;
+        selection-background-color: {c['primary']};
+        selection-color: {c['text_inverted']};
+    }}
+
     QToolButton[themeToggle="true"] {{
         border: 1px solid transparent;
         border-radius: 8px;

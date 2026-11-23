@@ -64,3 +64,64 @@ def test_theme_section_separation() -> None:
     for theme in ("light", "dark"):
         _assert_contrast(theme, "card_border", "surface_bg", 1.4)
         _assert_contrast(theme, "input_border", "input_bg", 1.2)
+
+
+def test_tool_button_and_text_panel_contrast() -> None:
+    for theme in ("light", "dark"):
+        for background in ("button_secondary_bg", "button_secondary_hover", "button_secondary_pressed", "input_bg"):
+            _assert_contrast(theme, "text_primary", background, 4.5)
+
+
+def test_rendered_source_controls_follow_theme_when_switching() -> None:
+    """Check painted surfaces, not just palette constants (native styles can ignore those)."""
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    script = """
+from PySide6.QtWidgets import QApplication, QToolButton, QTextEdit, QVBoxLayout, QWidget
+from PySide6.QtGui import QPalette
+from purway_geotagger.gui.theme import apply_theme
+from purway_geotagger.gui.style_sheet import get_theme_colors
+from purway_geotagger.gui.widgets.wind_source_details import WindSourceDetails
+
+app = QApplication([])
+window = QWidget()
+layout = QVBoxLayout(window)
+source = WindSourceDetails()
+source.details.setPlainText('Station readings and measurement times')
+layout.addWidget(source)
+fallback = QToolButton()
+fallback.setText('Other tool button')
+layout.addWidget(fallback)
+log = QTextEdit('Other text panel')
+layout.addWidget(log)
+window.resize(650, 650)
+window.show()
+for theme in ('dark', 'light', 'dark'):
+    apply_theme(app, theme)
+    colors = get_theme_colors(theme)
+    app.processEvents()
+    for expanded in (False, True):
+        source.toggle.setChecked(expanded)
+        app.processEvents()
+        assert source.details.isVisible() == expanded
+        for button in (source.toggle, fallback):
+            rendered = button.grab().toImage()
+            background = rendered.pixelColor(rendered.width()-10, rendered.height()-4).name().upper()
+            assert background in {colors[k].upper() for k in (
+                'button_secondary_bg', 'button_secondary_hover', 'button_secondary_pressed')}, (theme, background)
+            assert button.palette().color(QPalette.ButtonText).name().upper() == colors['text_primary'].upper()
+    for panel in (source.details, log):
+        rendered = panel.viewport().grab().toImage()
+        background = rendered.pixelColor(rendered.width()-10, rendered.height()-10).name().upper()
+        assert background == colors['input_bg'].upper(), (theme, background)
+        assert panel.palette().color(QPalette.Text).name().upper() == colors['text_primary'].upper()
+window.close()
+"""
+    result = subprocess.run([sys.executable, "-B", "-c", script], cwd=root,
+                            env={**os.environ, "PYTHONPATH": str(root / "src"), "QT_QPA_PLATFORM": "offscreen"},
+                            capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr

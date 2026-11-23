@@ -13,6 +13,7 @@ import os
 from PySide6.QtWidgets import QApplication
 
 from purway_geotagger.gui.main_window import MainWindow
+from purway_geotagger.gui.input_wheel_guard import install_input_wheel_guard
 from purway_geotagger.gui.theme import apply_theme
 from purway_geotagger.core.settings import AppSettings
 from purway_geotagger.util.platform import configure_macos_app_identity
@@ -22,6 +23,7 @@ def main() -> int:
     configure_macos_app_identity()
 
     app = QApplication(sys.argv)
+    install_input_wheel_guard(app)
 
     settings = AppSettings.load()
     apply_theme(app, settings.ui_theme)

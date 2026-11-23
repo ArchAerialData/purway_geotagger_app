@@ -3,12 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 import csv
 import json
+from html import escape
 
 from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QGroupBox, QTableWidget, QTableWidgetItem,
-    QTextEdit, QPushButton, QHBoxLayout, QWidget, QHeaderView
+    QTextEdit, QPushButton, QHBoxLayout, QWidget, QHeaderView, QScrollArea
 )
 
 
@@ -56,18 +57,20 @@ def format_run_summary(summary: dict | None) -> str:
         kmz_label = "Yes" if kmz_enabled else "No"
         lines.append(f"<b>Methane threshold</b>: {threshold}")
         lines.append(f"<b>KMZ enabled</b>: {kmz_label}")
+        if "methane_exclude_calibration" in settings:
+            lines.append(f"<b>Exclude calibration below 1 m</b>: {'Yes' if settings['methane_exclude_calibration'] else 'No'}")
 
     outputs = summary.get("methane_outputs", [])
     if outputs:
         lines.append("<b>Methane outputs</b>:")
         for out in outputs:
-            name = Path(out.get("source_csv", "")).name
+            name = escape(Path(out.get("source_csv", "")).name)
             cleaned_status = out.get("cleaned_status", "unknown")
             cleaned_rows = out.get("cleaned_rows", 0)
             kmz_status = out.get("kmz_status", "unknown")
             extras = []
             if out.get("photo_col_missing"):
-                extras.append("photo column missing → PPM-only")
+                extras.append("photo column missing → photo check skipped")
             missing_rows = out.get("missing_photo_rows", 0)
             if missing_rows:
                 extras.append(f"missing JPG rows: {missing_rows}")
@@ -75,6 +78,23 @@ def format_run_summary(summary: dict | None) -> str:
             lines.append(
                 f"• {name}: Cleaned {cleaned_status} ({cleaned_rows} rows), KMZ {kmz_status}{extra_txt}"
             )
+            for sheet in out.get("sheets", []):
+                if sheet.get("header_row") is None:
+                    continue
+                label = escape(sheet.get("source_sheet") or "CSV")
+                lines.append(
+                    f"&nbsp;&nbsp;{label}: retained {sheet.get('retained_rows', 0)}; "
+                    f"excluded — calibration {sheet.get('calibration_excluded', 0)}, "
+                    f"below threshold {sheet.get('threshold_excluded', 0)}, "
+                    f"invalid methane {sheet.get('invalid_methane_excluded', 0)}, "
+                    f"missing photo {sheet.get('missing_photo_rows', 0)}; "
+                    f"PAC — preserved {sheet.get('pac_preserved', 0)}, "
+                    f"calculated {sheet.get('pac_calculated', 0)}, "
+                    f"unavailable {sheet.get('pac_unavailable', 0)}."
+                )
+            for message in [out.get("cleaned_error"), out.get("kmz_error"), *out.get("warnings", [])]:
+                if message:
+                    lines.append(f"&nbsp;&nbsp;{escape(str(message))}")
 
     return "<br/>".join(lines)
 
@@ -127,7 +147,7 @@ def collect_output_files(summary: dict | None, run_folder: Path) -> list[dict[st
             if out.get("cleaned_status") == "success" and cleaned_path:
                 path = Path(cleaned_path)
                 if path.exists():
-                    _add("Cleaned CSV", path)
+                    _add(f"Cleaned {path.suffix[1:].upper()}", path)
             kmz_path = out.get("kmz")
             if out.get("kmz_status") == "success" and kmz_path:
                 path = Path(kmz_path)
@@ -195,7 +215,12 @@ class RunReportDialog(QDialog):
         summary_label = QLabel(format_run_summary(summary))
         summary_label.setWordWrap(True)
         summary_label.setTextFormat(Qt.RichText)
-        summary_layout.addWidget(summary_label)
+        summary_scroll = QScrollArea()
+        summary_scroll.setWidgetResizable(True)
+        summary_scroll.setWidget(summary_label)
+        summary_scroll.setMinimumHeight(120)
+        summary_scroll.setMaximumHeight(240)
+        summary_layout.addWidget(summary_scroll)
         layout.addWidget(summary_group)
 
         outputs_group = QGroupBox("Outputs")

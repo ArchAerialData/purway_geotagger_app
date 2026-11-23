@@ -15,7 +15,7 @@ HEADERS = [
     "Output Folder",
     "Inputs",
     "Photos",
-    "CSVs",
+    "CSV/XLSX",
     "Matched",
     "Success",
     "Failed",
@@ -63,7 +63,7 @@ class JobTableModel(QAbstractTableModel):
         if col == 7:
             return st.scanned_photos
         if col == 8:
-            return st.scanned_csvs
+            return st.scanned_csvs + st.scanned_workbooks
         if col == 9:
             return st.matched
         if col == 10:

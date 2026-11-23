@@ -30,6 +30,7 @@ class JobOptions:
     run_mode: RunMode | None = None
     methane_threshold: int = 1000
     methane_generate_kmz: bool = True
+    methane_exclude_calibration: bool = True
     methane_log_base: Path | None = None
     encroachment_output_base: Path | None = None
     output_photos_root: Path | None = None
@@ -40,6 +41,7 @@ class JobState:
     progress: int = 0
     scanned_photos: int = 0
     scanned_csvs: int = 0
+    scanned_workbooks: int = 0
     matched: int = 0
     success: int = 0
     failed: int = 0
