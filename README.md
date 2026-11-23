@@ -431,3 +431,15 @@ Local builds are manual; saving code does not rebuild the app. The `windows-exe`
 GitHub workflow is manually triggered, while `windows-installer` runs on pushes to
 `main` or manual dispatch. Those workflows build on GitHub and do not update this
 workstation's executable. Run the local build command above to refresh it.
+
+
+### Verifying and sharing the local Windows build
+
+The window title displays the app version and unique build ID (UTC build stamp plus an input fingerprint). Hover over the header version for the base Git commit, exact UTC build time, full fingerprint and whether local source changes were included. Development launches explicitly show `development`; older/missing package metadata shows `build unknown`.
+
+Use `scripts/windows/build_exe.ps1` for Windows builds. It snapshots Python sources, configuration, assets, Windows build scripts and dependency requirements before packaging, embeds `build-info.json`, and rejects promotion if those inputs change during the build. The complete successful app replaces the stable directory used by the `methane` alias. Merely committing or pulling source does not refresh that executable.
+
+After verifying the app, run `python scripts/windows/package_portable.py` using the build Python environment. It creates a version/build-named ZIP under `dist/share/`, checks the EXE against its build record, verifies ZIP integrity and every packaged application file, and includes launch instructions and checksums. Recipients must **Extract All**, keep `_internal` beside `PurwayGeotagger.exe`, and run the extracted EXE. Python, Git Bash and GitHub Actions are unnecessary on their workstations.
+
+
+November 23 maintenance: Partial edits to an already formatted time preserve its AM/PM selection; selecting all and replacing or clearing/retyping interprets bare input as 24-hour time. This applies to both main Wind Data and autofill time controls. Source-table discovery excludes app-generated `manifest.csv` and `_exiftool_import.csv` as well as cleaned outputs, so a folder can be processed again with previous run logs beneath it.

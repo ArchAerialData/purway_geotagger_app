@@ -827,3 +827,29 @@ Phase Notes (completed, 2026-09-28): Approved scope implemented and verified. Fu
 Real ExifTool 13.50 integration verified PAC on three source JPGs plus three Encroachment copies using mixed CSV/XLSX inputs, including a calibration photo; cleaned outputs/KMZs retained only the two eligible data rows. Existing table PAC remained authoritative while photo PAC was independently calculated. Test artifacts: `build/xlsx-real-exif-q8iq93tu/`. Toggle defaults, state/options propagation, resets and reporting passed Qt tests in both themes; rendered Methane/Combined options and populated reports were visually reviewed (`build/ui-audit-calibration-xlsx/`). Existing wheel-protection tests passed.
 
 Windows build: `scripts/windows/build_exe.ps1 -PythonExe ./build/ci-venv311/Scripts/python.exe` succeeded, built **2026-09-28T16:34:27.6167969Z**. Verified executable SHA-256, all **69 source hashes**, ten changed embedded modules and bundled openpyxl/defusedxml/et_xmlfile code. Native packaged main window opened and exited cleanly (0). Complete app promoted to `dist/windows/PurwayGeotagger/`; a fresh Git Bash confirmed `methane` targets that executable. Previous complete build retained in the timestamped backup. Build preflight now checks the pinned XLSX dependencies. README/AGENTS updated. Signed off for this requested Windows delivery; no macOS package smoke test was run, and the implementation uses cross-platform Python/Qt APIs.
+
+### Local Windows sharing package — 2026-11-23
+
+- [x] Verify the `methane` alias target and existing executable against `build-info.json`.
+- [x] Package the complete application directory, including `_internal`, bundled ExifTool and original build metadata.
+- [x] Include extraction/launch instructions and per-file checksums; validate ZIP integrity and all 1,373 application-file SHA-256 hashes.
+
+Gate: **complete**.
+Phase Notes (2026-11-23): Distribution packaging only; no code changes or rebuild. Created `dist/share/PurwayGeotagger-Windows-Portable-2026-09-28.zip` (60.5 MiB), containing the exact build currently launched by the local `methane` alias, built 2026-09-28T16:34:27.6167969Z. Added an adjacent `.zip.sha256` checksum. Recipients must extract the complete ZIP and retain `_internal` beside the EXE. GitHub Actions, Python and Git Bash are not required to use this portable package. Coworker-machine launch has not been tested here.
+
+
+### Versioned local 6.2 delivery and review fixes — 2026-11-23
+
+- [x] Remove the superseded September 28 sharing ZIP and checksum.
+- [x] Build from latest committed 6.2 source (`8f47abc`, same tree as GitHub main merge `cd29d1b`) plus the requested local version-identification and review fixes; bump app version to 6.2.0.
+- [x] Display version/build ID in the window title and commit/time/fingerprint/local-change status in the version tooltip; embed build metadata and check inputs remain unchanged during packaging.
+- [x] Preserve AM/PM for partial edits in main Wind Data and Autofill; retain full replacement 24-hour parsing and clear/delete/paste behavior.
+- [x] Exclude prior manifest and ExifTool import CSVs from recursive and explicit-file discovery.
+- [x] Full suite: 237 passed; real ExifTool CSV/XLSX folder processing and rerun passed with run artifacts beneath the selected source folder (three originals and six copies across two runs).
+- [x] Verify final native packaged title/startup, source and input hashes, alias, and new portable ZIP.
+
+Gate: **complete**.
+Phase Notes (completed, 2026-11-23): This is a local build from 6.2 plus the requested changes, not an assertion that the new changes are already committed or pushed. GitHub Actions not required. Checks: `build/versioned-build-tests.log`; real-run artifacts `build/xlsx-real-exif-mo0ap1ez/`. The previous sharing-package note documents the now-removed older ZIP. No macOS packaging changes were made; source launches remain portable and explicitly show development identity.
+
+
+Final delivery verification: **v6.2.0**, build **20261123-1921-5f63aa88**, built **2026-11-23T19:21:07.9235600Z**. Verified native packaged window title includes the exact version/build ID, clean exit 0, executable SHA-256, all 70 source hashes, 18 embedded changed modules, and bundled XLSX/XML dependencies. Build-time verification confirmed all recorded source/config/asset/script/dependency inputs remained unchanged. Header/tooltip and layout reviewed in dark/light themes. Fresh Git Bash confirms `methane` resolves to the replaced stable executable. Portable ZIP `dist/share/PurwayGeotagger-Windows-6.2.0-20261123-1921-5f63aa88.zip` (60.4 MiB) passed ZIP integrity and all 1,374 application-file SHA-256 checks; adjacent checksum and included launch instructions provided. Superseded September ZIP removed. The requested local fixes are included and explicitly identified as local changes; no Git commit/push or macOS package was performed. Coworker workstation itself has not been tested.

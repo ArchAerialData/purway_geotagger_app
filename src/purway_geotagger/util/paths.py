@@ -17,6 +17,7 @@ def is_csv(p: Path) -> bool:
 
 def is_source_table(p: Path) -> bool:
     return (p.suffix.lower() in {".csv", ".xlsx"}
+            and p.name.casefold() not in {"manifest.csv", "_exiftool_import.csv"}
             and not p.name.startswith("~$")
             and not re.search(r"_Cleaned_\d+-PPM$", p.stem, re.IGNORECASE)
             and not is_macos_artifact(p))

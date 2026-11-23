@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 
 
 from PySide6.QtGui import QIcon, QPixmap
-from purway_geotagger import __version__
+from purway_geotagger.core.build_identity import build_identity
 from purway_geotagger.core.settings import AppSettings
 from purway_geotagger.core.utils import resource_path
 
@@ -46,7 +46,8 @@ class MainWindow(QMainWindow):
     def __init__(self, settings: AppSettings) -> None:
         super().__init__()
         self.settings = settings
-        self.setWindowTitle("Purway Geotagger")
+        self.build_label, self.build_details = build_identity()
+        self.setWindowTitle(f"Purway Geotagger — {self.build_label}")
         self.resize(1100, 900)
         self.setMinimumSize(900, 750)
 
@@ -125,7 +126,8 @@ class MainWindow(QMainWindow):
         header_layout.addStretch(1)
         
         # 4. Version / Status
-        self.version_label = QLabel(f"v{__version__}")
+        self.version_label = QLabel(self.build_label.split(" · ")[0])
+        self.version_label.setToolTip(f"{self.build_label}\n{self.build_details}")
         self.version_label.setProperty("cssClass", "subtitle")
         header_layout.addWidget(self.version_label, alignment=Qt.AlignmentFlag.AlignVCenter)
 

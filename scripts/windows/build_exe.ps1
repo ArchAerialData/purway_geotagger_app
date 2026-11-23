@@ -34,11 +34,15 @@ try {
     if ($LASTEXITCODE -ne 0 -or $actualVersion -ne $ExifToolVersion) {
         throw "Expected ExifTool $ExifToolVersion; found $actualVersion"
     }
+    $metadataPath = Join-Path $repoRoot "build/identity/build-info.json"
+    & $PythonExe "scripts/windows/build_metadata.py" $metadataPath
+    if ($LASTEXITCODE -ne 0) { throw "Build metadata generation failed." }
     $pyInstallerArgs = @(
         "-m", "PyInstaller", "--noconfirm", "--clean", "--name", "PurwayGeotagger",
         "--windowed", "--onedir", "--specpath", "build/pyinstaller/windows",
         "--workpath", "build/pyinstaller/windows/work", "--distpath", $stagingRoot,
         "--paths", (Join-Path $repoRoot "src"),
+        "--add-data", "$metadataPath;.",
         "--add-data", "$(Join-Path $repoRoot 'config/default_templates.json');config",
         "--add-data", "$(Join-Path $repoRoot 'config/wind_templates');config/wind_templates",
         "--add-data", "$(Join-Path $repoRoot 'config/exiftool_config.txt');config",
@@ -50,7 +54,7 @@ try {
     & $PythonExe @pyInstallerArgs
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
     $stagedApp = Join-Path $stagingRoot "PurwayGeotagger"
-    foreach ($relativePath in @("PurwayGeotagger.exe", "_internal/config/default_templates.json",
+    foreach ($relativePath in @("PurwayGeotagger.exe", "_internal/build-info.json", "_internal/config/default_templates.json",
             "_internal/config/wind_templates", "_internal/config/exiftool_config.txt", "_internal/assets",
             "_internal/bin/exiftool.exe", "_internal/bin/exiftool_files", "_internal/tzdata")) {
         if (-not (Test-Path -LiteralPath (Join-Path $stagedApp $relativePath))) {
@@ -60,19 +64,15 @@ try {
     & (Join-Path $stagedApp "_internal/bin/exiftool.exe") -ver
     if ($LASTEXITCODE -ne 0) { throw "Bundled ExifTool failed." }
 
-    $sourceHashes = @{}
-    Get-ChildItem -LiteralPath (Join-Path $repoRoot "src") -Recurse -File -Filter "*.py" | ForEach-Object {
-        $relativeName = $_.FullName.Substring($repoRoot.Length + 1).Replace('\', '/')
-        $sourceHashes[$relativeName] = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+    & $PythonExe "scripts/windows/build_metadata.py" $metadataPath --verify
+    if ($LASTEXITCODE -ne 0) { throw "Build inputs changed during packaging." }
+    $buildInfo = Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
+    if ($buildInfo.built_at_utc -is [DateTime]) {
+        $buildInfo.built_at_utc = $buildInfo.built_at_utc.ToUniversalTime().ToString("o")
     }
-    $buildInfo = @{
-        built_at_utc = [DateTime]::UtcNow.ToString("o")
-        git_revision = (& git rev-parse HEAD | Out-String).Trim()
-        python = (& $PythonExe --version | Out-String).Trim()
-        exiftool_version = $actualVersion
-        executable_sha256 = (Get-FileHash -LiteralPath (Join-Path $stagedApp "PurwayGeotagger.exe") -Algorithm SHA256).Hash
-        source_sha256 = $sourceHashes
-    }
+    $buildInfo | Add-Member -NotePropertyName python -NotePropertyValue ((& $PythonExe --version | Out-String).Trim())
+    $buildInfo | Add-Member -NotePropertyName exiftool_version -NotePropertyValue $actualVersion
+    $buildInfo | Add-Member -NotePropertyName executable_sha256 -NotePropertyValue ((Get-FileHash -LiteralPath (Join-Path $stagedApp "PurwayGeotagger.exe") -Algorithm SHA256).Hash)
     $buildInfo | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $stagedApp "build-info.json") -Encoding utf8
 
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
