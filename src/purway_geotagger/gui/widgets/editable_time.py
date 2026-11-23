@@ -4,7 +4,8 @@ from __future__ import annotations
 import re
 
 from PySide6.QtCore import QSignalBlocker, QTime, Qt, Signal
-from PySide6.QtWidgets import QComboBox, QLineEdit
+from PySide6.QtGui import QKeySequence
+from PySide6.QtWidgets import QComboBox, QLineEdit, QMenu
 
 
 def parse_time_entry(text: str) -> QTime | None:
@@ -32,6 +33,7 @@ class EditableTime(QLineEdit):
         self._meridiem = meridiem
         self._formatted_text: str | None = None
         self._formatting = False
+        self._preserve_meridiem = False
         self.setPlaceholderText("HH:MM")
         self.setAccessibleName("Time (12 or 24 hour input)")
         self.setMinimumWidth(120)
@@ -47,6 +49,8 @@ class EditableTime(QLineEdit):
             return
         if self.text() != self._formatted_text:
             self._formatted_text = None
+        if not self.text():
+            self._preserve_meridiem = False
         self.validityChanged.emit(self.is_valid())
         self.valueChanged.emit()
 
@@ -56,10 +60,64 @@ class EditableTime(QLineEdit):
     def is_valid(self) -> bool:
         return self._formatted_text == self.text() or parse_time_entry(self.text()) is not None
 
+    def _parsed_time(self) -> QTime | None:
+        parsed = parse_time_entry(self.text())
+        if (parsed is not None and self._preserve_meridiem
+                and not re.search(r"[AP]M", self.text(), re.IGNORECASE)
+                and 1 <= parsed.hour() <= 12):
+            return QTime(parsed.hour() % 12 + (12 if self._meridiem.currentText() == "PM" else 0), parsed.minute())
+        return parsed
+
+    def _prepare_edit(self) -> None:
+        if not self.text() or len(self.selectedText()) == len(self.text()):
+            self._preserve_meridiem = False
+
+    def setText(self, text: str) -> None:
+        if not self._formatting:
+            self._preserve_meridiem = False
+        super().setText(text)
+
+    def paste(self) -> None:
+        self._prepare_edit()
+        super().paste()
+
+    def cut(self) -> None:
+        self._prepare_edit()
+        super().cut()
+
+    def insert(self, text: str) -> None:
+        self._prepare_edit()
+        super().insert(text)
+
+    def inputMethodEvent(self, event) -> None:
+        if event.commitString():
+            self._prepare_edit()
+        super().inputMethodEvent(event)
+
+    def dropEvent(self, event) -> None:
+        self._prepare_edit()
+        super().dropEvent(event)
+
+    def contextMenuEvent(self, event) -> None:
+        menu = QMenu(self)
+        for label, callback, enabled in (
+            ("Undo", self.undo, self.isUndoAvailable()),
+            ("Redo", self.redo, self.isRedoAvailable()),
+            ("Cut", self.cut, self.hasSelectedText() and not self.isReadOnly()),
+            ("Copy", self.copy, self.hasSelectedText()),
+            ("Paste", self.paste, not self.isReadOnly()),
+            ("Delete", lambda: self.insert(""), self.hasSelectedText() and not self.isReadOnly()),
+            ("Select All", self.selectAll, bool(self.text())),
+        ):
+            action = menu.addAction(label, callback)
+            action.setEnabled(enabled)
+        menu.exec(event.globalPos())
+        menu.deleteLater()
+
     def commit(self) -> bool:
         if self._formatted_text == self.text():
             return True
-        parsed = parse_time_entry(self.text())
+        parsed = self._parsed_time()
         if parsed is None:
             return False  # Never restore an old value or silently clamp invalid input.
         self.setTime(parsed)
@@ -77,6 +135,7 @@ class EditableTime(QLineEdit):
                 self._meridiem.setCurrentText("PM" if value.hour() >= 12 else "AM")
             self._formatted_text = f"{value.hour() % 12 or 12}:{value.minute():02d}"
             self.setText(self._formatted_text)
+            self._preserve_meridiem = True
         finally:
             self._formatting = False
         self.validityChanged.emit(True)
@@ -85,7 +144,7 @@ class EditableTime(QLineEdit):
     def time_24h(self) -> str:
         # Reading live previews must not rewrite a field or move its cursor.
         if self._formatted_text != self.text():
-            parsed = parse_time_entry(self.text())
+            parsed = self._parsed_time()
             if parsed is not None:
                 return parsed.toString("HH:mm")
             raise ValueError("Enter a complete time, such as 09:30 or 15:30.")
@@ -115,4 +174,8 @@ class EditableTime(QLineEdit):
             self.stepBy(1 if event.key() == Qt.Key_Up else -1)
             event.accept()
         else:
+            if (event.text().isprintable() and event.text()
+                    or event.key() in (Qt.Key_Backspace, Qt.Key_Delete)
+                    or event.matches(QKeySequence.Paste) or event.matches(QKeySequence.Cut)):
+                self._prepare_edit()
             super().keyPressEvent(event)
