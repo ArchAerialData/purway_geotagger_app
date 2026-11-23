@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def hashes() -> dict[str, str]:
     paths = list((ROOT / "src").rglob("*.py"))
-    for folder in ("config", "assets", "scripts/windows"):
+    for folder in ("config", "assets", "scripts/windows", ".github/workflows"):
         paths.extend(p for p in (ROOT / folder).rglob("*") if p.is_file() and "__pycache__" not in p.parts)
     paths.extend(ROOT.glob("requirements*.txt"))
     return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest().upper()
@@ -35,7 +35,7 @@ def main() -> None:
     sys.path.insert(0, str(ROOT / "src"))
     from purway_geotagger import __version__
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    changed = subprocess.check_output(["git", "status", "--porcelain", "--", "src", "config", "assets", "scripts/windows", "requirements.txt", "requirements-dev.txt"], cwd=ROOT, text=True).strip()
+    changed = subprocess.check_output(["git", "status", "--porcelain", "--", "src", "config", "assets", "scripts/windows", ".github/workflows", "requirements.txt", "requirements-dev.txt"], cwd=ROOT, text=True).strip()
     now = datetime.now(timezone.utc)
     fingerprint = hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
     info = dict(app_version=__version__, built_at_utc=now.isoformat(), git_revision=revision,

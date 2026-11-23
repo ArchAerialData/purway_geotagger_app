@@ -59,6 +59,7 @@ All implementation must follow `PILOT_RAW_DATA_CONTEXT_AND_PLAN.md` and `IMPLEME
 - Windows scripts live under `scripts/windows/`.
 - For every Windows build, use `scripts/windows/build_exe.ps1` so the newest successful build replaces the entire `dist/windows/PurwayGeotagger/` folder, including `_internal`. The stable launcher target is `dist/windows/PurwayGeotagger/PurwayGeotagger.exe`; do not leave the newest build only in staging or a versioned folder. Verify the output and `build-info.json` before reporting completion.
 - Windows packages must display their app version and unique build ID in the window title. Preserve embedded build metadata and explicit local-change status; use `scripts/windows/package_portable.py` for verified, version-named coworker ZIPs.
+- Main-merge Windows CI lives in `.github/workflows/windows-installer.yml`; keep the manual `windows-exe` entrypoint delegated to it. Use the pinned, checksum-verified vendored ExifTool and Inno Setup compiler. Run `smoke_test.py`, `build_installer.ps1` and `verify_installer.py` before publishing installer artifacts; installer verification must not replace an existing registered installation.
 - The local Git Bash alias `methane` in `~/.bashrc` targets that stable executable. Keep this path stable for future builds. CI artifacts do not automatically update the local checkout; local builds must be run explicitly (see README).
 - Pilot distribution should be a **signed + notarized `.app`**; avoid requiring Homebrew/Terminal/venv on pilot machines.
 

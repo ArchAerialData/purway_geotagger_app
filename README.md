@@ -145,7 +145,7 @@ Code pointers:
 - Full regression suite: **232 passed**; source log: `build/calibration-xlsx-tests.log`.
 - Real ExifTool verification covered CSV/XLSX inputs, calibration photo retention, independently calculated photo PAC and Encroachment copies. Source tables remained unchanged.
 - Methane/Combined controls and populated reports reviewed in light/dark themes; wheel protection retained.
-- Latest Windows build: **2026-09-28T16:34:27.6167969Z**, at the stable `dist/windows/PurwayGeotagger/PurwayGeotagger.exe` path used by `methane`. Executable hash, all 69 source hashes, embedded changed modules, XLSX/XML dependencies and native startup/clean exit verified. Full results are in `PILOT_RAW_DATA_CONTEXT_AND_PLAN.md`.
+- Initial XLSX Windows build (historical): **2026-09-28T16:34:27.6167969Z**. Later local builds replace the stable `dist/windows/PurwayGeotagger/PurwayGeotagger.exe` path used by `methane`; check its window title and `build-info.json` for current identity. Verification results are in `PILOT_RAW_DATA_CONTEXT_AND_PLAN.md`.
 
 ## Input Scanning and Correlation
 
@@ -431,6 +431,47 @@ Local builds are manual; saving code does not rebuild the app. The `windows-exe`
 GitHub workflow is manually triggered, while `windows-installer` runs on pushes to
 `main` or manual dispatch. Those workflows build on GitHub and do not update this
 workstation's executable. Run the local build command above to refresh it.
+
+### Downloadable Windows installer from GitHub
+
+Merging to `main` triggers `.github/workflows/windows-installer.yml` (any push to
+`main` also triggers it). It runs the regression suite, builds the full app, verifies
+its startup/build identity, compiles a single **Setup EXE**, then installs it in a
+temporary location, checks every payload file, launches it and uninstalls the test copy.
+Downloads are published only after these checks pass. `windows-exe` is a manual
+entrypoint for the same pipeline; `windows-installer` can also be run manually.
+
+Open **Actions → windows-installer → successful run → Artifacts**. Download the
+`PurwayGeotagger-Setup-<version>-<build-id>` artifact, extract GitHub's ZIP wrapper,
+and run the Setup EXE. The installer contains the entire app, Python/Qt and ExifTool;
+recipient machines do not need Python, Git Bash or Excel. It installs per user and
+provides a Start menu shortcut. This is one downloadable installer EXE, not a single
+portable runtime file. The alternate `PurwayGeotagger-Portable-...` artifact contains
+the portable ZIP; keep its complete extracted app folder together. Both downloads
+include SHA-256 checksums; installer artifacts also include build and smoke-test records.
+Artifacts have a requested 90-day retention period (subject to repository policy).
+The run summary links to both downloads. GitHub authentication/repository access may
+be required; share the downloaded package with coworkers as needed.
+
+Windows ExifTool 13.50 is vendored under `scripts/windows/vendor/` with provenance
+and a pinned SHA-256, avoiding the expired upstream download that broke earlier CI.
+Update its archive and manifest together. Inno Setup 6.7.4 is downloaded from its
+official GitHub release and SHA-256 verified. Windows installers are currently unsigned.
+The existing macOS signing/notarization workflow is unchanged.
+
+To reproduce installer packaging locally after the app build, use the build Python:
+
+```powershell
+python -B scripts/windows/smoke_test.py
+./scripts/windows/setup_inno.ps1
+./scripts/windows/build_installer.ps1
+python -B scripts/windows/verify_installer.py
+python -B scripts/windows/package_portable.py
+```
+
+Installer verification requires a Windows account without an existing registered
+PurwayGeotagger installation; it refuses to replace one. Installers are written to
+`dist/windows-installer/`; the stable `methane` target remains unchanged.
 
 
 ### Verifying and sharing the local Windows build
